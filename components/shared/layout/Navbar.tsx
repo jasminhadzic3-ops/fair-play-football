@@ -1,0 +1,120 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+
+interface NavbarProps {
+  user: any | null;
+  profile: any | null;
+  onLogout: () => void;
+  onSignIn: () => void;
+}
+
+export default function Navbar({ user, profile, onLogout, onSignIn }: NavbarProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const displayName =
+    profile?.username?.trim() ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.user_metadata?.display_name ||
+    user?.email?.split("@")[0] ||
+    user?.email;
+
+  const navLinks = [
+    { label: "Home", href: "/" },
+    { label: "Games", href: "/#games" },
+    ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
+    { label: "About", href: "/#about" },
+    { label: "Admin", href: "/admin" },
+  ];
+
+  const handleMobileLogout = () => {
+    setIsMenuOpen(false);
+    onLogout();
+  };
+
+  const handleMobileSignIn = () => {
+    setIsMenuOpen(false);
+    onSignIn();
+  };
+
+  const renderNavLinks = (isMobile = false) =>
+    navLinks.map((link) => (
+      <Link
+        key={link.href}
+        href={link.href}
+        className={
+          isMobile
+            ? "block text-gray-300 hover:text-white transition font-medium py-2"
+            : "text-gray-300 hover:text-white transition font-medium text-sm"
+        }
+        onClick={isMobile ? () => setIsMenuOpen(false) : undefined}
+      >
+        {link.label}
+      </Link>
+    ));
+
+  const renderAuthControls = (isMobile = false) =>
+    user ? (
+      <div
+        className={
+          isMobile
+            ? "flex items-center justify-between gap-3 rounded-3xl border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-200"
+            : "flex items-center gap-3 rounded-full border border-zinc-700 bg-zinc-950/80 px-4 py-2 text-sm text-zinc-200"
+        }
+      >
+        <span className="font-semibold text-white">{displayName}</span>
+        <button
+          onClick={isMobile ? handleMobileLogout : onLogout}
+          className="rounded-full bg-emerald-500 px-3 py-1 text-black font-semibold transition hover:bg-emerald-400"
+        >
+          Sign out
+        </button>
+      </div>
+    ) : (
+      <button
+        onClick={isMobile ? handleMobileSignIn : onSignIn}
+        className={
+          isMobile
+            ? "block w-full text-left text-gray-300 hover:text-white transition font-medium py-2"
+            : "text-gray-300 hover:text-white transition font-medium text-sm"
+        }
+      >
+        Sign In
+      </button>
+    );
+
+  return (
+    <nav className="sticky top-0 z-30 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
+      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-3">
+          <span className="text-xl font-black text-white tracking-[0.3em]">
+            FAIR PLAY
+          </span>
+        </Link>
+
+        <div className="hidden md:flex items-center gap-10">
+          {renderNavLinks()}
+          {renderAuthControls()}
+        </div>
+
+        <button
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          className="md:hidden flex flex-col gap-1.5 w-6 h-6"
+          aria-label="Toggle navigation menu"
+        >
+          <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "rotate-45 translate-y-2" : ""}`} />
+          <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "opacity-0" : ""}`} />
+          <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+        </button>
+      </div>
+
+      {isMenuOpen && (
+        <div className="md:hidden bg-black border-t border-zinc-800/60 px-6 py-4 space-y-3">
+          {renderNavLinks(true)}
+          {renderAuthControls(true)}
+        </div>
+      )}
+    </nav>
+  );
+}
