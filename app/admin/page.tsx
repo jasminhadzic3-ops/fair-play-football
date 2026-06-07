@@ -67,6 +67,26 @@ export default function AdminPage() {
     setEditingGameId(null);
   };
 
+  const getAdminAuthHeaders = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("Please sign in as an admin before managing games.");
+    }
+
+    return {
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    };
+  };
+
+  const readApiError = async (response: Response) => {
+    const result = await response.json().catch(() => null);
+    return result?.error || "Unable to save game.";
+  };
+
   const saveGame = async () => {
     if (isSubmitting) return;
 
@@ -96,18 +116,24 @@ export default function AdminPage() {
         max_players: numericMaxPlayers,
       };
 
-      const { error } = editingGameId
-        ? await supabase.from("games").update(payload).eq("id", editingGameId)
-        : await supabase.from("games").insert([payload]);
+      const response = await fetch(
+        editingGameId ? `/api/admin/games/${editingGameId}` : "/api/admin/games",
+        {
+          method: editingGameId ? "PATCH" : "POST",
+          headers: await getAdminAuthHeaders(),
+          body: JSON.stringify(payload),
+        }
+      );
 
-      if (error) {
-        console.log(error);
-        alert(JSON.stringify(error));
+      if (!response.ok) {
+        alert(await readApiError(response));
       } else {
         alert(editingGameId ? "Game updated!" : "Game created!");
         resetForm();
         await fetchAdminData();
       }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save game.");
     } finally {
       setIsSubmitting(false);
     }
@@ -129,11 +155,18 @@ export default function AdminPage() {
       return;
     }
 
-    const { error } = await supabase.from("games").delete().eq("id", game.id);
+    try {
+      const response = await fetch(`/api/admin/games/${game.id}`, {
+        method: "DELETE",
+        headers: await getAdminAuthHeaders(),
+      });
 
-    if (error) {
-      console.log(error);
-      alert(JSON.stringify(error));
+      if (!response.ok) {
+        alert(await readApiError(response));
+        return;
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to delete game.");
       return;
     }
 
