@@ -18,6 +18,11 @@ interface Booking {
   game_id: number;
 }
 
+interface AdminDashboardData {
+  games: Game[];
+  bookings: Booking[];
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [games, setGames] = useState<Game[]>([]);
@@ -31,26 +36,24 @@ export default function AdminPage() {
   const [editingGameId, setEditingGameId] = useState<number | null>(null);
 
   const fetchAdminData = async () => {
-    const { data: gamesData, error: gamesError } = await supabase
-      .from("games")
-      .select("*")
-      .order("id", { ascending: true });
-    const { data: bookingsData, error: bookingsError } = await supabase
-      .from("bookings")
-      .select("id, game_id");
+    try {
+      const response = await fetch("/api/admin/dashboard", {
+        headers: await getAdminAuthHeaders(),
+      });
 
-    if (gamesError) {
-      console.log(gamesError);
-      alert(JSON.stringify(gamesError));
-    } else {
-      setGames(gamesData ?? []);
-    }
+      const result = (await response.json().catch(() => null)) as AdminDashboardData | { error?: string } | null;
 
-    if (bookingsError) {
-      console.log(bookingsError);
-      alert(JSON.stringify(bookingsError));
-    } else {
-      setBookings(bookingsData ?? []);
+      if (!response.ok) {
+        alert(result && "error" in result ? result.error || "Unable to load admin dashboard." : "Unable to load admin dashboard.");
+        return;
+      }
+
+      if (result && "games" in result) {
+        setGames(result.games ?? []);
+        setBookings(result.bookings ?? []);
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to load admin dashboard.");
     }
   };
 
