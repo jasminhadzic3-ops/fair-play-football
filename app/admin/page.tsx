@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -16,11 +16,21 @@ interface Game {
 interface Booking {
   id: number;
   game_id: number;
+  user_id?: string | null;
+  player_name?: string | null;
+}
+
+interface AdminSummary {
+  games_count: number;
+  bookings_count: number;
+  players_count: number;
+  paid_payments_amount_total: number;
 }
 
 interface AdminDashboardData {
   games: Game[];
   bookings: Booking[];
+  summary: AdminSummary;
 }
 
 export default function AdminPage() {
@@ -34,8 +44,29 @@ export default function AdminPage() {
   const [maxPlayers, setMaxPlayers] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingGameId, setEditingGameId] = useState<number | null>(null);
+  const [summary, setSummary] = useState<AdminSummary>({
+    games_count: 0,
+    bookings_count: 0,
+    players_count: 0,
+    paid_payments_amount_total: 0,
+  });
 
-  const fetchAdminData = async () => {
+  const getAdminAuthHeaders = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("Please sign in as an admin before managing games.");
+    }
+
+    return {
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    };
+  }, []);
+
+  const fetchAdminData = useCallback(async () => {
     try {
       const response = await fetch("/api/admin/dashboard", {
         headers: await getAdminAuthHeaders(),
@@ -51,15 +82,20 @@ export default function AdminPage() {
       if (result && "games" in result) {
         setGames(result.games ?? []);
         setBookings(result.bookings ?? []);
+        setSummary(result.summary);
       }
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to load admin dashboard.");
     }
-  };
+  }, [getAdminAuthHeaders]);
 
   useEffect(() => {
-    fetchAdminData();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      void fetchAdminData();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [fetchAdminData]);
 
   const resetForm = () => {
     setTitle("");
@@ -68,21 +104,6 @@ export default function AdminPage() {
     setPrice("");
     setMaxPlayers("");
     setEditingGameId(null);
-  };
-
-  const getAdminAuthHeaders = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("Please sign in as an admin before managing games.");
-    }
-
-    return {
-      Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
-    };
   };
 
   const readApiError = async (response: Response) => {
@@ -183,6 +204,16 @@ export default function AdminPage() {
   const getBookingCount = (gameId: number) =>
     bookings.filter((booking) => booking.game_id === gameId).length;
 
+  const summaryCards = [
+    { label: "Total games", value: summary.games_count },
+    { label: "Total bookings", value: summary.bookings_count },
+    { label: "Total players", value: summary.players_count },
+    {
+      label: "Paid payments amount",
+      value: `£${summary.paid_payments_amount_total.toFixed(2)}`,
+    },
+  ];
+
   return (
     <main className="min-h-screen bg-black text-white p-8">
       <div className="max-w-5xl mx-auto">
@@ -194,6 +225,20 @@ export default function AdminPage() {
           >
             Back to Home
           </button>
+        </div>
+
+        <div className="mb-8 grid gap-4 md:grid-cols-4">
+          {summaryCards.map((card) => (
+            <div
+              key={card.label}
+              className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+            >
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                {card.label}
+              </p>
+              <p className="mt-3 text-2xl font-bold text-white">{card.value}</p>
+            </div>
+          ))}
         </div>
 
         <div className="space-y-6">

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type Payment = {
   payment_status: string | null;
+  amount: number | string | null;
 };
 
 function countPaymentsByStatus(payments: Payment[]) {
@@ -12,6 +13,26 @@ function countPaymentsByStatus(payments: Payment[]) {
     counts[status] = (counts[status] || 0) + 1;
     return counts;
   }, {});
+}
+
+function countUniquePlayers(bookings: Array<{ user_id: string | null; player_name: string | null }>) {
+  const playerKeys = new Set<string>();
+
+  bookings.forEach((booking) => {
+    const key = booking.user_id || booking.player_name?.trim().toLowerCase();
+
+    if (key) {
+      playerKeys.add(key);
+    }
+  });
+
+  return playerKeys.size;
+}
+
+function sumPaidPaymentAmounts(payments: Payment[]) {
+  return payments
+    .filter((payment) => payment.payment_status?.toLowerCase() === "paid")
+    .reduce((total, payment) => total + Number(payment.amount || 0), 0);
 }
 
 export async function GET(request: NextRequest) {
@@ -65,8 +86,10 @@ export async function GET(request: NextRequest) {
       summary: {
         games_count: games.length,
         bookings_count: bookings.length,
+        players_count: countUniquePlayers(bookings),
         profiles_count: profiles.length,
         payments_count: bookingPayments.length,
+        paid_payments_amount_total: sumPaidPaymentAmounts(bookingPayments),
         payments_by_status: countPaymentsByStatus(bookingPayments),
       },
     });
