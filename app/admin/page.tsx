@@ -222,6 +222,32 @@ export default function AdminPage() {
     await fetchAdminData();
   };
 
+  const removeBooking = async (booking: Booking) => {
+    const confirmed = window.confirm(
+      "This only removes the player from the game. It does not refund payment or add credit."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/bookings/${booking.id}`, {
+        method: "DELETE",
+        headers: await getAdminAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        alert(await readApiError(response));
+        return;
+      }
+
+      await fetchAdminData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to remove booking.");
+    }
+  };
+
   const getBookingCount = (gameId: number) =>
     bookings.filter((booking) => booking.game_id === gameId).length;
 
@@ -437,6 +463,13 @@ export default function AdminPage() {
                               <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs uppercase tracking-[0.18em] text-zinc-400">
                                 {getPaymentStatusForBooking(booking)}
                               </span>
+                              <button
+                                type="button"
+                                onClick={() => removeBooking(booking)}
+                                className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-200 transition hover:border-red-400"
+                              >
+                                Remove booking
+                              </button>
                             </span>
                           ))}
                         </div>
@@ -472,7 +505,7 @@ export default function AdminPage() {
                     key={booking.id}
                     className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
                   >
-                    <div className="grid gap-4 md:grid-cols-[1fr_1.3fr_1fr_0.7fr] md:items-center">
+                    <div className="grid gap-4 md:grid-cols-[1fr_1.3fr_1fr_0.7fr_auto] md:items-center">
                       <div>
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                           Player
@@ -510,6 +543,16 @@ export default function AdminPage() {
                         <p className="mt-2 font-semibold text-white">
                           {formatPaymentAmount(payment)}
                         </p>
+                      </div>
+
+                      <div className="md:text-right">
+                        <button
+                          type="button"
+                          onClick={() => removeBooking(booking)}
+                          className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400"
+                        >
+                          Remove booking
+                        </button>
                       </div>
                     </div>
                   </div>
