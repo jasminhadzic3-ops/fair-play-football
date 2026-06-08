@@ -20,6 +20,17 @@ interface Booking {
   player_name?: string | null;
 }
 
+interface BookingPayment {
+  id: number;
+  game_id: number;
+  user_id?: string | null;
+  player_name?: string | null;
+  payment_status?: string | null;
+  booking_id?: number | null;
+  amount?: number | string | null;
+  currency?: string | null;
+}
+
 interface AdminSummary {
   games_count: number;
   bookings_count: number;
@@ -30,6 +41,7 @@ interface AdminSummary {
 interface AdminDashboardData {
   games: Game[];
   bookings: Booking[];
+  booking_payments: BookingPayment[];
   summary: AdminSummary;
 }
 
@@ -37,6 +49,7 @@ export default function AdminPage() {
   const router = useRouter();
   const [games, setGames] = useState<Game[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingPayments, setBookingPayments] = useState<BookingPayment[]>([]);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [time, setTime] = useState("");
@@ -82,6 +95,7 @@ export default function AdminPage() {
       if (result && "games" in result) {
         setGames(result.games ?? []);
         setBookings(result.bookings ?? []);
+        setBookingPayments(result.booking_payments ?? []);
         setSummary(result.summary);
       }
     } catch (error) {
@@ -213,6 +227,49 @@ export default function AdminPage() {
 
   const getGameBookings = (gameId: number) =>
     bookings.filter((booking) => booking.game_id === gameId);
+
+  const getPaymentStatusForBooking = (booking: Booking) => {
+    const matchedPayment = getPaymentForBooking(booking);
+
+    return matchedPayment?.payment_status || "unknown";
+  };
+
+  const getPaymentForBooking = (booking: Booking) => {
+    const normalizedPlayerName = booking.player_name?.trim().toLowerCase();
+
+    return (
+      bookingPayments.find((payment) => payment.booking_id === booking.id) ||
+      bookingPayments.find(
+        (payment) =>
+          booking.user_id &&
+          payment.user_id === booking.user_id &&
+          payment.game_id === booking.game_id
+      ) ||
+      bookingPayments.find(
+        (payment) =>
+          normalizedPlayerName &&
+          payment.game_id === booking.game_id &&
+          payment.player_name?.trim().toLowerCase() === normalizedPlayerName
+      )
+    );
+  };
+
+  const getGameForBooking = (booking: Booking) =>
+    games.find((game) => game.id === booking.game_id);
+
+  const formatPaymentAmount = (payment: BookingPayment | undefined) => {
+    if (payment?.amount === null || payment?.amount === undefined) {
+      return "—";
+    }
+
+    const amount = Number(payment.amount);
+
+    if (Number.isNaN(amount)) {
+      return "—";
+    }
+
+    return `${payment.currency === "GBP" || !payment.currency ? "£" : `${payment.currency} `}${amount.toFixed(2)}`;
+  };
 
   const summaryCards = [
     { label: "Total games", value: summary.games_count },
@@ -374,13 +431,86 @@ export default function AdminPage() {
                           {gameBookings.map((booking) => (
                             <span
                               key={booking.id}
-                              className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm font-medium text-zinc-200"
+                              className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm font-medium text-zinc-200"
                             >
-                              {booking.player_name?.trim() || "Unnamed player"}
+                              <span>{booking.player_name?.trim() || "Unnamed player"}</span>
+                              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs uppercase tracking-[0.18em] text-zinc-400">
+                                {getPaymentStatusForBooking(booking)}
+                              </span>
                             </span>
                           ))}
                         </div>
                       )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-12 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h2 className="text-2xl font-bold">Bookings</h2>
+            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-400">
+              {bookings.length} total
+            </span>
+          </div>
+
+          {bookings.length === 0 ? (
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-400">
+              No bookings yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {bookings.map((booking) => {
+                const game = getGameForBooking(booking);
+                const payment = getPaymentForBooking(booking);
+
+                return (
+                  <div
+                    key={booking.id}
+                    className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                  >
+                    <div className="grid gap-4 md:grid-cols-[1fr_1.3fr_1fr_0.7fr] md:items-center">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Player
+                        </p>
+                        <p className="mt-2 font-semibold text-white">
+                          {booking.player_name?.trim() || "Unnamed player"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Game
+                        </p>
+                        <p className="mt-2 font-semibold text-white">
+                          {game?.title || "Unknown game"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {game ? `${game.time || "TBD"} • ${game.location}` : "TBD"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Payment
+                        </p>
+                        <span className="mt-2 inline-flex rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-300">
+                          {payment?.payment_status || "unknown"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Amount
+                        </p>
+                        <p className="mt-2 font-semibold text-white">
+                          {formatPaymentAmount(payment)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 );
