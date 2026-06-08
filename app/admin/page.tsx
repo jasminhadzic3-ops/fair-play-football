@@ -106,6 +106,13 @@ export default function AdminPage() {
     setEditingGameId(null);
   };
 
+  const refreshAdminDataAfterSave = () => {
+    void fetchAdminData().catch((error) => {
+      console.warn("Unable to refresh admin dashboard after saving game:", error);
+      alert("Game saved, but the dashboard refresh failed. Please refresh the page if the list looks outdated.");
+    });
+  };
+
   const readApiError = async (response: Response) => {
     const result = await response.json().catch(() => null);
     return result?.error || "Unable to save game.";
@@ -154,7 +161,7 @@ export default function AdminPage() {
       } else {
         alert(editingGameId ? "Game updated!" : "Game created!");
         resetForm();
-        await fetchAdminData();
+        refreshAdminDataAfterSave();
       }
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to save game.");
@@ -203,6 +210,9 @@ export default function AdminPage() {
 
   const getBookingCount = (gameId: number) =>
     bookings.filter((booking) => booking.game_id === gameId).length;
+
+  const getGameBookings = (gameId: number) =>
+    bookings.filter((booking) => booking.game_id === gameId);
 
   const summaryCards = [
     { label: "Total games", value: summary.games_count },
@@ -315,41 +325,66 @@ export default function AdminPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {games.map((game) => (
-                <div
-                  key={game.id}
-                  className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h3 className="text-xl font-bold text-white">{game.title}</h3>
-                      <p className="mt-1 text-sm text-zinc-400">
-                        {game.location} • {game.time} • £{game.price} • {game.max_players} players
-                      </p>
-                      <p className="mt-2 text-sm font-semibold text-emerald-300">
-                        {getBookingCount(game.id)} bookings
-                      </p>
+              {games.map((game) => {
+                const gameBookings = getGameBookings(game.id);
+
+                return (
+                  <div
+                    key={game.id}
+                    className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-white">{game.title}</h3>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {game.location} • {game.time} • £{game.price} • {game.max_players} players
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-emerald-300">
+                          {getBookingCount(game.id)} bookings
+                        </p>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => editGame(game)}
+                          className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteGame(game)}
+                          className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => editGame(game)}
-                        className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteGame(game)}
-                        className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400"
-                      >
-                        Delete
-                      </button>
+                    <div className="mt-5 border-t border-zinc-800 pt-4">
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Booked players
+                      </p>
+
+                      {gameBookings.length === 0 ? (
+                        <p className="mt-3 text-sm text-zinc-500">No players booked yet.</p>
+                      ) : (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {gameBookings.map((booking) => (
+                            <span
+                              key={booking.id}
+                              className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm font-medium text-zinc-200"
+                            >
+                              {booking.player_name?.trim() || "Unnamed player"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
