@@ -280,6 +280,41 @@ export default function AdminPage() {
     }
   };
 
+  const moveBooking = async (booking: Booking, formData: FormData) => {
+    const targetGameId = Number(formData.get("target_game_id"));
+
+    if (!Number.isInteger(targetGameId) || targetGameId <= 0) {
+      alert("Please choose a game to move this booking to.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "This only moves the player booking. It does not change payment, refund, or credit."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/bookings/${booking.id}/move`, {
+        method: "PATCH",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({ target_game_id: targetGameId }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        alert(result?.error || "Unable to move booking.");
+        return;
+      }
+
+      await fetchAdminData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to move booking.");
+    }
+  };
+
   const getBookingCount = (gameId: number) =>
     bookings.filter((booking) => booking.game_id === gameId).length;
 
@@ -578,13 +613,40 @@ export default function AdminPage() {
                       </div>
 
                       <div className="md:text-right">
-                        <button
-                          type="button"
-                          onClick={() => removeBooking(booking)}
-                          className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400"
+                        <form
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void moveBooking(booking, new FormData(event.currentTarget));
+                          }}
+                          className="flex flex-col gap-2 sm:flex-row md:justify-end"
                         >
-                          Remove booking
-                        </button>
+                          <select
+                            name="target_game_id"
+                            defaultValue={booking.game_id}
+                            className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
+                          >
+                            {games.map((gameOption) => (
+                              <option key={gameOption.id} value={gameOption.id}>
+                                {gameOption.title}
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            type="submit"
+                            className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
+                          >
+                            Move
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => removeBooking(booking)}
+                            className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400"
+                          >
+                            Remove booking
+                          </button>
+                        </form>
                       </div>
                     </div>
                   </div>
