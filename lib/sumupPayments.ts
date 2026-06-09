@@ -141,7 +141,7 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
   }
 
   if (status !== "paid") {
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("booking_payments")
       .update({
         payment_status: status,
@@ -151,11 +151,15 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
       })
       .eq("id", payment.id);
 
+    if (updateError) {
+      throw updateError;
+    }
+
     return { paymentStatus: status, bookingId: payment.booking_id ?? null };
   }
 
   if (payment.booking_id) {
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("booking_payments")
       .update({
         payment_status: "paid",
@@ -164,6 +168,10 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", payment.id);
+
+    if (updateError) {
+      throw updateError;
+    }
 
     return { paymentStatus: "paid", bookingId: payment.booking_id };
   }
@@ -180,10 +188,10 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     throw existingBookingError;
   }
 
-  const bookingId =
-    existingBooking?.id ??
-    (
-      await supabaseAdmin
+  let bookingId = existingBooking?.id;
+
+  if (!bookingId) {
+    const { data: newBooking, error: bookingInsertError } = await supabaseAdmin
         .from("bookings")
         .insert({
           game_id: payment.game_id,
@@ -191,14 +199,20 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
           user_id: payment.user_id,
         })
         .select("id")
-        .single()
-    ).data?.id;
+      .single();
 
-  if (!bookingId) {
-    throw new Error("Unable to create booking after paid checkout.");
+    if (bookingInsertError) {
+      throw bookingInsertError;
+    }
+
+    bookingId = newBooking?.id;
   }
 
-  await supabaseAdmin
+  if (!bookingId) {
+    throw new Error("Unable to create or find booking after paid checkout.");
+  }
+
+  const { data: updatedPayment, error: paymentUpdateError } = await supabaseAdmin
     .from("booking_payments")
     .update({
       booking_id: bookingId,
@@ -207,7 +221,17 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
       transaction_code: transactionCode,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", payment.id);
+    .eq("id", payment.id)
+    .select("booking_id")
+    .single();
+
+  if (paymentUpdateError) {
+    throw paymentUpdateError;
+  }
+
+  if (updatedPayment?.booking_id !== bookingId) {
+    throw new Error("Unable to write booking_id to paid payment record.");
+  }
 
   return { paymentStatus: "paid", bookingId };
 }

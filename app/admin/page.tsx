@@ -132,6 +132,26 @@ export default function AdminPage() {
     return result?.error || "Unable to save game.";
   };
 
+  const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = 15000) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  const alertAfterPaint = (message: string) => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => alert(message), 0);
+    });
+  };
+
   const saveGame = async () => {
     if (isSubmitting) return;
 
@@ -150,6 +170,15 @@ export default function AdminPage() {
       return;
     }
 
+    let adminHeaders: HeadersInit;
+
+    try {
+      adminHeaders = await getAdminAuthHeaders();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save game.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -161,24 +190,27 @@ export default function AdminPage() {
         max_players: numericMaxPlayers,
       };
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         editingGameId ? `/api/admin/games/${editingGameId}` : "/api/admin/games",
         {
           method: editingGameId ? "PATCH" : "POST",
-          headers: await getAdminAuthHeaders(),
+          headers: adminHeaders,
           body: JSON.stringify(payload),
         }
       );
 
       if (!response.ok) {
-        alert(await readApiError(response));
+        setIsSubmitting(false);
+        alertAfterPaint(await readApiError(response));
       } else {
-        alert(editingGameId ? "Game updated!" : "Game created!");
+        setIsSubmitting(false);
+        alertAfterPaint(editingGameId ? "Game updated!" : "Game created!");
         resetForm();
         refreshAdminDataAfterSave();
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Unable to save game.");
+      setIsSubmitting(false);
+      alertAfterPaint(error instanceof Error ? error.message : "Unable to save game.");
     } finally {
       setIsSubmitting(false);
     }
