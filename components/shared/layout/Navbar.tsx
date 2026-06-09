@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
+
+interface Profile {
+  username?: string | null;
+}
 
 interface NavbarProps {
-  user: any | null;
-  profile: any | null;
+  user: User | null;
+  profile: Profile | null;
   onLogout: () => void;
   onSignIn: () => void;
 }
@@ -23,6 +28,7 @@ export default function Navbar({ user, profile, onLogout, onSignIn }: NavbarProp
   const navLinks = [
     { label: "Home", href: "/" },
     { label: "Games", href: "/#games" },
+    ...(user ? [{ label: "Profile", href: "/profile" }] : []),
     ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
     { label: "About", href: "/#about" },
     { label: "Admin", href: "/admin" },
