@@ -315,6 +315,31 @@ export default function AdminPage() {
     }
   };
 
+  const exportBookingsCsv = async () => {
+    try {
+      const response = await fetch("/api/admin/export/bookings", {
+        headers: await getAdminAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        alert(result?.error || "Unable to export bookings.");
+        return;
+      }
+
+      const csvBlob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(csvBlob);
+      const downloadLink = document.createElement("a");
+
+      downloadLink.href = downloadUrl;
+      downloadLink.download = "fair-play-bookings.csv";
+      downloadLink.click();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to export bookings.");
+    }
+  };
+
   const getBookingCount = (gameId: number) =>
     bookings.filter((booking) => booking.game_id === gameId).length;
 
@@ -552,9 +577,18 @@ export default function AdminPage() {
         <div className="mt-12 space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <h2 className="text-2xl font-bold">Bookings</h2>
-            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-400">
-              {bookings.length} total
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={exportBookingsCsv}
+                className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
+              >
+                Export bookings CSV
+              </button>
+              <span className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-400">
+                {bookings.length} total
+              </span>
+            </div>
           </div>
 
           {bookings.length === 0 ? (
