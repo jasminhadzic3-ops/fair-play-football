@@ -11,6 +11,13 @@ type SumUpCheckout = {
 };
 
 const sumupApiBase = "https://api.sumup.com/v0.1";
+const noSpacePaymentMessage = "This spot has already been taken. You are still on the waiting list.";
+
+type CreateBookingIfSpaceResult = {
+  success: boolean;
+  booking_id: number | null;
+  reason: string | null;
+};
 
 async function readJsonResponse(response: Response) {
   const text = await response.text();
@@ -140,6 +147,15 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     throw new Error("Payment record not found.");
   }
 
+  if (payment.payment_status === "paid_no_space") {
+    return {
+      paymentStatus: "paid_no_space",
+      bookingId: null,
+      reason: "game_full",
+      message: noSpacePaymentMessage,
+    };
+  }
+
   if (status !== "paid") {
     const { error: updateError } = await supabaseAdmin
       .from("booking_payments")
@@ -176,37 +192,53 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     return { paymentStatus: "paid", bookingId: payment.booking_id };
   }
 
-  const { data: existingBooking, error: existingBookingError } = await supabaseAdmin
-    .from("bookings")
-    .select("id")
-    .eq("user_id", payment.user_id)
-    .eq("game_id", payment.game_id)
-    .eq("player_name", payment.player_name)
-    .maybeSingle();
+  const { data: bookingResult, error: bookingRpcError } = await supabaseAdmin
+    .rpc("create_booking_if_space", {
+      p_game_id: payment.game_id,
+      p_user_id: payment.user_id,
+      p_player_name: payment.player_name,
+    })
+    .single<CreateBookingIfSpaceResult>();
 
-  if (existingBookingError) {
-    throw existingBookingError;
+  if (bookingRpcError) {
+    throw bookingRpcError;
   }
 
-  let bookingId = existingBooking?.id;
-
-  if (!bookingId) {
-    const { data: newBooking, error: bookingInsertError } = await supabaseAdmin
-        .from("bookings")
-        .insert({
-          game_id: payment.game_id,
-          player_name: payment.player_name,
-          user_id: payment.user_id,
+  if (!bookingResult?.success) {
+    if (bookingResult?.reason === "game_full") {
+      const { data: updatedPayment, error: noSpaceUpdateError } = await supabaseAdmin
+        .from("booking_payments")
+        .update({
+          booking_id: null,
+          payment_status: "paid_no_space",
+          raw_checkout: checkout,
+          transaction_code: transactionCode,
+          updated_at: new Date().toISOString(),
         })
-        .select("id")
-      .single();
+        .eq("id", payment.id)
+        .select("booking_id,payment_status")
+        .single();
 
-    if (bookingInsertError) {
-      throw bookingInsertError;
+      if (noSpaceUpdateError) {
+        throw noSpaceUpdateError;
+      }
+
+      if (updatedPayment?.payment_status !== "paid_no_space" || updatedPayment?.booking_id) {
+        throw new Error("Unable to record paid checkout without available game space.");
+      }
+
+      return {
+        paymentStatus: "paid_no_space",
+        bookingId: null,
+        reason: "game_full",
+        message: noSpacePaymentMessage,
+      };
     }
 
-    bookingId = newBooking?.id;
+    throw new Error(`Unable to create booking after paid checkout: ${bookingResult?.reason || "unknown_reason"}.`);
   }
+
+  const bookingId = bookingResult.booking_id;
 
   if (!bookingId) {
     throw new Error("Unable to create or find booking after paid checkout.");

@@ -71,10 +71,13 @@ export default function GameDetails({
   const [showStatusBadge, setShowStatusBadge] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [authOpenedFromNavbar, setAuthOpenedFromNavbar] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState<"idle" | "creating" | "pending" | "paid" | "failed" | "expired">("idle");
+  const [paymentStatus, setPaymentStatus] = useState<"idle" | "creating" | "pending" | "paid" | "paid_no_space" | "failed" | "expired">("idle");
   const [paymentCheckoutId, setPaymentCheckoutId] = useState<string | null>(null);
   const [paymentCheckoutReference, setPaymentCheckoutReference] = useState<string | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [waitingListLoading, setWaitingListLoading] = useState(false);
+  const [waitingListMessage, setWaitingListMessage] = useState<string | null>(null);
+  const [waitingListError, setWaitingListError] = useState<string | null>(null);
 
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
@@ -248,6 +251,61 @@ export default function GameDetails({
     }
   };
 
+  const joinWaitingList = async () => {
+    if (waitingListLoading) {
+      return;
+    }
+
+    setWaitingListMessage(null);
+    setWaitingListError(null);
+
+    if (!isAuthenticated) {
+      setWaitingListError("Please sign in before joining the waiting list.");
+      setShowPaymentModal(false);
+      setAuthMode("signin");
+      setAuthOpenedFromNavbar(false);
+      setShowProfileModal(true);
+      return;
+    }
+
+    setWaitingListLoading(true);
+
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+
+      if (!session?.access_token) {
+        throw new Error("Please sign in again before joining the waiting list.");
+      }
+
+      const response = await fetch("/api/waiting-list", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          game_id: game.id,
+          player_name: profileName,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(result?.error || "Unable to join waiting list.");
+      }
+
+      setWaitingListMessage(
+        result?.message ||
+          "You've been added to the waiting list.\n\nIf a space becomes available, we'll notify you. Spots are allocated on a first-come, first-served basis."
+      );
+    } catch (error) {
+      setWaitingListError(error instanceof Error ? error.message : "Unable to join waiting list.");
+    } finally {
+      setWaitingListLoading(false);
+    }
+  };
+
   useEffect(() => {
     if ((!paymentCheckoutId && !paymentCheckoutReference) || paymentStatus !== "pending") {
       return;
@@ -301,6 +359,16 @@ export default function GameDetails({
         localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
         setPaymentStatus("paid");
         setPaymentMessage("Payment confirmed. Your booking has been added.");
+        await onPaymentComplete?.();
+        return;
+      }
+
+      if (result.paymentStatus === "paid_no_space") {
+        localStorage.removeItem("pendingSumUpGameId");
+        localStorage.removeItem("pendingSumUpCheckoutId");
+        localStorage.removeItem("pendingSumUpCheckoutReference");
+        setPaymentStatus("paid_no_space");
+        setPaymentMessage(result.message || "This spot has already been taken. You are still on the waiting list.");
         await onPaymentComplete?.();
         return;
       }
@@ -655,6 +723,39 @@ export default function GameDetails({
                 </button>
               )}
             </div>
+
+            {isGameFull && !alreadyJoined ? (
+              <div className="mt-5 border-t border-zinc-800 pt-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Waiting list</p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Join the list for this game. This does not create a booking or take payment.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={joinWaitingList}
+                    disabled={waitingListLoading}
+                    className="rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-3 font-bold text-white transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {waitingListLoading ? "Joining..." : "Join waiting list"}
+                  </button>
+                </div>
+
+                {waitingListMessage ? (
+                  <div className="mt-4 rounded-3xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm font-semibold text-emerald-200">
+                    {waitingListMessage}
+                  </div>
+                ) : null}
+
+                {waitingListError ? (
+                  <div className="mt-4 rounded-3xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm font-semibold text-red-200">
+                    {waitingListError}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1047,7 +1148,7 @@ export default function GameDetails({
               className={`rounded-3xl border px-5 py-4 text-sm font-semibold ${
                 paymentStatus === "paid"
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                  : paymentStatus === "failed" || paymentStatus === "expired"
+                  : paymentStatus === "failed" || paymentStatus === "expired" || paymentStatus === "paid_no_space"
                     ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
                     : "border-amber-500/30 bg-amber-500/10 text-amber-100"
               }`}
@@ -1059,7 +1160,7 @@ export default function GameDetails({
           <div className="grid gap-3 sm:grid-cols-[1.25fr_0.75fr]">
             <button
               onClick={handleOpenPaymentLink}
-              disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid"}
+              disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
               className="rounded-3xl bg-emerald-500 px-6 py-4 text-black font-bold transition duration-150 ease-out enabled:hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : `Pay £${game.price} with SumUp`}
@@ -1080,4 +1181,3 @@ export default function GameDetails({
     </>
   );
 }
-
