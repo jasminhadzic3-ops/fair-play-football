@@ -4,19 +4,19 @@ interface Booking {
   id: number;
   game_id: number;
   player_name: string;
+  user_id?: string | null;
 }
 
 interface TeamListProps {
   bookings: Booking[];
   onLeaveGame: (bookingId: number) => Promise<void> | void;
-  currentPlayerName?: string;
+  currentUserId?: string | null;
 }
 
-export default function TeamList({ bookings, onLeaveGame, currentPlayerName }: TeamListProps) {
+export default function TeamList({ bookings, onLeaveGame, currentUserId }: TeamListProps) {
   const midpoint = Math.ceil(bookings.length / 2);
   const teamA = bookings.slice(0, midpoint);
   const teamB = bookings.slice(midpoint);
-  const normalizedCurrentPlayerName = currentPlayerName?.trim().toLowerCase();
 
   const renderTeam = (team: Booking[], teamName: string) => (
     <div className="flex-1">
@@ -44,8 +44,7 @@ export default function TeamList({ bookings, onLeaveGame, currentPlayerName }: T
                 {booking.player_name}
               </span>
             </div>
-            {normalizedCurrentPlayerName &&
-            booking.player_name.trim().toLowerCase() === normalizedCurrentPlayerName ? (
+            {currentUserId && booking.user_id === currentUserId ? (
               <button
                 onClick={() => onLeaveGame(booking.id)}
                 className="text-xs uppercase tracking-[0.1em] text-zinc-300 hover:text-white transition"

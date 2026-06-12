@@ -31,6 +31,13 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!user.email_confirmed_at && !user.confirmed_at) {
+      return Response.json(
+        { error: "Please verify your email before making a payment." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json().catch(() => null);
     const { gameId, playerName } = body ?? {};
 

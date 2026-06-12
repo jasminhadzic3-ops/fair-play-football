@@ -11,11 +11,12 @@ interface Profile {
 interface NavbarProps {
   user: User | null;
   profile: Profile | null;
+  unreadNotificationCount?: number;
   onLogout: () => void;
   onSignIn: () => void;
 }
 
-export default function Navbar({ user, profile, onLogout, onSignIn }: NavbarProps) {
+export default function Navbar({ user, profile, unreadNotificationCount = 0, onLogout, onSignIn }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const displayName =
     profile?.username?.trim() ||
@@ -45,20 +46,29 @@ export default function Navbar({ user, profile, onLogout, onSignIn }: NavbarProp
   };
 
   const renderNavLinks = (isMobile = false) =>
-    navLinks.map((link) => (
+    navLinks.map((link) => {
+      const showNotificationBadge = link.href === "/profile" && unreadNotificationCount > 0;
+
+      return (
       <Link
         key={link.href}
         href={link.href}
         className={
           isMobile
-            ? "block text-gray-300 hover:text-white transition font-medium py-2"
-            : "text-gray-300 hover:text-white transition font-medium text-sm"
+            ? "flex items-center gap-2 text-gray-300 hover:text-white transition font-medium py-2"
+            : "inline-flex items-center gap-2 text-gray-300 hover:text-white transition font-medium text-sm"
         }
         onClick={isMobile ? () => setIsMenuOpen(false) : undefined}
       >
-        {link.label}
+        <span>{link.label}</span>
+        {showNotificationBadge ? (
+          <span className="inline-flex min-w-5 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-1.5 py-0.5 text-[0.65rem] font-bold leading-none text-stone-200">
+            {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+          </span>
+        ) : null}
       </Link>
-    ));
+      );
+    });
 
   const renderAuthControls = (isMobile = false) =>
     user ? (
@@ -69,7 +79,14 @@ export default function Navbar({ user, profile, onLogout, onSignIn }: NavbarProp
             : "flex items-center gap-3 rounded-full border border-zinc-700 bg-zinc-950/80 px-4 py-2 text-sm text-zinc-200"
         }
       >
-        <span className="font-semibold text-white">{displayName}</span>
+        <span className="inline-flex items-center gap-2 font-semibold text-white">
+          {displayName}
+          {unreadNotificationCount > 0 ? (
+            <span className="inline-flex min-w-5 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-1.5 py-0.5 text-[0.65rem] font-bold leading-none text-stone-200">
+              {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+            </span>
+          ) : null}
+        </span>
         <button
           onClick={isMobile ? handleMobileLogout : onLogout}
           className="rounded-full bg-emerald-500 px-3 py-1 text-black font-semibold transition hover:bg-emerald-400"

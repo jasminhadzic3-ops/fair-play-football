@@ -21,6 +21,7 @@ interface GameCardProps {
     id: number;
     game_id: number;
     player_name: string;
+    user_id?: string | null;
   }>;
   successGameId: number | null;
   user: any | null;
@@ -34,6 +35,8 @@ interface GameCardProps {
   pendingCheckoutReference?: string | null;
   continueToPayment?: boolean;
   onContinueToPaymentHandled?: () => void;
+  openDetails?: boolean;
+  onOpenDetailsHandled?: () => void;
   openAuthModal?: boolean;
   onOpenAuthModalHandled?: () => void;
 }
@@ -53,16 +56,19 @@ export default function GameCard({
   pendingCheckoutReference,
   continueToPayment,
   onContinueToPaymentHandled,
+  openDetails,
+  onOpenDetailsHandled,
   openAuthModal,
   onOpenAuthModalHandled,
 }: GameCardProps) {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   useEffect(() => {
-    if (continueToPayment || openAuthModal) {
+    if (openAuthModal || openDetails) {
       setIsDetailsOpen(true);
+      onOpenDetailsHandled?.();
     }
-  }, [continueToPayment, openAuthModal]);
+  }, [openAuthModal, openDetails, onOpenDetailsHandled]);
 
   const maxPlayers = game.max_players || 12;
   const spotsLeft =

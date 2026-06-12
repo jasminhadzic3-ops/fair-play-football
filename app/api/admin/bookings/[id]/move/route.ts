@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { notifyWaitingListForOpenSpace } from "@/lib/waitingListNotifications";
 
 type MoveBookingPayload = {
   target_game_id?: unknown;
@@ -39,7 +40,7 @@ export async function PATCH(
 
     const { data: booking, error: bookingError } = await supabaseAdmin
       .from("bookings")
-      .select("id,game_id")
+      .select("id,game_id,user_id")
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -69,6 +70,29 @@ export async function PATCH(
       return Response.json({ ok: true, booking });
     }
 
+    const sourceGameId = booking.game_id;
+    const { data: sourceGame, error: sourceGameError } = await supabaseAdmin
+      .from("games")
+      .select("id,max_players")
+      .eq("id", sourceGameId)
+      .maybeSingle();
+
+    if (sourceGameError) {
+      return Response.json({ error: sourceGameError.message }, { status: 500 });
+    }
+
+    const { count: sourceBookingCountBeforeMove, error: sourceCountBeforeError } = await supabaseAdmin
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("game_id", sourceGameId);
+
+    if (sourceCountBeforeError) {
+      return Response.json({ error: sourceCountBeforeError.message }, { status: 500 });
+    }
+
+    const sourceWasFullBeforeMove =
+      sourceGame ? (sourceBookingCountBeforeMove ?? 0) >= sourceGame.max_players : false;
+
     const { count: targetBookingCount, error: countError } = await supabaseAdmin
       .from("bookings")
       .select("id", { count: "exact", head: true })
@@ -91,6 +115,36 @@ export async function PATCH(
 
     if (updateError) {
       return Response.json({ error: updateError.message }, { status: 500 });
+    }
+
+    if (booking.user_id) {
+      const { error: waitingListCleanupError } = await supabaseAdmin
+        .from("waiting_list")
+        .update({ status: "removed" })
+        .eq("user_id", booking.user_id)
+        .eq("game_id", targetGameId)
+        .eq("status", "waiting");
+
+      if (waitingListCleanupError) {
+        return Response.json({ error: waitingListCleanupError.message }, { status: 500 });
+      }
+    }
+
+    if (sourceGame && sourceWasFullBeforeMove) {
+      const { count: sourceBookingCountAfterMove, error: sourceCountAfterError } = await supabaseAdmin
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("game_id", sourceGameId);
+
+      if (sourceCountAfterError) {
+        return Response.json({ error: sourceCountAfterError.message }, { status: 500 });
+      }
+
+      if ((sourceBookingCountAfterMove ?? 0) < sourceGame.max_players) {
+        await notifyWaitingListForOpenSpace(sourceGameId).catch((notificationError) => {
+          console.warn("Unable to notify waiting list after moving booking:", notificationError);
+        });
+      }
     }
 
     return Response.json({ ok: true, booking: updatedBooking });

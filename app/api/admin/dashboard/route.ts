@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [gamesResult, bookingsResult, profilesResult, paymentsResult] = await Promise.all([
+    const [gamesResult, bookingsResult, profilesResult, paymentsResult, waitingListResult] = await Promise.all([
       supabaseAdmin
         .from("games")
         .select("id,title,location,time,price,max_players")
@@ -61,13 +61,19 @@ export async function GET(request: NextRequest) {
           "id,user_id,game_id,player_name,checkout_id,checkout_reference,payment_status,booking_id,hosted_checkout_url,amount,currency,raw_checkout,created_at,updated_at"
         )
         .order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("waiting_list")
+        .select("id,game_id,user_id,player_name,status,created_at")
+        .eq("status", "waiting")
+        .order("created_at", { ascending: true }),
     ]);
 
     const firstError =
       gamesResult.error ||
       bookingsResult.error ||
       profilesResult.error ||
-      paymentsResult.error;
+      paymentsResult.error ||
+      waitingListResult.error;
 
     if (firstError) {
       return Response.json({ error: firstError.message }, { status: 500 });
@@ -77,18 +83,21 @@ export async function GET(request: NextRequest) {
     const bookings = bookingsResult.data ?? [];
     const profiles = profilesResult.data ?? [];
     const bookingPayments = paymentsResult.data ?? [];
+    const waitingList = waitingListResult.data ?? [];
 
     return Response.json({
       games,
       bookings,
       profiles,
       booking_payments: bookingPayments,
+      waiting_list: waitingList,
       summary: {
         games_count: games.length,
         bookings_count: bookings.length,
         players_count: countUniquePlayers(bookings),
         profiles_count: profiles.length,
         payments_count: bookingPayments.length,
+        waiting_list_count: waitingList.length,
         paid_payments_amount_total: sumPaidPaymentAmounts(bookingPayments),
         payments_by_status: countPaymentsByStatus(bookingPayments),
       },

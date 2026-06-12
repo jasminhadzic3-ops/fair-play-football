@@ -6,6 +6,9 @@ import { supabase } from "@/lib/supabase";
 import GameCard from "@/components/games/GameCard";
 import Navbar from "@/components/shared/layout/Navbar";
 import Hero from "@/components/shared/layout/Hero";
+import Modal from "@/components/shared/ui/Modal";
+
+const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -18,8 +21,24 @@ export default function Home() {
   const [pendingCheckoutReference, setPendingCheckoutReference] = useState<string | null>(null);
   const [returnPaymentMessage, setReturnPaymentMessage] = useState<string | null>(null);
   const [returnPaymentState, setReturnPaymentState] = useState<"checking" | "paid" | "pending" | "failed" | null>(null);
-  const [navbarAuthOpen, setNavbarAuthOpen] = useState(false);
+  const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
+  const [navbarAuthEmail, setNavbarAuthEmail] = useState("");
+  const [navbarAuthPassword, setNavbarAuthPassword] = useState("");
+  const [navbarAuthConfirmPassword, setNavbarAuthConfirmPassword] = useState("");
+  const [navbarAuthUsername, setNavbarAuthUsername] = useState("");
+  const [navbarAuthAge, setNavbarAuthAge] = useState("");
+  const [navbarAuthGender, setNavbarAuthGender] = useState("");
+  const [navbarAuthFavouritePosition, setNavbarAuthFavouritePosition] = useState("");
+  const [navbarAuthMode, setNavbarAuthMode] = useState<"signin" | "signup">("signin");
+  const [navbarAuthLoading, setNavbarAuthLoading] = useState(false);
+  const [navbarAuthError, setNavbarAuthError] = useState<string | null>(null);
+  const [navbarAuthStatus, setNavbarAuthStatus] = useState<string | null>(null);
+  const [showNavbarAuthPassword, setShowNavbarAuthPassword] = useState(false);
+  const [openDetailsGameId, setOpenDetailsGameId] = useState<number | null>(null);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const returnPollingReference = useRef<string | null>(null);
+  const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
+  const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
 
   async function fetchProfile(userId: string) {
     const { data, error } = await supabase
@@ -82,6 +101,39 @@ export default function Home() {
     }
   }
 
+  async function fetchUnreadNotificationCount() {
+    const { count, error } = await supabase
+      .from("waiting_list_notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "unread");
+
+    if (error) {
+      console.error("Unable to load unread notifications:", error.message);
+      setUnreadNotificationCount(0);
+      return;
+    }
+
+    setUnreadNotificationCount(count ?? 0);
+  }
+
+  function clearPendingCheckoutState() {
+    localStorage.removeItem("pendingJoinGameId");
+    localStorage.removeItem("pendingSumUpGameId");
+    localStorage.removeItem("pendingSumUpCheckoutId");
+    localStorage.removeItem("pendingSumUpCheckoutReference");
+  }
+
+  function openGameFromNotification() {
+    const gameId = new URLSearchParams(window.location.search).get("open_game_id");
+
+    if (!gameId) {
+      return;
+    }
+
+    setOpenDetailsGameId(Number(gameId));
+    window.setTimeout(scrollToGames, 0);
+  }
+
   function continuePendingJoin() {
     const pendingJoinGameId = localStorage.getItem("pendingJoinGameId");
 
@@ -90,21 +142,44 @@ export default function Home() {
     }
 
     localStorage.removeItem("pendingJoinGameId");
-    setCheckoutGameId(Number(pendingJoinGameId));
+    setOpenDetailsGameId(Number(pendingJoinGameId));
   }
 
-  function continuePendingPayment() {
+  async function continuePendingPayment(authUserId: string) {
+    const checkoutReferenceFromUrl = new URLSearchParams(window.location.search).get("sumup_checkout_reference");
     const pendingSumUpGameId = localStorage.getItem("pendingSumUpGameId");
     const pendingSumUpCheckoutId = localStorage.getItem("pendingSumUpCheckoutId");
     const pendingSumUpCheckoutReference = localStorage.getItem("pendingSumUpCheckoutReference");
+
+    if (!checkoutReferenceFromUrl) {
+      clearPendingCheckoutState();
+      setPendingCheckoutId(null);
+      setPendingCheckoutReference(null);
+      setCheckoutGameId(null);
+      return;
+    }
 
     if (!pendingSumUpGameId || (!pendingSumUpCheckoutId && !pendingSumUpCheckoutReference)) {
       return;
     }
 
-    setPendingCheckoutId(pendingSumUpCheckoutId);
-    setPendingCheckoutReference(pendingSumUpCheckoutReference);
-    setCheckoutGameId(Number(pendingSumUpGameId));
+    let paymentQuery = supabase
+      .from("booking_payments")
+      .select("user_id,checkout_id,checkout_reference");
+
+    paymentQuery = pendingSumUpCheckoutId
+      ? paymentQuery.eq("checkout_id", pendingSumUpCheckoutId)
+      : paymentQuery.eq("checkout_reference", pendingSumUpCheckoutReference);
+
+    const { data: payment, error } = await paymentQuery.maybeSingle();
+
+    if (error || !payment || payment.user_id !== authUserId) {
+      clearPendingCheckoutState();
+      setPendingCheckoutId(null);
+      setPendingCheckoutReference(null);
+      setCheckoutGameId(null);
+      return;
+    }
   }
 
   function clearSumUpCheckoutReferenceFromUrl() {
@@ -204,8 +279,10 @@ export default function Home() {
       setUser(session?.user ?? null);
       if (session?.user) {
         await loadOrCreateProfile(session.user);
+        await fetchUnreadNotificationCount();
+        openGameFromNotification();
         continuePendingJoin();
-        continuePendingPayment();
+        await continuePendingPayment(session.user.id);
         await checkReturnedPayment(session.access_token);
       }
 
@@ -213,11 +290,18 @@ export default function Home() {
         setUser(session?.user ?? null);
         if (session?.user) {
           await loadOrCreateProfile(session.user);
+          await fetchUnreadNotificationCount();
+          openGameFromNotification();
           continuePendingJoin();
-          continuePendingPayment();
+          await continuePendingPayment(session.user.id);
           await checkReturnedPayment(session.access_token);
         } else {
           setProfile(null);
+          setUnreadNotificationCount(0);
+          clearPendingCheckoutState();
+          setPendingCheckoutId(null);
+          setPendingCheckoutReference(null);
+          setCheckoutGameId(null);
         }
       });
 
@@ -232,14 +316,24 @@ export default function Home() {
   }, []);
 
   const leaveGame = async (bookingId: number) => {
+    const session = (await supabase.auth.getSession()).data.session;
 
-    const { error } = await supabase
-      .from("bookings")
-      .delete()
-      .eq("id", bookingId);
+    if (!session?.access_token) {
+      console.error("Unable to leave game: missing session.");
+      return;
+    }
 
-    if (error) {
-      console.error("Unable to leave game:", error.message);
+    const response = await fetch(`/api/bookings/${bookingId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      console.error("Unable to leave game:", result?.error || "Unknown error");
       return;
     }
 
@@ -247,9 +341,182 @@ export default function Home() {
   };
 
   const handleSignOut = async () => {
+    clearPendingCheckoutState();
+    setPendingCheckoutId(null);
+    setPendingCheckoutReference(null);
+    setCheckoutGameId(null);
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+  };
+
+  const handleNavbarSignIn = () => {
+    clearPendingCheckoutState();
+    setPendingCheckoutId(null);
+    setPendingCheckoutReference(null);
+    setCheckoutGameId(null);
+    setOpenDetailsGameId(null);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+    setNavbarAuthMode("signin");
+    setShowNavbarAuthModal(true);
+  };
+
+  const closeNavbarAuthModal = () => {
+    setShowNavbarAuthModal(false);
+    setNavbarAuthLoading(false);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+    setNavbarAuthPassword("");
+    setNavbarAuthConfirmPassword("");
+    setNavbarAuthMode("signin");
+  };
+
+  const switchNavbarAuthMode = (mode: "signin" | "signup") => {
+    setNavbarAuthMode(mode);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+    setNavbarAuthPassword("");
+    setNavbarAuthConfirmPassword("");
+  };
+
+  const handleNavbarEmailSignIn = async () => {
+    setNavbarAuthLoading(true);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: navbarAuthEmail,
+        password: navbarAuthPassword,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const signedInUser = data.user ?? data.session?.user;
+
+      if (!signedInUser) {
+        throw new Error("Sign in succeeded, but the user session could not be loaded.");
+      }
+
+      setShowNavbarAuthModal(false);
+      setNavbarAuthPassword("");
+      await loadOrCreateProfile(signedInUser);
+      await fetchUnreadNotificationCount();
+    } catch (error: any) {
+      setNavbarAuthError(`Sign in failed. ${error?.message || "Please verify your email and password."}`);
+    } finally {
+      setNavbarAuthLoading(false);
+    }
+  };
+
+  const handleNavbarGoogleSignIn = async () => {
+    setNavbarAuthLoading(true);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: {
+          prompt: "select_account",
+        },
+      },
+    });
+
+    if (error) {
+      setNavbarAuthLoading(false);
+      setNavbarAuthError(`Google sign in failed. ${error.message}`);
+    }
+  };
+
+  const handleNavbarCreateAccount = async () => {
+    setNavbarAuthLoading(true);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+
+    if (!navbarAuthAge) {
+      setNavbarAuthError("Please select your age.");
+      setNavbarAuthLoading(false);
+      return;
+    }
+
+    if (!navbarAuthFavouritePosition) {
+      setNavbarAuthError("Please select your favourite position.");
+      setNavbarAuthLoading(false);
+      return;
+    }
+
+    if (navbarAuthPassword !== navbarAuthConfirmPassword) {
+      setNavbarAuthError("Passwords do not match.");
+      setNavbarAuthLoading(false);
+      return;
+    }
+
+    try {
+      const pendingSignupProfile = {
+        username: navbarAuthUsername.trim(),
+        age: navbarAuthAge,
+        gender: navbarAuthGender,
+        favouritePosition: navbarAuthFavouritePosition,
+        favourite_position: navbarAuthFavouritePosition,
+        email: navbarAuthEmail,
+      };
+
+      localStorage.setItem(PENDING_SIGNUP_PROFILE_KEY, JSON.stringify(pendingSignupProfile));
+
+      const { data, error } = await supabase.auth.signUp({
+        email: navbarAuthEmail,
+        password: navbarAuthPassword,
+        options: {
+          emailRedirectTo: `${window.location.origin}/profile?complete_profile=1`,
+          data: pendingSignupProfile,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const currentUser = data.user ?? (await supabase.auth.getUser()).data.user;
+      if (!currentUser) {
+        const signInResult = await supabase.auth.signInWithPassword({
+          email: navbarAuthEmail,
+          password: navbarAuthPassword,
+        });
+        if (signInResult.error) {
+          throw signInResult.error;
+        }
+      }
+
+      const sessionUser = (await supabase.auth.getUser()).data.user;
+      if (sessionUser) {
+        await supabase.from("profiles").upsert({
+          id: sessionUser.id,
+          email: navbarAuthEmail,
+          username: navbarAuthUsername.trim(),
+          age: navbarAuthAge,
+          gender: navbarAuthGender,
+          favourite_position: navbarAuthFavouritePosition,
+        });
+        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+        await loadOrCreateProfile(sessionUser);
+        await fetchUnreadNotificationCount();
+        closeNavbarAuthModal();
+        window.location.href = "/profile";
+        return;
+      }
+
+      setNavbarAuthStatus("Check your email to verify your account. Your profile will be completed after verification.");
+    } catch (error: any) {
+      localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+      setNavbarAuthError(error?.message || "Unable to create account. Please try again.");
+    } finally {
+      setNavbarAuthLoading(false);
+    }
   };
 
   return (
@@ -257,9 +524,180 @@ export default function Home() {
       <Navbar
         user={user}
         profile={profile}
+        unreadNotificationCount={unreadNotificationCount}
         onLogout={handleSignOut}
-        onSignIn={() => setNavbarAuthOpen(true)}
+        onSignIn={handleNavbarSignIn}
       />
+      <Modal
+        isOpen={showNavbarAuthModal}
+        onClose={closeNavbarAuthModal}
+        title="Sign in or create account"
+      >
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
+            <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">
+              {navbarAuthMode === "signup" ? "Create account" : "Sign in"}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+              Enter your account credentials to continue.
+            </p>
+          </div>
+
+          {navbarAuthError ? (
+            <div className="rounded-3xl border border-rose-500/70 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              {navbarAuthError}
+            </div>
+          ) : null}
+
+          {navbarAuthStatus ? (
+            <div className="rounded-3xl border border-stone-300/15 bg-zinc-950 px-4 py-3 text-sm font-semibold text-stone-200">
+              {navbarAuthStatus}
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
+            {navbarAuthMode === "signup" ? (
+              <>
+                <div>
+                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Username</label>
+                  <input
+                    value={navbarAuthUsername}
+                    onChange={(event) => setNavbarAuthUsername(event.target.value)}
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                    placeholder="Your username"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Age</label>
+                  <select
+                    value={navbarAuthAge}
+                    onChange={(event) => setNavbarAuthAge(event.target.value)}
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                  >
+                    <option value="" disabled>
+                      Select age
+                    </option>
+                    {ageOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Gender</label>
+                  <select
+                    value={navbarAuthGender}
+                    onChange={(event) => setNavbarAuthGender(event.target.value)}
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                  >
+                    <option value="" disabled>
+                      Select gender
+                    </option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Favourite position</label>
+                  <select
+                    value={navbarAuthFavouritePosition}
+                    onChange={(event) => setNavbarAuthFavouritePosition(event.target.value)}
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                  >
+                    <option value="" disabled>
+                      Select position
+                    </option>
+                    {positionOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : null}
+
+            <div>
+              <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Email</label>
+              <input
+                value={navbarAuthEmail}
+                onChange={(event) => setNavbarAuthEmail(event.target.value)}
+                className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                placeholder="you@example.com"
+              />
+            </div>
+            <div>
+              <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Password</label>
+              <div className="relative mt-2">
+                <input
+                  type={showNavbarAuthPassword ? "text" : "password"}
+                  value={navbarAuthPassword}
+                  onChange={(event) => setNavbarAuthPassword(event.target.value)}
+                  className="w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 pr-20 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNavbarAuthPassword((current) => !current)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs uppercase tracking-[0.25em] text-zinc-400 hover:text-white"
+                >
+                  {showNavbarAuthPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+            {navbarAuthMode === "signup" ? (
+              <div>
+                <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Confirm password</label>
+                <input
+                  type={showNavbarAuthPassword ? "text" : "password"}
+                  value={navbarAuthConfirmPassword}
+                  onChange={(event) => setNavbarAuthConfirmPassword(event.target.value)}
+                  className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                  placeholder="Confirm password"
+                />
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={handleNavbarGoogleSignIn}
+                disabled={navbarAuthLoading}
+                className="rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {navbarAuthLoading ? "Connecting..." : "Continue with Google"}
+              </button>
+              <button
+                type="button"
+                onClick={navbarAuthMode === "signup" ? handleNavbarCreateAccount : handleNavbarEmailSignIn}
+                disabled={navbarAuthLoading}
+                className="rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {navbarAuthLoading
+                  ? navbarAuthMode === "signup"
+                    ? "Creating..."
+                    : "Signing in..."
+                  : navbarAuthMode === "signup"
+                    ? "Create account"
+                    : "Sign in"}
+              </button>
+            </div>
+
+            <div className="text-center text-sm text-zinc-400">
+              {navbarAuthMode === "signup" ? "Already have an account?" : "Don't have an account?"}{" "}
+              <button
+                type="button"
+                onClick={() => switchNavbarAuthMode(navbarAuthMode === "signup" ? "signin" : "signup")}
+                className="font-semibold text-stone-200 hover:text-white"
+              >
+                {navbarAuthMode === "signup" ? "Sign In" : "Create Account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
       <Hero />
       <main className="bg-black text-white" id="games">
         <div className="max-w-5xl mx-auto px-6 py-12">
@@ -332,14 +770,13 @@ export default function Home() {
                 onSignOut={handleSignOut}
                 pendingCheckoutId={checkoutGameId === game.id ? pendingCheckoutId : null}
                 pendingCheckoutReference={checkoutGameId === game.id ? pendingCheckoutReference : null}
-                continueToPayment={checkoutGameId === game.id}
                 onContinueToPaymentHandled={() => {
                   setCheckoutGameId(null);
                   setPendingCheckoutId(null);
                   setPendingCheckoutReference(null);
                 }}
-                openAuthModal={navbarAuthOpen && game.id === games[0]?.id}
-                onOpenAuthModalHandled={() => setNavbarAuthOpen(false)}
+                openDetails={openDetailsGameId === game.id}
+                onOpenDetailsHandled={() => setOpenDetailsGameId(null)}
               />
             ))}
           </div>

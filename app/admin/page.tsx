@@ -31,6 +31,15 @@ interface BookingPayment {
   currency?: string | null;
 }
 
+interface WaitingListEntry {
+  id: number;
+  game_id: number;
+  user_id?: string | null;
+  player_name?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+}
+
 interface AdminSummary {
   games_count: number;
   bookings_count: number;
@@ -42,6 +51,7 @@ interface AdminDashboardData {
   games: Game[];
   bookings: Booking[];
   booking_payments: BookingPayment[];
+  waiting_list: WaitingListEntry[];
   summary: AdminSummary;
 }
 
@@ -50,6 +60,7 @@ export default function AdminPage() {
   const [games, setGames] = useState<Game[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingPayments, setBookingPayments] = useState<BookingPayment[]>([]);
+  const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [time, setTime] = useState("");
@@ -96,6 +107,7 @@ export default function AdminPage() {
         setGames(result.games ?? []);
         setBookings(result.bookings ?? []);
         setBookingPayments(result.booking_payments ?? []);
+        setWaitingList(result.waiting_list ?? []);
         setSummary(result.summary);
       }
     } catch (error) {
@@ -374,6 +386,26 @@ export default function AdminPage() {
 
   const getGameForBooking = (booking: Booking) =>
     games.find((game) => game.id === booking.game_id);
+
+  const getGameById = (gameId: number) =>
+    games.find((game) => game.id === gameId);
+
+  const formatJoinedDate = (dateValue: string | null | undefined) => {
+    if (!dateValue) {
+      return "—";
+    }
+
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return "—";
+    }
+
+    return date.toLocaleString("en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  };
 
   const formatPaymentAmount = (payment: BookingPayment | undefined) => {
     if (payment?.amount === null || payment?.amount === undefined) {
@@ -681,6 +713,75 @@ export default function AdminPage() {
                             Remove booking
                           </button>
                         </form>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-12 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h2 className="text-2xl font-bold">Waiting List</h2>
+            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-400">
+              {waitingList.length} total
+            </span>
+          </div>
+
+          {waitingList.length === 0 ? (
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-400">
+              No waiting list entries yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {waitingList.map((entry) => {
+                const game = getGameById(entry.game_id);
+
+                return (
+                  <div
+                    key={entry.id}
+                    className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                  >
+                    <div className="grid gap-4 md:grid-cols-[1fr_1.3fr_0.8fr_1fr] md:items-center">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Player
+                        </p>
+                        <p className="mt-2 font-semibold text-white">
+                          {entry.player_name?.trim() || "Unnamed player"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Game
+                        </p>
+                        <p className="mt-2 font-semibold text-white">
+                          {game?.title || "Unknown game"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {game ? `${game.time || "TBD"} • ${game.location}` : "TBD"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Status
+                        </p>
+                        <span className="mt-2 inline-flex rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-300">
+                          {entry.status || "waiting"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Joined
+                        </p>
+                        <p className="mt-2 font-semibold text-white">
+                          {formatJoinedDate(entry.created_at)}
+                        </p>
                       </div>
                     </div>
                   </div>

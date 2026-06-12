@@ -121,10 +121,25 @@ export default function MyBookingsPage() {
 
     setLeavingBookingId(bookingId);
 
-    const { error } = await supabase.from("bookings").delete().eq("id", bookingId);
+    const session = (await supabase.auth.getSession()).data.session;
 
-    if (error) {
-      console.error("Unable to leave game:", error.message);
+    if (!session?.access_token) {
+      console.error("Unable to leave game: missing session.");
+      setLeavingBookingId(null);
+      return;
+    }
+
+    const response = await fetch(`/api/bookings/${bookingId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      console.error("Unable to leave game:", result?.error || "Unknown error");
     } else {
       await fetchBookings();
     }

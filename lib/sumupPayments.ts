@@ -43,6 +43,19 @@ function getSumUpApiKey() {
   return apiKey;
 }
 
+async function removeWaitingListEntryForBookedUser(userId: string, gameId: number) {
+  const { error } = await supabaseAdmin
+    .from("waiting_list")
+    .update({ status: "removed" })
+    .eq("user_id", userId)
+    .eq("game_id", gameId)
+    .eq("status", "waiting");
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function getAuthenticatedUser(authHeader: string | null) {
   assertSupabaseAdminConfigured();
 
@@ -189,6 +202,8 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
       throw updateError;
     }
 
+    await removeWaitingListEntryForBookedUser(payment.user_id, payment.game_id);
+
     return { paymentStatus: "paid", bookingId: payment.booking_id };
   }
 
@@ -264,6 +279,8 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
   if (updatedPayment?.booking_id !== bookingId) {
     throw new Error("Unable to write booking_id to paid payment record.");
   }
+
+  await removeWaitingListEntryForBookedUser(payment.user_id, payment.game_id);
 
   return { paymentStatus: "paid", bookingId };
 }
