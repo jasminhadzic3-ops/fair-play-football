@@ -533,14 +533,44 @@ export default function Home() {
         onClose={closeNavbarAuthModal}
         title="Sign in or create account"
       >
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
-            <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">
-              {navbarAuthMode === "signup" ? "Create account" : "Sign in"}
+        <div className="space-y-5">
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+            <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
+              {navbarAuthMode === "signup" ? "CREATE ACCOUNT" : "SIGN IN"}
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              Enter your account credentials to continue.
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-white">
+              {null}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              {navbarAuthMode === "signup"
+                ? "Enter your details to continue."
+                : "Enter your credentials to continue."}
             </p>
+
+            <div className="mt-6 grid grid-cols-2 rounded-full border border-zinc-800 bg-black p-1">
+              <button
+                type="button"
+                onClick={() => switchNavbarAuthMode("signin")}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  navbarAuthMode === "signin"
+                    ? "bg-stone-200 text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.16)]"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => switchNavbarAuthMode("signup")}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  navbarAuthMode === "signup"
+                    ? "bg-stone-200 text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.16)]"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                Create account
+              </button>
+            </div>
           </div>
 
           {navbarAuthError ? (
@@ -555,24 +585,41 @@ export default function Home() {
             </div>
           ) : null}
 
-          <div className="grid gap-4 rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
+          <div className="grid gap-5 rounded-[2rem] border border-zinc-800 bg-zinc-900 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+            <button
+              type="button"
+              onClick={handleNavbarGoogleSignIn}
+              disabled={navbarAuthLoading}
+              className="flex w-full items-center justify-center rounded-3xl border border-stone-300/20 bg-zinc-950 px-5 py-4 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {navbarAuthLoading ? "Connecting..." : "Continue with Google"}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-zinc-800" />
+              <span className="text-xs font-bold uppercase tracking-[0.25em] text-zinc-500">
+                or
+              </span>
+              <div className="h-px flex-1 bg-zinc-800" />
+            </div>
+
             {navbarAuthMode === "signup" ? (
-              <>
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Username</label>
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Username</label>
                   <input
                     value={navbarAuthUsername}
                     onChange={(event) => setNavbarAuthUsername(event.target.value)}
-                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-white/30"
                     placeholder="Your username"
                   />
                 </div>
                 <div>
-                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Age</label>
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Age</label>
                   <select
                     value={navbarAuthAge}
                     onChange={(event) => setNavbarAuthAge(event.target.value)}
-                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
                   >
                     <option value="" disabled>
                       Select age
@@ -585,11 +632,11 @@ export default function Home() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Gender</label>
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Gender</label>
                   <select
                     value={navbarAuthGender}
                     onChange={(event) => setNavbarAuthGender(event.target.value)}
-                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
                   >
                     <option value="" disabled>
                       Select gender
@@ -600,11 +647,11 @@ export default function Home() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Favourite position</label>
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Favourite position</label>
                   <select
                     value={navbarAuthFavouritePosition}
                     onChange={(event) => setNavbarAuthFavouritePosition(event.target.value)}
-                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
                   >
                     <option value="" disabled>
                       Select position
@@ -616,26 +663,26 @@ export default function Home() {
                     ))}
                   </select>
                 </div>
-              </>
+              </div>
             ) : null}
 
             <div>
-              <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Email</label>
+              <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Email</label>
               <input
                 value={navbarAuthEmail}
                 onChange={(event) => setNavbarAuthEmail(event.target.value)}
-                className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-white/30"
                 placeholder="you@example.com"
               />
             </div>
             <div>
-              <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Password</label>
+              <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Password</label>
               <div className="relative mt-2">
                 <input
                   type={showNavbarAuthPassword ? "text" : "password"}
                   value={navbarAuthPassword}
                   onChange={(event) => setNavbarAuthPassword(event.target.value)}
-                  className="w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 pr-20 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                  className="w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 pr-20 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-white/30"
                   placeholder="Enter your password"
                 />
                 <button
@@ -649,43 +696,33 @@ export default function Home() {
             </div>
             {navbarAuthMode === "signup" ? (
               <div>
-                <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Confirm password</label>
+                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Confirm password</label>
                 <input
                   type={showNavbarAuthPassword ? "text" : "password"}
                   value={navbarAuthConfirmPassword}
                   onChange={(event) => setNavbarAuthConfirmPassword(event.target.value)}
-                  className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none transition-colors duration-150 ease-out focus:border-white/30"
+                  className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-white/30"
                   placeholder="Confirm password"
                 />
               </div>
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <button
-                type="button"
-                onClick={handleNavbarGoogleSignIn}
-                disabled={navbarAuthLoading}
-                className="rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {navbarAuthLoading ? "Connecting..." : "Continue with Google"}
-              </button>
-              <button
-                type="button"
-                onClick={navbarAuthMode === "signup" ? handleNavbarCreateAccount : handleNavbarEmailSignIn}
-                disabled={navbarAuthLoading}
-                className="rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {navbarAuthLoading
-                  ? navbarAuthMode === "signup"
-                    ? "Creating..."
-                    : "Signing in..."
-                  : navbarAuthMode === "signup"
-                    ? "Create account"
-                    : "Sign in"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={navbarAuthMode === "signup" ? handleNavbarCreateAccount : handleNavbarEmailSignIn}
+              disabled={navbarAuthLoading}
+              className="w-full rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_14px_40px_rgba(214,211,209,0.22)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {navbarAuthLoading
+                ? navbarAuthMode === "signup"
+                  ? "Creating..."
+                  : "Signing in..."
+                : navbarAuthMode === "signup"
+                  ? "Create account"
+                  : "Sign in"}
+            </button>
 
-            <div className="text-center text-sm text-zinc-400">
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-center text-sm text-zinc-400">
               {navbarAuthMode === "signup" ? "Already have an account?" : "Don't have an account?"}{" "}
               <button
                 type="button"
