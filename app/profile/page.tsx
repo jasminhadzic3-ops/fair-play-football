@@ -100,12 +100,31 @@ export default function ProfilePage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const isProfileDirty =
     username.trim() !== (profile?.username || "") ||
     age !== (profile?.age || "") ||
     gender !== (profile?.gender || "") ||
     favouritePosition !== (profile?.favourite_position || "");
   const isEmailVerified = Boolean(user?.email_confirmed_at || user?.confirmed_at);
+  const displayName: string = profile?.username || username || (user ? getFallbackUsername(user) : "Player");
+  const displayEmail = profile?.email || user?.email || "No email found";
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part[0]?.toUpperCase())
+    .join("") || "FP";
+
+  const resetProfileForm = () => {
+    setUsername(profile?.username || "");
+    setAge(profile?.age || "");
+    setGender(profile?.gender || "");
+    setFavouritePosition(profile?.favourite_position || "");
+    setIsEditingProfile(false);
+    setStatusMessage(null);
+    setErrorMessage(null);
+  };
 
   const showTemporaryNotificationMessage = (message: string) => {
     setNotificationMessage(message);
@@ -385,6 +404,7 @@ export default function ProfilePage() {
     setGender(data.gender || "");
     setFavouritePosition(data.favourite_position || "");
     setStatusMessage("Profile saved.");
+    setIsEditingProfile(false);
     setIsSaving(false);
   };
 
@@ -504,8 +524,30 @@ export default function ProfilePage() {
 
         {!isLoading && user ? (
           <div className="space-y-6">
+            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+              <div className="flex items-center gap-5">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
+                  {initials}
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
+                    Player profile
+                  </p>
+                  <h2 className="mt-2 text-3xl font-black tracking-tight text-white md:text-4xl">
+                    {displayName}
+                  </h2>
+                  <p className="mt-2 text-sm font-semibold text-zinc-400">
+                    {displayEmail}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {!isEmailVerified ? (
               <div className="rounded-[2rem] border border-stone-300/20 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+                <span className="mb-4 inline-flex rounded-full border border-stone-300/20 bg-stone-200/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-stone-200">
+                  Verification Required
+                </span>
                 <p className="text-sm uppercase tracking-[0.3em] text-stone-400">
                   Verify your email
                 </p>
@@ -515,81 +557,117 @@ export default function ProfilePage() {
               </div>
             ) : null}
 
-            <div className="space-y-6 rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Email
-                </p>
-                <p className="mt-2 text-sm font-semibold text-zinc-300">
-                  {profile?.email || user.email || "No email found"}
-                </p>
+            <div className="space-y-6 rounded-[2rem] border border-zinc-800 bg-zinc-900 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    Personal details
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold text-white">Your player info</h2>
+                </div>
+                {!isEditingProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusMessage(null);
+                      setErrorMessage(null);
+                      setIsEditingProfile(true);
+                    }}
+                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-5 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800"
+                  >
+                    Edit Profile
+                  </button>
+                ) : null}
               </div>
 
-              <div>
-                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Display name
-                </label>
-                <input
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
-                  placeholder="Your display name"
-                />
-              </div>
+              {isEditingProfile ? (
+                <div className="grid gap-4">
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Display name
+                    </label>
+                    <input
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
+                      placeholder="Your display name"
+                    />
+                  </div>
 
-              <div>
-                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Age
-                </label>
-                <select
-                  value={age}
-                  onChange={(event) => setAge(event.target.value)}
-                  className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
-                >
-                  <option value="">Select age</option>
-                  {ageOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Age
+                    </label>
+                    <select
+                      value={age}
+                      onChange={(event) => setAge(event.target.value)}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="">Select age</option>
+                      {ageOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Gender
+                    </label>
+                    <select
+                      value={gender}
+                      onChange={(event) => setGender(event.target.value)}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="">Select gender</option>
+                      {genderOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Favourite position
+                    </label>
+                    <select
+                      value={favouritePosition}
+                      onChange={(event) => setFavouritePosition(event.target.value)}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="">Select a position</option>
+                      {positionOptions.map((position) => (
+                        <option key={position} value={position}>
+                          {position}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { label: "Display name", value: profile?.username || username || "—" },
+                    { label: "Email", value: displayEmail },
+                    { label: "Age", value: profile?.age || age || "—" },
+                    { label: "Gender", value: profile?.gender || gender || "—" },
+                    { label: "Favourite position", value: profile?.favourite_position || favouritePosition || "—" },
+                  ].map((field) => (
+                    <div key={field.label} className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
+                      <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                        {field.label}
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-white">
+                        {field.value}
+                      </p>
+                    </div>
                   ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Gender
-                </label>
-                <select
-                  value={gender}
-                  onChange={(event) => setGender(event.target.value)}
-                  className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
-                >
-                  <option value="">Select gender</option>
-                  {genderOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Favourite position
-                </label>
-                <select
-                  value={favouritePosition}
-                  onChange={(event) => setFavouritePosition(event.target.value)}
-                  className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
-                >
-                  <option value="">Select a position</option>
-                  {positionOptions.map((position) => (
-                    <option key={position} value={position}>
-                      {position}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                </div>
+              )}
 
               {statusMessage ? (
                 <div className="rounded-3xl border border-stone-300/15 bg-zinc-950 p-4 text-sm font-semibold text-stone-200">
@@ -603,18 +681,30 @@ export default function ProfilePage() {
                 </div>
               ) : null}
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (isProfileDirty) {
-                    void saveProfile();
-                  }
-                }}
-                disabled={isSaving || !isProfileDirty}
-                className="w-full rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_14px_40px_rgba(214,211,209,0.22)] disabled:cursor-default disabled:opacity-60"
-              >
-                {isSaving ? "Saving..." : isProfileDirty ? "Save Profile" : "Edit Profile"}
-              </button>
+              {isEditingProfile ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isProfileDirty) {
+                        void saveProfile();
+                      }
+                    }}
+                    disabled={isSaving || !isProfileDirty}
+                    className="rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_14px_40px_rgba(214,211,209,0.22)] disabled:cursor-default disabled:opacity-60"
+                  >
+                    {isSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetProfileForm}
+                    disabled={isSaving}
+                    className="rounded-3xl border border-zinc-700 bg-zinc-950 px-6 py-4 font-bold text-white transition hover:border-white/20 disabled:cursor-default disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
