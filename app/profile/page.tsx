@@ -97,6 +97,7 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [gamesPlayedCount, setGamesPlayedCount] = useState(0);
   const [notifications, setNotifications] = useState<WaitingListNotification[]>([]);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -111,6 +112,14 @@ export default function ProfilePage() {
   const isEmailVerified = Boolean(user?.email_confirmed_at || user?.confirmed_at);
   const displayName: string = profile?.username || username || (user ? getFallbackUsername(user) : "Player");
   const displayEmail = profile?.email || user?.email || "No email found";
+  const profileCompletenessCount = [
+    Boolean(profile?.avatar_url),
+    Boolean((profile?.username || username).trim()),
+    Boolean(age),
+    Boolean(gender),
+    Boolean(profile?.favourite_position || favouritePosition),
+  ].filter(Boolean).length;
+  const profileCompletenessPercent = Math.round((profileCompletenessCount / 5) * 100);
   const initials = displayName
     .split(/\s+/)
     .filter(Boolean)
@@ -142,6 +151,21 @@ export default function ProfilePage() {
 
     return mimeExtension || file.name.split(".").pop()?.toLowerCase() || "jpg";
   };
+
+  const fetchGamesPlayedCount = useCallback(async (userId: string) => {
+    const { count, error } = await supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("Unable to load games played:", error.message);
+      setGamesPlayedCount(0);
+      return;
+    }
+
+    setGamesPlayedCount(count ?? 0);
+  }, []);
 
   const loadNotifications = useCallback(async () => {
     setIsLoadingNotifications(true);
@@ -240,11 +264,13 @@ export default function ProfilePage() {
       setGender("");
       setFavouritePosition("");
       setNotifications([]);
+      setGamesPlayedCount(0);
       setIsLoading(false);
       return;
     }
 
     await loadNotifications();
+    await fetchGamesPlayedCount(authUser.id);
 
     const completeProfileFromUrl = new URLSearchParams(window.location.search).get("complete_profile") === "1";
     const pendingProfileText = localStorage.getItem(PENDING_SIGNUP_PROFILE_KEY);
@@ -366,7 +392,7 @@ export default function ProfilePage() {
       setStatusMessage("Profile completed. Please check your details.");
     }
     setIsLoading(false);
-  }, [loadNotifications]);
+  }, [fetchGamesPlayedCount, loadNotifications]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -606,39 +632,66 @@ export default function ProfilePage() {
         {!isLoading && user ? (
           <div className="space-y-6">
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
-              <div className="flex items-center gap-5">
-                <label className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
-                  {profile?.avatar_url ? (
-                    <img
-                      src={profile.avatar_url}
-                      alt=""
-                      className="h-full w-full object-cover"
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-5">
+                  <label className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
+                    {profile?.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      initials
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/60 px-2 text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-white opacity-0 transition group-hover:opacity-100">
+                      {isUploadingAvatar ? "Uploading" : "Upload"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={uploadAvatar}
+                      disabled={isUploadingAvatar}
+                      className="sr-only"
                     />
-                  ) : (
-                    initials
-                  )}
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/60 px-2 text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-white opacity-0 transition group-hover:opacity-100">
-                    {isUploadingAvatar ? "Uploading" : "Upload"}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={uploadAvatar}
-                    disabled={isUploadingAvatar}
-                    className="sr-only"
-                  />
-                </label>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
-                    Player profile
-                  </p>
-                  <h2 className="mt-2 text-3xl font-black tracking-tight text-white md:text-4xl">
-                    {displayName}
-                  </h2>
-                  <p className="mt-2 text-sm font-semibold text-zinc-400">
-                    {displayEmail}
-                  </p>
+                  </label>
+                  <div>
+                    <h2 className="max-w-full break-words text-3xl font-black tracking-tight text-white md:text-4xl">
+                      {displayName}
+                    </h2>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <span className="rounded-full border border-stone-300/20 bg-stone-200/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-stone-200">
+                        {profile?.favourite_position || favouritePosition || "—"}
+                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                        Member since{" "}
+                        {user.created_at
+                          ? new Date(user.created_at).toLocaleDateString("en-GB", {
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "—"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-zinc-400">
+                      {displayEmail}
+                    </p>
+                  </div>
                 </div>
+                <div className="w-full rounded-3xl border border-zinc-800 bg-zinc-900 px-5 py-4 sm:w-auto sm:min-w-36">
+                  <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                    Games Played
+                  </p>
+                  <p className="mt-2 text-4xl font-black text-stone-200">{gamesPlayedCount}</p>
+                </div>
+              </div>
+              <div className="mt-5 flex items-center justify-between rounded-3xl border border-stone-300/15 bg-zinc-900 px-5 py-3">
+                <p className="text-xs font-bold tracking-[0.12em] text-stone-300">
+                  Profile Complete
+                </p>
+                <p className="text-sm font-black text-stone-100">
+                  {profileCompletenessPercent}%
+                </p>
               </div>
             </div>
 
@@ -662,7 +715,6 @@ export default function ProfilePage() {
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                     Personal details
                   </p>
-                  <h2 className="mt-2 text-2xl font-bold text-white">Your player info</h2>
                 </div>
                 {!isEditingProfile ? (
                   <button
@@ -756,11 +808,14 @@ export default function ProfilePage() {
                     { label: "Gender", value: profile?.gender || gender || "—" },
                     { label: "Favourite position", value: profile?.favourite_position || favouritePosition || "—" },
                   ].map((field) => (
-                    <div key={field.label} className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
-                      <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                    <div
+                      key={field.label}
+                      className="flex items-center justify-between gap-4 rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-4"
+                    >
+                      <p className="shrink-0 text-xs uppercase tracking-[0.25em] text-zinc-500">
                         {field.label}
                       </p>
-                      <p className="mt-2 text-base font-semibold text-white">
+                      <p className="min-w-0 break-words text-right text-sm font-semibold text-white">
                         {field.value}
                       </p>
                     </div>
