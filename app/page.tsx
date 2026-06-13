@@ -315,6 +315,29 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const refreshUnreadNotifications = () => {
+      void fetchUnreadNotificationCount();
+    };
+    const refreshUnreadNotificationsWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshUnreadNotifications();
+      }
+    };
+
+    window.addEventListener("focus", refreshUnreadNotifications);
+    document.addEventListener("visibilitychange", refreshUnreadNotificationsWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshUnreadNotifications);
+      document.removeEventListener("visibilitychange", refreshUnreadNotificationsWhenVisible);
+    };
+  }, [user]);
+
   const leaveGame = async (bookingId: number) => {
     const session = (await supabase.auth.getSession()).data.session;
 
