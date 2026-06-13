@@ -80,7 +80,7 @@ export default function GameCard({
   return (
     <>
       <div
-        className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm transition cursor-pointer hover:border-white/20 hover:shadow-lg hover:-translate-y-0.5"
+        className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-[0_14px_44px_rgba(0,0,0,0.22)] transition cursor-pointer hover:border-stone-200/25 hover:shadow-[0_18px_54px_rgba(0,0,0,0.32)] hover:-translate-y-0.5"
         onClick={() => setIsDetailsOpen(true)}
       >
         <div className="grid gap-6 p-6 md:p-8 md:grid-cols-[auto_1fr_auto] items-center">

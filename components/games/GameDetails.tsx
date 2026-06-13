@@ -787,19 +787,19 @@ export default function GameDetails({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="bg-zinc-800 rounded-3xl p-5 border border-zinc-700">
                 <p className="text-gray-400 text-sm mb-2 uppercase tracking-[0.3em]">
-                  Location
+                  Venue
                 </p>
-                <p className="text-white font-semibold text-lg">📍 {game.location}</p>
+                <p className="text-white font-semibold text-lg">{game.location}</p>
               </div>
               <div className="bg-zinc-800 rounded-3xl p-5 border border-zinc-700">
                 <p className="text-gray-400 text-sm mb-2 uppercase tracking-[0.3em]">
-                  Date & Time
+                  KICKOFF
                 </p>
-                <p className="text-white font-semibold text-lg">🕐 {game.time}</p>
+                <p className="text-white font-semibold text-lg">{game.time}</p>
               </div>
               <div className="bg-zinc-800 rounded-3xl p-5 border border-zinc-700">
                 <p className="text-gray-400 text-sm mb-2 uppercase tracking-[0.3em]">
-                  Price per Player
+                  Match Fee
                 </p>
                 <p className="text-stone-200 font-bold text-lg">£{game.price}</p>
               </div>
@@ -808,7 +808,7 @@ export default function GameDetails({
                   Availability
                 </p>
                 <p className="font-bold text-lg text-stone-200">
-                  {spotsLeft > 0 ? `${spotsLeft} Spots Left` : "Full"}
+                  {spotsLeft > 0 ? `${spotsLeft} Spaces Left` : "Full"}
                 </p>
               </div>
             </div>
@@ -819,7 +819,7 @@ export default function GameDetails({
   <h3 className="text-2xl font-bold text-white mb-4">{game.title}</h3>
 
   <p className="text-zinc-400 leading-relaxed">
-    Friendly football games across North London.
+    Friendly casual football in North London.
     All levels welcome.
   </p>
 
@@ -833,7 +833,7 @@ export default function GameDetails({
     </span>
 
     <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-300">
-      {spotsLeft > 0 ? `${spotsLeft} open` : "Full"}
+      {spotsLeft > 0 ? `${spotsLeft} spaces` : "Full"}
     </span>
   </div>
 </div>
@@ -844,7 +844,7 @@ export default function GameDetails({
           <div className="flex items-center justify-between gap-4">
             <h3 className="text-lg font-bold text-white">Teams</h3>
             <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-300">
-              {gameBookings.length} players
+              {gameBookings.length} Confirmed
             </span>
           </div>
           <TeamList
@@ -886,7 +886,6 @@ export default function GameDetails({
         <div className="border-t border-zinc-800 pt-6">
           <div className="flex items-center justify-between gap-4">
             <h3 className="text-lg font-bold text-white">Available payment methods</h3>
-            <p className="text-sm text-zinc-500">Future-ready UI only</p>
           </div>
           <div className="grid gap-4 md:grid-cols-3 mt-4">
             <div className="flex cursor-default items-center gap-3 rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-4 text-left">
@@ -918,11 +917,13 @@ export default function GameDetails({
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">
-                  {isGameFull ? "Match status" : "Book your spot"}
+                  {isGameFull ? "Match status" : "Book Your Spot"}
                 </p>
-                <h3 className="text-xl font-bold text-white">
-                  {isGameFull ? "This game is currently full" : "Ready to join?"}
-                </h3>
+                {isGameFull ? (
+                  <h3 className="text-xl font-bold text-white">
+                    This match is currently full
+                  </h3>
+                ) : null}
               </div>
               {alreadyJoined ? (
                 <span className="rounded-full border border-stone-300/20 bg-zinc-900 px-4 py-2 text-sm font-bold text-stone-200">
