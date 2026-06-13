@@ -12,6 +12,7 @@ interface Profile {
   age: string | null;
   gender: string | null;
   favourite_position: string | null;
+  avatar_url: string | null;
 }
 
 type PendingSignupProfile = {
@@ -95,6 +96,7 @@ export default function ProfilePage() {
   const [favouritePosition, setFavouritePosition] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [notifications, setNotifications] = useState<WaitingListNotification[]>([]);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -129,6 +131,16 @@ export default function ProfilePage() {
   const showTemporaryNotificationMessage = (message: string) => {
     setNotificationMessage(message);
     window.setTimeout(() => setNotificationMessage(null), 5000);
+  };
+
+  const getAvatarExtension = (file: File) => {
+    const mimeExtension = file.type.split("/")[1]?.toLowerCase();
+
+    if (mimeExtension === "jpeg") {
+      return "jpg";
+    }
+
+    return mimeExtension || file.name.split(".").pop()?.toLowerCase() || "jpg";
   };
 
   const loadNotifications = useCallback(async () => {
@@ -273,7 +285,7 @@ export default function ProfilePage() {
             gender: completedGender,
             favourite_position: completedFavouritePosition,
           })
-          .select("id,email,username,age,gender,favourite_position")
+          .select("id,email,username,age,gender,favourite_position,avatar_url")
           .single();
 
         if (completeError) {
@@ -305,7 +317,7 @@ export default function ProfilePage() {
 
     const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
-      .select("id,email,username,age,gender,favourite_position")
+      .select("id,email,username,age,gender,favourite_position,avatar_url")
       .eq("id", authUser.id)
       .maybeSingle();
 
@@ -336,7 +348,7 @@ export default function ProfilePage() {
         email: authUser.email,
         username: fallbackUsername,
       })
-      .select("id,email,username,age,gender,favourite_position")
+      .select("id,email,username,age,gender,favourite_position,avatar_url")
       .single();
 
     if (createError) {
@@ -388,8 +400,9 @@ export default function ProfilePage() {
         age: age || null,
         gender: gender || null,
         favourite_position: favouritePosition || null,
+        avatar_url: profile?.avatar_url ?? null,
       })
-      .select("id,email,username,age,gender,favourite_position")
+      .select("id,email,username,age,gender,favourite_position,avatar_url")
       .single();
 
     if (error) {
@@ -406,6 +419,74 @@ export default function ProfilePage() {
     setStatusMessage("Profile saved.");
     setIsEditingProfile(false);
     setIsSaving(false);
+  };
+
+  const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!user) {
+      setErrorMessage("Please sign in before uploading a profile picture.");
+      setStatusMessage(null);
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setErrorMessage("Please choose an image file.");
+      setStatusMessage(null);
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMessage("Profile picture must be 2MB or smaller.");
+      setStatusMessage(null);
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+
+    const extension = getAvatarExtension(file);
+    const avatarPath = `avatars/${user.id}/profile.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("profile-pictures")
+      .upload(avatarPath, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      setErrorMessage(uploadError.message);
+      setIsUploadingAvatar(false);
+      return;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("profile-pictures").getPublicUrl(avatarPath);
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: publicUrl })
+      .eq("id", user.id)
+      .select("id,email,username,age,gender,favourite_position,avatar_url")
+      .single();
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsUploadingAvatar(false);
+      return;
+    }
+
+    setProfile(data);
+    setStatusMessage("Profile picture updated.");
+    setIsUploadingAvatar(false);
   };
 
   const updateNotificationStatus = async (
@@ -526,9 +607,27 @@ export default function ProfilePage() {
           <div className="space-y-6">
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
               <div className="flex items-center gap-5">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
-                  {initials}
-                </div>
+                <label className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
+                  {profile?.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    initials
+                  )}
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/60 px-2 text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-white opacity-0 transition group-hover:opacity-100">
+                    {isUploadingAvatar ? "Uploading" : "Upload"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={uploadAvatar}
+                    disabled={isUploadingAvatar}
+                    className="sr-only"
+                  />
+                </label>
                 <div>
                   <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
                     Player profile
