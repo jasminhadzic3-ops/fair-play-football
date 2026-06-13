@@ -159,7 +159,7 @@ export default function MyBookingsPage() {
           </div>
           <Link
             href="/"
-            className="rounded-3xl bg-emerald-500 hover:bg-emerald-400 transition px-6 py-3 font-bold text-black text-sm md:text-base whitespace-nowrap"
+            className="rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 py-3 font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 text-sm md:text-base whitespace-nowrap"
           >
             Back to Home
           </Link>
@@ -184,19 +184,27 @@ export default function MyBookingsPage() {
         ) : null}
 
         {bookings.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {bookings.map(({ booking, game }) => (
               <div
                 key={booking.id}
-                className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.32)] transition hover:border-stone-200/20 hover:shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
               >
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-white">{game.title}</h2>
-                    <p className="mt-1 text-sm text-zinc-400">
-                      {game.location} • {game.time || "TBD"} • £{game.price ?? 0}
-                    </p>
-                    <p className="mt-2 text-sm font-semibold text-emerald-300">
+                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-2xl font-bold tracking-tight text-white">{game.title}</h2>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                        <p className="truncate text-sm font-semibold text-zinc-200">{game.location}</p>
+                      </div>
+                      <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                        <p className="text-sm font-semibold text-zinc-200">{game.time || "TBD"}</p>
+                      </div>
+                      <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                        <p className="text-sm font-semibold text-zinc-200">£{game.price ?? 0}</p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-stone-300">
                       Payment status: Paid
                     </p>
                   </div>
@@ -205,7 +213,7 @@ export default function MyBookingsPage() {
                     type="button"
                     onClick={() => leaveGame(booking.id)}
                     disabled={leavingBookingId === booking.id}
-                    className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-full border border-stone-300/20 bg-zinc-900 px-5 py-3 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-red-300/40 hover:bg-red-500/10 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {leavingBookingId === booking.id ? "Leaving..." : "Leave Game"}
                   </button>
