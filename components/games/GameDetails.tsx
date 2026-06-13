@@ -851,6 +851,7 @@ export default function GameDetails({
             bookings={gameBookings}
             onLeaveGame={onLeaveGame}
             currentUserId={user?.id ?? null}
+            currentUserAvatarUrl={profile?.avatar_url ?? null}
           />
           {gameBookings.length === 0 && (
             <p className="text-gray-400 text-center py-8">No confirmed players yet</p>

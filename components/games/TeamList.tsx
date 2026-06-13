@@ -11,9 +11,15 @@ interface TeamListProps {
   bookings: Booking[];
   onLeaveGame: (bookingId: number) => Promise<void> | void;
   currentUserId?: string | null;
+  currentUserAvatarUrl?: string | null;
 }
 
-export default function TeamList({ bookings, onLeaveGame, currentUserId }: TeamListProps) {
+export default function TeamList({
+  bookings,
+  onLeaveGame,
+  currentUserId,
+  currentUserAvatarUrl,
+}: TeamListProps) {
   const midpoint = Math.ceil(bookings.length / 2);
   const teamA = bookings.slice(0, midpoint);
   const teamB = bookings.slice(midpoint);
@@ -33,12 +39,20 @@ export default function TeamList({ bookings, onLeaveGame, currentUserId }: TeamL
             className="bg-zinc-900 border border-zinc-800 rounded-3xl px-4 py-3 flex items-center justify-between gap-3 transition hover:border-zinc-600"
           >
             <div className="flex items-center gap-4 flex-1 min-w-0">
-              <div className="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
-                {booking.player_name
-                  .split(" ")
-                  .map((part) => part.charAt(0).toUpperCase())
-                  .slice(0, 2)
-                  .join("")}
+              <div className="w-11 h-11 overflow-hidden rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
+                {currentUserId && booking.user_id === currentUserId && currentUserAvatarUrl ? (
+                  <img
+                    src={currentUserAvatarUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  booking.player_name
+                    .split(" ")
+                    .map((part) => part.charAt(0).toUpperCase())
+                    .slice(0, 2)
+                    .join("")
+                )}
               </div>
               <span className="text-sm text-white font-medium truncate">
                 {booking.player_name}

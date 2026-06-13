@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 
 interface Profile {
   username?: string | null;
+  avatar_url?: string | null;
 }
 
 interface NavbarProps {
@@ -25,6 +26,13 @@ export default function Navbar({ user, profile, unreadNotificationCount = 0, onL
     user?.user_metadata?.display_name ||
     user?.email?.split("@")[0] ||
     user?.email;
+  const initials =
+    displayName
+      ?.split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part: string) => part[0]?.toUpperCase())
+      .join("") || "FP";
 
   const navLinks = [
     { label: "Home", href: "/" },
@@ -80,6 +88,17 @@ export default function Navbar({ user, profile, unreadNotificationCount = 0, onL
         }
       >
         <span className="inline-flex items-center gap-2 font-semibold text-white">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-900 text-[0.65rem] font-bold text-stone-200">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              initials
+            )}
+          </span>
           {displayName}
           {unreadNotificationCount > 0 ? (
             <span className="inline-flex min-w-5 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-1.5 py-0.5 text-[0.65rem] font-bold leading-none text-stone-200">
