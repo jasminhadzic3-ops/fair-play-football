@@ -270,11 +270,30 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", payment.id)
-    .select("booking_id")
-    .single();
+    .is("booking_id", null)
+    .select("booking_id,payment_status")
+    .maybeSingle();
 
   if (paymentUpdateError) {
     throw paymentUpdateError;
+  }
+
+  if (!updatedPayment) {
+    const { data: finalizedPayment, error: finalizedPaymentError } = await supabaseAdmin
+      .from("booking_payments")
+      .select("booking_id,payment_status")
+      .eq("id", payment.id)
+      .single();
+
+    if (finalizedPaymentError) {
+      throw finalizedPaymentError;
+    }
+
+    if (finalizedPayment?.payment_status === "paid" && finalizedPayment.booking_id) {
+      return { paymentStatus: "paid", bookingId: finalizedPayment.booking_id };
+    }
+
+    throw new Error("Unable to claim paid payment record for finalized booking.");
   }
 
   if (updatedPayment?.booking_id !== bookingId) {
