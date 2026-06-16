@@ -784,71 +784,60 @@ export default function GameDetails({
       <Modal
         isOpen={isOpen && !showProfileModal && !showPaymentModal}
         onClose={onClose}
-        title={game.title}
+        title="Game Info"
       >
-        <div className="space-y-8">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.25fr_0.85fr]">
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="bg-zinc-800 rounded-3xl p-5 border border-zinc-700">
-                <p className="text-gray-400 text-sm mb-2 uppercase tracking-[0.3em]">
-                  Venue
-                </p>
-                <p className="text-white font-semibold text-lg">{game.location}</p>
-              </div>
-              <div className="bg-zinc-800 rounded-3xl p-5 border border-zinc-700">
-                <p className="text-gray-400 text-sm mb-2 uppercase tracking-[0.3em]">
-                  KICKOFF
-                </p>
-                <p className="text-white font-semibold text-lg">{game.time}</p>
-              </div>
-              <div className="bg-zinc-800 rounded-3xl p-5 border border-zinc-700">
-                <p className="text-gray-400 text-sm mb-2 uppercase tracking-[0.3em]">
-                  Match Fee
-                </p>
-                <p className="text-stone-200 font-bold text-lg">£{game.price}</p>
-              </div>
-              <div className="bg-zinc-800 rounded-3xl p-5 border border-zinc-700">
-                <p className="text-gray-400 text-sm mb-2 uppercase tracking-[0.3em]">
-                  Availability
-                </p>
-                <p className="font-bold text-lg text-stone-200">
-                  {spotsLeft > 0 ? `${spotsLeft} Spaces Left` : "Full"}
-                </p>
-              </div>
-            </div>
+        <div className="space-y-3 sm:space-y-6">
+        <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5">
+          <h3 className="text-lg font-bold text-white mb-1.5 sm:text-2xl sm:mb-3">{game.title}</h3>
+
+          <p className="text-sm text-zinc-400 leading-relaxed sm:text-base">
+            Friendly casual football in North London.
+            All levels welcome.
+          </p>
+
+          <div className="mt-3 flex flex-wrap gap-2 sm:mt-4 sm:gap-3">
+            <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 sm:tracking-[0.25em]">
+              {gameFormat}
+            </span>
+            <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 sm:tracking-[0.25em]">
+              {spotsLeft > 0 ? `${spotsLeft} Spaces Left` : "Full"}
+            </span>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-6">
-  <h3 className="text-2xl font-bold text-white mb-4">{game.title}</h3>
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+          <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">
+            <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
+              Venue
+            </p>
+            <p className="text-white font-semibold text-sm sm:text-lg">{game.location}</p>
+          </div>
+          <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">
+            <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
+              KICKOFF
+            </p>
+            <p className="text-white font-semibold text-sm sm:text-lg">{game.time}</p>
+          </div>
+          <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">
+            <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
+              Match Fee
+            </p>
+            <p className="text-stone-200 font-bold text-sm sm:text-lg">£{game.price}</p>
+          </div>
+          <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">
+            <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
+              Availability
+            </p>
+            <p className="font-bold text-sm text-stone-200 sm:text-lg">
+              {spotsLeft > 0 ? `${spotsLeft} Spaces Left` : "Full"}
+            </p>
+          </div>
+        </div>
 
-  <p className="text-zinc-400 leading-relaxed">
-    Friendly casual football in North London.
-    All levels welcome.
-  </p>
-
-  <div className="mt-6 flex flex-wrap gap-3">
-    <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-300">
-      {gameFormat}
-    </span>
-
-    <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-300">
-      {game.location}
-    </span>
-
-    <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-300">
-      {spotsLeft > 0 ? `${spotsLeft} spaces` : "Full"}
-    </span>
-  </div>
-</div>
-              </div>
-            </div>
-
-        <div className="space-y-4">
+        <div className="space-y-2.5 sm:space-y-4">
           <div className="flex items-center justify-between gap-4">
-            <h3 className="text-lg font-bold text-white">Teams</h3>
-            <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-300">
+            <h3 className="text-base font-bold text-white sm:text-lg">Teams</h3>
+            <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 sm:tracking-[0.25em]">
               {gameBookings.length} Confirmed
             </span>
           </div>
@@ -859,13 +848,13 @@ export default function GameDetails({
             currentUserAvatarUrl={profile?.avatar_url ?? null}
           />
           {gameBookings.length === 0 && (
-            <p className="text-gray-400 text-center py-8">No confirmed players yet</p>
+            <p className="text-gray-400 text-center py-5 sm:py-8">No confirmed players yet</p>
           )}
         </div>
 
-        <div className="border-t border-zinc-800 pt-6">
-          <h3 className="text-lg font-bold text-white mb-4">Rules</h3>
-          <ul className="space-y-3 text-gray-300 text-sm">
+        <div className="border-t border-zinc-800 pt-3 sm:pt-6">
+          <h3 className="text-base font-bold text-white mb-2.5 sm:text-lg sm:mb-4">Rules</h3>
+          <ul className="space-y-2.5 text-gray-300 text-sm sm:space-y-3">
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>
               <span>Please arrive 10–15 minutes before kick-off</span>
@@ -913,27 +902,27 @@ export default function GameDetails({
           </ul>
         </div>
 
-        <div className="border-t border-zinc-800 pt-6">
+        <div className="border-t border-zinc-800 pt-3 sm:pt-6">
           <div className="flex items-center justify-between gap-4">
-            <h3 className="text-lg font-bold text-white">Available payment methods</h3>
+            <h3 className="text-base font-bold text-white sm:text-lg">Available payment methods</h3>
           </div>
-          <div className="grid gap-4 md:grid-cols-3 mt-4">
-            <div className="flex cursor-default items-center gap-3 rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-4 text-left">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white"></span>
+          <div className="grid gap-3 md:grid-cols-3 mt-3 sm:gap-4 sm:mt-4">
+            <div className="flex cursor-default items-center gap-2.5 rounded-3xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-left sm:gap-3 sm:px-4 sm:py-4">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white sm:h-10 sm:w-10"></span>
               <div>
                 <p className="font-semibold text-white">Apple Pay</p>
                 <p className="text-xs text-zinc-500">Fast checkout</p>
               </div>
             </div>
-            <div className="flex cursor-default items-center gap-3 rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-4 text-left">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white">G</span>
+            <div className="flex cursor-default items-center gap-2.5 rounded-3xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-left sm:gap-3 sm:px-4 sm:py-4">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white sm:h-10 sm:w-10">G</span>
               <div>
                 <p className="font-semibold text-white">Google Pay</p>
                 <p className="text-xs text-zinc-500">One-tap pay</p>
               </div>
             </div>
-            <div className="flex cursor-default items-center gap-3 rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-4 text-left">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white">💳</span>
+            <div className="flex cursor-default items-center gap-2.5 rounded-3xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-left sm:gap-3 sm:px-4 sm:py-4">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white sm:h-10 sm:w-10">💳</span>
               <div>
                 <p className="font-semibold text-white">Card</p>
                 <p className="text-xs text-zinc-500">Visa, Mastercard</p>
@@ -942,15 +931,78 @@ export default function GameDetails({
           </div>
         </div>
 
-        <div className="border-t border-zinc-800 pt-6">
-          <div className="rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-5 shadow-[0_18px_54px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        {isGameFull && !alreadyJoined ? (
+          <div className="border-t border-zinc-800 pt-3 sm:pt-6">
+            <div className="rounded-3xl border border-stone-300/10 bg-zinc-900/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-white">Waiting list</p>
+                  <p className="mt-1 text-sm leading-6 text-zinc-400">
+                    {waitingListEntry
+                      ? "You're on the waiting list for this game."
+                      : "Join the list for this game. This does not create a booking or take payment."}
+                  </p>
+                </div>
+                {waitingListEntry ? (
+                  <button
+                    type="button"
+                    onClick={leaveWaitingList}
+                    disabled={waitingListLoading}
+                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {waitingListLoading ? "Leaving..." : "Leave Waiting List"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={joinWaitingList}
+                    disabled={waitingListLoading}
+                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {waitingListLoading ? "Joining..." : "Join waiting list"}
+                  </button>
+                )}
+              </div>
+
+              {waitingListMessage ? (
+                <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-950 px-4 py-3 text-sm font-semibold text-stone-200">
+                  {waitingListMessage}
+                </div>
+              ) : null}
+
+              {waitingListError ? (
+                <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-950 px-4 py-3 text-sm font-semibold text-stone-200">
+                  {waitingListError}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="border-t border-zinc-800 pt-3 bg-zinc-800 bg-opacity-50 rounded-lg p-3 border border-zinc-700 sm:p-4 sm:pt-6">
+          <h3 className="text-base font-bold text-white mb-2 sm:text-lg sm:mb-3">Refund Policy</h3>
+          <div className="space-y-2.5 text-sm text-gray-300 sm:space-y-3">
+            <p>
+              If fewer than 12 players are confirmed, the game will be cancelled and all players will receive a full refund. Please allow 2-5 working days for refunds to appear.
+            </p>
+            <p>
+              You are eligible for a full refund if you cancel your booking at least 24 hours before kick-off.
+            </p>
+            <p>
+              If a game is cancelled by the organiser, all players will receive a full refund.
+            </p>
+          </div>
+        </div>
+
+        <div className="border-t border-zinc-800 pt-3 sm:pt-6">
+          <div className="rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-3 shadow-[0_18px_54px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between sm:gap-4">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.3em] text-stone-300">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-stone-300 sm:text-sm sm:tracking-[0.3em]">
                   {isGameFull ? "Match status" : "Book Your Spot"}
                 </p>
                 {isGameFull ? (
-                  <h3 className="mt-2 text-xl font-bold text-white">
+                  <h3 className="mt-2 text-lg font-bold text-white sm:text-xl">
                     This match is currently full
                   </h3>
                 ) : null}
@@ -973,75 +1025,12 @@ export default function GameDetails({
                     openProfileModal();
                   }}
                   disabled={isGameFull}
-                  className="rounded-3xl border border-stone-200/35 bg-stone-200 px-6 py-3 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.18)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_14px_40px_rgba(214,211,209,0.24)]"
+                  className="rounded-3xl border border-stone-200/35 bg-stone-200 px-5 py-3 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.18)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_14px_40px_rgba(214,211,209,0.24)] sm:px-6"
                 >
                   Join Game
                 </button>
               )}
             </div>
-
-            {isGameFull && !alreadyJoined ? (
-              <div className="mt-4 border-t border-zinc-800 pt-4">
-                <div className="rounded-3xl border border-stone-300/10 bg-zinc-900/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Waiting list</p>
-                      <p className="mt-1 text-sm leading-6 text-zinc-400">
-                        {waitingListEntry
-                          ? "You're on the waiting list for this game."
-                          : "Join the list for this game. This does not create a booking or take payment."}
-                      </p>
-                    </div>
-                    {waitingListEntry ? (
-                      <button
-                        type="button"
-                        onClick={leaveWaitingList}
-                        disabled={waitingListLoading}
-                        className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {waitingListLoading ? "Leaving..." : "Leave Waiting List"}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={joinWaitingList}
-                        disabled={waitingListLoading}
-                        className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {waitingListLoading ? "Joining..." : "Join waiting list"}
-                      </button>
-                    )}
-                  </div>
-
-                  {waitingListMessage ? (
-                    <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-950 px-4 py-3 text-sm font-semibold text-stone-200">
-                      {waitingListMessage}
-                    </div>
-                  ) : null}
-
-                  {waitingListError ? (
-                    <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-950 px-4 py-3 text-sm font-semibold text-stone-200">
-                      {waitingListError}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="border-t border-zinc-800 pt-6 bg-zinc-800 bg-opacity-50 rounded-lg p-4 border border-zinc-700">
-          <h3 className="text-lg font-bold text-white mb-3">Refund Policy</h3>
-          <div className="space-y-3 text-sm text-gray-300">
-            <p>
-              If fewer than 12 players are confirmed, the game will be cancelled and all players will receive a full refund. Please allow 2-5 working days for refunds to appear.
-            </p>
-            <p>
-              You are eligible for a full refund if you cancel your booking at least 24 hours before kick-off.
-            </p>
-            <p>
-              If a game is cancelled by the organiser, all players will receive a full refund.
-            </p>
           </div>
         </div>
 
@@ -1051,7 +1040,7 @@ export default function GameDetails({
           </div>
         )}
 
-        <div className="flex gap-3 pt-4 border-t border-zinc-800">
+        <div className="flex gap-3 pt-3 border-t border-zinc-800 sm:pt-4">
           <button
             onClick={onClose}
             className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 rounded-lg transition"
@@ -1073,11 +1062,11 @@ export default function GameDetails({
             : "Sign in to continue"
         }
       >
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-3 sm:space-y-6">
+          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">
+                <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:text-sm sm:tracking-[0.3em]">
                   {isAuthenticated
                     ? "Signed in"
                     : authMode === "signup"
@@ -1101,7 +1090,7 @@ export default function GameDetails({
               {!isAuthenticated ? (
                 <button
                   onClick={() => setAuthMode(authMode === "signup" ? "signin" : "signup")}
-                  className="rounded-3xl bg-zinc-800 border border-zinc-700 px-4 py-3 text-sm text-white transition hover:border-white/20"
+                  className="rounded-3xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm text-white transition hover:border-white/20 sm:py-3"
                 >
                   {authMode === "signup" ? "Sign in" : "Create account"}
                 </button>
@@ -1122,15 +1111,15 @@ export default function GameDetails({
             </div>
           ) : null}
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-4 rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
+          <div className="grid gap-4 md:grid-cols-2 sm:gap-6">
+            <div className="space-y-3 rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:space-y-4 sm:p-5">
               {isAuthenticated ? (
-                <div className="space-y-4">
-                  <div className="rounded-3xl bg-zinc-950 p-5">
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="rounded-3xl bg-zinc-950 p-3 sm:p-5">
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Signed in as</p>
-                        <p className="mt-2 text-lg font-semibold text-white">{user?.email}</p>
+                        <p className="mt-1.5 text-base font-semibold text-white sm:mt-2 sm:text-lg">{user?.email}</p>
                       </div>
                       <button
                         onClick={handleSignOut}
@@ -1148,7 +1137,7 @@ export default function GameDetails({
                         <input
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
-                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                           placeholder="Your username"
                         />
                       </div>
@@ -1157,7 +1146,7 @@ export default function GameDetails({
                         <select
                           value={age}
                           onChange={(e) => setAge(e.target.value)}
-                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                         >
                           <option value="" disabled>
                             Select age
@@ -1174,7 +1163,7 @@ export default function GameDetails({
                         <select
                           value={gender}
                           onChange={(e) => setGender(e.target.value)}
-                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                         >
                           <option value="" disabled>
                             Select gender
@@ -1189,7 +1178,7 @@ export default function GameDetails({
                         <select
                           value={favouritePosition}
                           onChange={(e) => setFavouritePosition(e.target.value)}
-                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                          className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                         >
                           <option value="" disabled>
                             Select position
@@ -1204,23 +1193,23 @@ export default function GameDetails({
                     </div>
                   ) : (
                     <div className="grid gap-3">
-                      <div className="rounded-3xl bg-zinc-950 p-4">
+                      <div className="rounded-3xl bg-zinc-950 p-3 sm:p-4">
                         <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Username</p>
-                        <p className="mt-2 text-lg font-semibold text-white">{profile?.username || username || "—"}</p>
+                        <p className="mt-1.5 text-base font-semibold text-white sm:mt-2 sm:text-lg">{profile?.username || username || "—"}</p>
                       </div>
-                      <div className="rounded-3xl bg-zinc-950 p-4">
+                      <div className="rounded-3xl bg-zinc-950 p-3 sm:p-4">
                         <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Position</p>
-                        <p className="mt-2 text-lg font-semibold text-white">{profile?.favourite_position || favouritePosition || "—"}</p>
+                        <p className="mt-1.5 text-base font-semibold text-white sm:mt-2 sm:text-lg">{profile?.favourite_position || favouritePosition || "—"}</p>
                       </div>
-                      <div className="rounded-3xl bg-zinc-950 p-4">
+                      <div className="rounded-3xl bg-zinc-950 p-3 sm:p-4">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Age</p>
-                            <p className="mt-2 text-lg font-semibold text-white">{profile?.age || age || "—"}</p>
+                            <p className="mt-1.5 text-base font-semibold text-white sm:mt-2 sm:text-lg">{profile?.age || age || "—"}</p>
                           </div>
                           <div>
                             <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Gender</p>
-                            <p className="mt-2 text-lg font-semibold text-white">{profile?.gender || gender || "—"}</p>
+                            <p className="mt-1.5 text-base font-semibold text-white sm:mt-2 sm:text-lg">{profile?.gender || gender || "—"}</p>
                           </div>
                         </div>
                       </div>
@@ -1234,7 +1223,7 @@ export default function GameDetails({
                     <input
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                       placeholder="Your username"
                     />
                   </div>
@@ -1243,7 +1232,7 @@ export default function GameDetails({
                     <select
                       value={age}
                       onChange={(e) => setAge(e.target.value)}
-                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                     >
                       <option value="" disabled>
                         Select age
@@ -1260,7 +1249,7 @@ export default function GameDetails({
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
-                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                     >
                       <option value="" disabled>
                         Select gender
@@ -1275,7 +1264,7 @@ export default function GameDetails({
                     <select
                       value={favouritePosition}
                       onChange={(e) => setFavouritePosition(e.target.value)}
-                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                     >
                       <option value="" disabled>
                         Select position
@@ -1295,7 +1284,7 @@ export default function GameDetails({
               )}
             </div>
 
-            <div className="space-y-4 rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
+            <div className="space-y-3 rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:space-y-4 sm:p-5">
               {(!isAuthenticated && authMode === "signup") || !isAuthenticated ? (
                 <>
                   <div>
@@ -1303,7 +1292,7 @@ export default function GameDetails({
                     <input
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                       placeholder="you@example.com"
                     />
                   </div>
@@ -1314,7 +1303,7 @@ export default function GameDetails({
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 pr-20 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                        className="w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 pr-20 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                         placeholder={authMode === "signup" ? "Create password" : "Enter your password"}
                       />
                       <button
@@ -1333,7 +1322,7 @@ export default function GameDetails({
                         type={showPassword ? "text" : "password"}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out"
+                        className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
                         placeholder="Confirm password"
                       />
                     </div>
@@ -1342,22 +1331,22 @@ export default function GameDetails({
               ) : null}
 
               {!isAuthenticated ? (
-                <div className="rounded-3xl border border-zinc-700 bg-zinc-800 p-5">
-                  <p className="text-sm uppercase tracking-[0.3em] text-zinc-500 mb-4">
+                <div className="rounded-3xl border border-zinc-700 bg-zinc-800 p-3 sm:p-5">
+                  <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 mb-3 sm:text-sm sm:tracking-[0.3em] sm:mb-4">
                     {authMode === "signup" ? "Create account" : "Sign in options"}
                   </p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <button
                       onClick={handleGoogleSignIn}
                       disabled={authLoading}
-                      className="rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50 sm:py-3"
                     >
                       {authLoading ? "Connecting..." : "Continue with Google"}
                     </button>
                     <button
                       onClick={authMode === "signup" ? handleSignUp : handleSignIn}
                       disabled={authLoading}
-                      className="rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-3xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-left text-white transition-colors duration-150 ease-out hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50 sm:py-3"
                     >
                       {authMode === "signup" ? "Create account" : "Sign in"}
                     </button>
@@ -1367,8 +1356,8 @@ export default function GameDetails({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-zinc-700 bg-zinc-950/80 p-5">
-            <p className="text-sm uppercase tracking-[0.3em] text-zinc-500 mb-3">Preview</p>
+          <div className="rounded-3xl border border-zinc-700 bg-zinc-950/80 p-3 sm:p-5">
+            <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 mb-3 sm:text-sm sm:tracking-[0.3em]">Preview</p>
             <div className="grid gap-3">
               {[
                 { label: "Username", value: profile?.username || username || "—" },
@@ -1377,7 +1366,7 @@ export default function GameDetails({
                 { label: "Favourite position", value: profile?.favourite_position || favouritePosition || "—" },
                 { label: "Email", value: profile?.email || email || "—" },
               ].map((field) => (
-                <div key={field.label} className="rounded-2xl bg-zinc-900 px-4 py-3">
+                <div key={field.label} className="rounded-2xl bg-zinc-900 px-4 py-2.5 sm:py-3">
                   <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">{field.label}</p>
                   <p className="mt-1 text-sm text-white">{field.value}</p>
                 </div>
@@ -1388,7 +1377,7 @@ export default function GameDetails({
           <div className="flex justify-between gap-3 flex-wrap">
             <button
               onClick={closeProfileModal}
-              className="rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-3 text-white transition hover:border-white/20"
+              className="rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-white transition hover:border-white/20 sm:py-3"
             >
               Back to match
             </button>
@@ -1403,7 +1392,7 @@ export default function GameDetails({
                       }
                 }
                 disabled={authLoading}
-                className="rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-3 text-white transition hover:border-white/20"
+                className="rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-white transition hover:border-white/20 sm:py-3"
               >
                 {isEditingProfile ? "Save profile" : "Edit profile"}
               </button>
@@ -1420,30 +1409,30 @@ export default function GameDetails({
         }}
         title="Secure checkout"
       >
-        <div className="space-y-6">
-          <div className="rounded-[2rem] border border-zinc-700 bg-zinc-950/95 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.55)]">
+        <div className="space-y-3 sm:space-y-6">
+          <div className="rounded-[2rem] border border-zinc-700 bg-zinc-950/95 p-3 shadow-[0_20px_70px_rgba(15,23,42,0.55)] sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">Booking summary</p>
-                <p className="mt-2 text-xl font-bold text-white">{game.title}</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:tracking-[0.35em]">Booking summary</p>
+                <p className="mt-1.5 text-lg font-bold text-white sm:mt-2 sm:text-xl">{game.title}</p>
                 <p className="text-zinc-400 text-sm">{game.location} • {game.time}</p>
               </div>
-              <div className="rounded-3xl bg-zinc-900 px-4 py-3 text-right">
-                <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">Total</p>
-                <p className="text-3xl font-bold text-stone-100">£{game.price}</p>
+              <div className="rounded-3xl bg-zinc-900 px-4 py-2.5 text-right sm:py-3">
+                <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:tracking-[0.35em]">Total</p>
+                <p className="text-2xl font-bold text-stone-100 sm:text-3xl">£{game.price}</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-5">
-            <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">Secure payment</p>
+          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5">
+            <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:text-sm sm:tracking-[0.3em]">Secure payment</p>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
               All payments are processed securely through SumUp. You’ll be able to choose your preferred payment method, including card, Apple Pay or Google Pay, during checkout.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-zinc-700 bg-zinc-950/80 p-5">
-            <p className="text-sm uppercase tracking-[0.3em] text-zinc-500 mb-4">Order details</p>
+          <div className="rounded-3xl border border-zinc-700 bg-zinc-950/80 p-3 sm:p-5">
+            <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 mb-3 sm:text-sm sm:tracking-[0.3em] sm:mb-4">Order details</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {[
                 { label: "Username", value: profileName },
@@ -1451,9 +1440,9 @@ export default function GameDetails({
                 { label: "Email", value: profile?.email || user?.email || email || "you@example.com" },
                 { label: "Payment", value: "SumUp Secure Checkout" },
               ].map((field) => (
-                <div key={field.label} className="rounded-3xl bg-zinc-900 px-4 py-4">
+                <div key={field.label} className="rounded-3xl bg-zinc-900 px-4 py-3 sm:py-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">{field.label}</p>
-                  <p className="mt-2 text-sm text-white">{field.value}</p>
+                  <p className="mt-1.5 text-sm text-white sm:mt-2">{field.value}</p>
                 </div>
               ))}
             </div>
@@ -1477,7 +1466,7 @@ export default function GameDetails({
             <button
               onClick={handleOpenPaymentLink}
               disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
-              className="rounded-3xl bg-stone-200 px-6 py-4 text-zinc-950 font-bold transition duration-150 ease-out enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-3xl bg-stone-200 px-6 py-3 text-zinc-950 font-bold transition duration-150 ease-out enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4"
             >
               {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : `Pay £${game.price} with SumUp`}
             </button>
@@ -1486,7 +1475,7 @@ export default function GameDetails({
                 setShowPaymentModal(false);
                 setShowProfileModal(true);
               }}
-              className="rounded-3xl border border-zinc-700 bg-zinc-900 px-6 py-4 text-white transition duration-150 ease-out hover:border-white/20"
+              className="rounded-3xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-white transition duration-150 ease-out hover:border-white/20 sm:py-4"
             >
               Back to profile
             </button>

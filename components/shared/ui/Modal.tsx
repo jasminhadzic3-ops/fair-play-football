@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -13,32 +15,45 @@ export default function Modal({
   title,
   children,
 }: ModalProps) {
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 pointer-events-none">
+    <div className="fixed inset-0 z-50 bg-black pointer-events-none overscroll-none">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black bg-opacity-50 transition-opacity pointer-events-auto"
+        className="absolute inset-0 bg-black/90 transition-opacity pointer-events-auto"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="relative flex min-h-full items-center justify-center p-4 pointer-events-none">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-5xl md:max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-2xl pointer-events-auto">
+      <div className="relative flex h-[100dvh] w-screen items-stretch justify-center p-0 pointer-events-none overscroll-none sm:items-center">
+        <div className="flex h-[100dvh] w-screen flex-col overflow-hidden rounded-none border border-zinc-800 bg-zinc-900 shadow-2xl pointer-events-auto overscroll-contain sm:h-[99vh] sm:w-[88vw] sm:rounded-2xl">
           {/* Header */}
-          <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-white">{title}</h2>
+          <div className="shrink-0 bg-zinc-900 border-b border-zinc-800 px-3 py-2.5 flex items-center justify-between sm:px-6 sm:py-4">
+            <h2 className="text-lg font-bold text-white sm:text-2xl">{title}</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition text-2xl leading-none"
+              className="text-gray-400 hover:text-white transition text-xl leading-none sm:text-2xl"
             >
               ✕
             </button>
           </div>
 
           {/* Content */}
-          <div className="px-6 py-6">{children}</div>
+          <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-8 sm:py-7">{children}</div>
         </div>
       </div>
     </div>
