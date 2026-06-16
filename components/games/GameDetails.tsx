@@ -1069,7 +1069,7 @@ export default function GameDetails({
           isAuthenticated
             ? "Your profile"
             : authMode === "signup"
-            ? "Create your profile"
+            ? "Create account"
             : "Sign in to continue"
         }
       >
@@ -1088,17 +1088,22 @@ export default function GameDetails({
                   {isAuthenticated
                     ? "You're signed in. Return to the match to choose your next step."
                     : authMode === "signup"
-                    ? "Create your player profile to join games."
+                    ? "Create your account to join games."
                     : "Enter your account credentials to continue."
                   }
                 </p>
+                {!isAuthenticated && authMode === "signup" ? (
+                  <p className="mt-2 text-xs font-semibold text-stone-300">
+                    You may need to verify your email before booking or paying.
+                  </p>
+                ) : null}
               </div>
               {!isAuthenticated ? (
                 <button
                   onClick={() => setAuthMode(authMode === "signup" ? "signin" : "signup")}
                   className="rounded-3xl bg-zinc-800 border border-zinc-700 px-4 py-3 text-sm text-white transition hover:border-white/20"
                 >
-                  {authMode === "signup" ? "Sign in" : "Create profile"}
+                  {authMode === "signup" ? "Sign in" : "Create account"}
                 </button>
               ) : null}
             </div>
@@ -1234,7 +1239,7 @@ export default function GameDetails({
                     />
                   </div>
                   <div>
-                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Age</label>
+                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Age *</label>
                     <select
                       value={age}
                       onChange={(e) => setAge(e.target.value)}
@@ -1251,7 +1256,7 @@ export default function GameDetails({
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Gender</label>
+                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Gender (Optional)</label>
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
@@ -1266,7 +1271,7 @@ export default function GameDetails({
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Favourite position</label>
+                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Favourite Position *</label>
                     <select
                       value={favouritePosition}
                       onChange={(e) => setFavouritePosition(e.target.value)}
@@ -1303,7 +1308,7 @@ export default function GameDetails({
                     />
                   </div>
                   <div>
-                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Password</label>
+                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Password *</label>
                     <div className="relative mt-2">
                       <input
                         type={showPassword ? "text" : "password"}
@@ -1323,7 +1328,7 @@ export default function GameDetails({
                   </div>
                   {authMode === "signup" ? (
                     <div>
-                      <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Confirm password</label>
+                      <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Confirm Password *</label>
                       <input
                         type={showPassword ? "text" : "password"}
                         value={confirmPassword}

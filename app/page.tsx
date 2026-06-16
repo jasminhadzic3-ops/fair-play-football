@@ -582,6 +582,11 @@ export default function Home() {
                 ? "Enter your details to continue."
                 : "Enter your credentials to continue."}
             </p>
+            {navbarAuthMode === "signup" ? (
+              <p className="mt-2 text-xs font-semibold text-stone-300">
+                You may need to verify your email before booking or paying.
+              </p>
+            ) : null}
 
             <div className="mt-6 grid grid-cols-2 rounded-full border border-zinc-800 bg-black p-1">
               <button
@@ -651,7 +656,7 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Age</label>
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Age *</label>
                   <select
                     value={navbarAuthAge}
                     onChange={(event) => setNavbarAuthAge(event.target.value)}
@@ -668,7 +673,7 @@ export default function Home() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Gender</label>
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Gender (Optional)</label>
                   <select
                     value={navbarAuthGender}
                     onChange={(event) => setNavbarAuthGender(event.target.value)}
@@ -683,7 +688,7 @@ export default function Home() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Favourite position</label>
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Favourite Position *</label>
                   <select
                     value={navbarAuthFavouritePosition}
                     onChange={(event) => setNavbarAuthFavouritePosition(event.target.value)}
@@ -712,14 +717,14 @@ export default function Home() {
               />
             </div>
             <div>
-              <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Password</label>
+              <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Password *</label>
               <div className="relative mt-2">
                 <input
                   type={showNavbarAuthPassword ? "text" : "password"}
                   value={navbarAuthPassword}
                   onChange={(event) => setNavbarAuthPassword(event.target.value)}
                   className="w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 pr-20 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-white/30"
-                  placeholder="Enter your password"
+                  placeholder={navbarAuthMode === "signup" ? "Create password" : "Enter your password"}
                 />
                 <button
                   type="button"
@@ -732,7 +737,7 @@ export default function Home() {
             </div>
             {navbarAuthMode === "signup" ? (
               <div>
-                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Confirm password</label>
+                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Confirm Password *</label>
                 <input
                   type={showNavbarAuthPassword ? "text" : "password"}
                   value={navbarAuthConfirmPassword}
