@@ -584,7 +584,7 @@ export default function Home() {
             </p>
             {navbarAuthMode === "signup" ? (
               <p className="mt-2 text-xs font-semibold text-stone-300">
-                You may need to verify your email before booking or paying.
+                Please check your email and verify your account after signing up.
               </p>
             ) : null}
 
