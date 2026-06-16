@@ -1,3 +1,4 @@
+import { sendBookingConfirmedEmail } from "./email/bookingConfirmed";
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "./supabaseAdmin";
 
 type SumUpCheckout = {
@@ -281,6 +282,26 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
   }
 
   await removeWaitingListEntryForBookedUser(payment.user_id, payment.game_id);
+
+  try {
+    await sendBookingConfirmedEmail({
+      bookingId,
+      paymentId: payment.id,
+      userId: payment.user_id,
+      gameId: payment.game_id,
+      playerName: payment.player_name,
+      amount: payment.amount,
+      currency: payment.currency,
+      checkoutId: payment.checkout_id,
+      checkoutReference: payment.checkout_reference,
+    });
+  } catch (emailError) {
+    console.error("Unable to send booking confirmation email:", {
+      bookingId,
+      paymentId: payment.id,
+      error: emailError,
+    });
+  }
 
   return { paymentStatus: "paid", bookingId };
 }
