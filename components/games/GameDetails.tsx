@@ -315,7 +315,7 @@ export default function GameDetails({
       setPaymentCheckoutReference(checkout.checkout_reference);
       setPaymentStatus("pending");
       setPaymentMessage("Payment is open in SumUp. Your booking will confirm automatically after payment succeeds.");
-      window.open(checkout.hosted_checkout_url, "_blank", "noopener,noreferrer");
+      window.location.assign(checkout.hosted_checkout_url);
     } catch (error: any) {
       setPaymentStatus("failed");
       setPaymentMessage(error?.message || "Unable to start SumUp checkout.");
