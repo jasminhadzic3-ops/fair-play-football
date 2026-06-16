@@ -236,6 +236,7 @@ export default function Home() {
       const paymentStatus = String(result?.paymentStatus || "").toLowerCase();
 
       if (paymentStatus === "paid" || paymentStatus === "successful") {
+        const paidGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
@@ -243,8 +244,11 @@ export default function Home() {
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
-        setSuccessGameId(result?.gameId ?? null);
+        setSuccessGameId(paidGameId);
         await fetchGames();
+        if (paidGameId) {
+          setOpenDetailsGameId(paidGameId);
+        }
         clearSumUpCheckoutReferenceFromUrl();
         setReturnPaymentState("paid");
         setReturnPaymentMessage("Payment confirmed. Your booking has been added.");
