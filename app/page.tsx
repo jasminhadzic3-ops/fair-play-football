@@ -782,7 +782,7 @@ export default function Home() {
               Browse premium football matches in one clean list.
             </h2>
             <p className="mt-4 text-base md:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Discover upcoming games, compare formats, venues, spots and pricing with a bold dark layout.
+              Discover upcoming games, pick your match, and play when it suits you.
             </p>
           </div>
 

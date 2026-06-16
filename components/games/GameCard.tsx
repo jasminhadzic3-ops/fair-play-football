@@ -111,9 +111,6 @@ export default function GameCard({
                   Host: {game.host}
                 </span>
               )}
-              <span className="rounded-full bg-zinc-800 border border-zinc-700 px-3 py-1 text-xs text-zinc-300 font-medium">
-                {game.location}
-              </span>
             </div>
 
             <div className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300 border border-emerald-500/20">

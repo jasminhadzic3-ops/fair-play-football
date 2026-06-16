@@ -643,30 +643,35 @@ export default function GameDetails({
       if (shouldCloseParent) {
         onClose();
       }
+      setAuthLoading(false);
 
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", signedInUser.id)
-        .maybeSingle();
+      void (async () => {
+        try {
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", signedInUser.id)
+            .maybeSingle();
 
-      if (profileError) {
-        throw profileError;
-      }
+          if (profileError) {
+            throw profileError;
+          }
 
-      if (profileData) {
-        setUsername(profileData.username || "");
-        setAge(profileData.age ?? "");
-        setGender(profileData.gender || "");
-        setFavouritePosition(profileData.favourite_position || "");
-        setEmail(profileData.email || signedInUser.email || email);
-      }
+          if (profileData) {
+            setUsername(profileData.username || "");
+            setAge(profileData.age ?? "");
+            setGender(profileData.gender || "");
+            setFavouritePosition(profileData.favourite_position || "");
+            setEmail(profileData.email || signedInUser.email || email);
+          }
 
-      if (onRefreshProfile) {
-        await onRefreshProfile();
-      }
-
-      setIsClosingAfterSignIn(false);
+          await onRefreshProfile?.();
+        } catch (profileError) {
+          console.error("Unable to refresh profile after sign in:", profileError);
+        } finally {
+          setIsClosingAfterSignIn(false);
+        }
+      })();
     } catch (error: any) {
       setIsClosingAfterSignIn(false);
       const message = error?.message || "Please verify your email and password.";
@@ -863,23 +868,47 @@ export default function GameDetails({
           <ul className="space-y-3 text-gray-300 text-sm">
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>
-              <span>All players must arrive 15 minutes before kickoff</span>
+              <span>Please arrive 10–15 minutes before kick-off</span>
             </li>
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>
-              <span>Appropriate football boots or trainers required</span>
+              <span>8v8 format</span>
             </li>
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>
-              <span>Fair play and respect for all players at all times</span>
+              <span>No slide tackles</span>
             </li>
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>
-              <span>No jewelry or watches during play</span>
+              <span>No back passes</span>
             </li>
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>
-              <span>Water bottles and snacks welcome</span>
+              <span>Goalkeeper rotates every 8 minutes</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-stone-300">✓</span>
+              <span>Astros, moulds and football boots are allowed</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-stone-300">✓</span>
+              <span>No metal studs</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-stone-300">✓</span>
+              <span>Respect all players at all times</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-stone-300">✓</span>
+              <span>Get everyone involved in the game</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-stone-300">✓</span>
+              <span>No aggressive or abusive behaviour</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-stone-300">✓</span>
+              <span>Most importantly, have fun</span>
             </li>
           </ul>
         </div>
@@ -914,24 +943,24 @@ export default function GameDetails({
         </div>
 
         <div className="border-t border-zinc-800 pt-6">
-          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-5 shadow-[0_18px_54px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">
+                <p className="text-sm font-bold uppercase tracking-[0.3em] text-stone-300">
                   {isGameFull ? "Match status" : "Book Your Spot"}
                 </p>
                 {isGameFull ? (
-                  <h3 className="text-xl font-bold text-white">
+                  <h3 className="mt-2 text-xl font-bold text-white">
                     This match is currently full
                   </h3>
                 ) : null}
               </div>
               {alreadyJoined ? (
-                <span className="rounded-full border border-stone-300/20 bg-zinc-900 px-4 py-2 text-sm font-bold text-stone-200">
+                <span className="inline-flex w-fit items-center rounded-full border border-stone-300/20 bg-stone-200/10 px-4 py-2 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                   Already Joined
                 </span>
               ) : isGameFull ? (
-                <span className="inline-flex w-fit items-center rounded-full border border-stone-300/20 bg-zinc-950/90 px-4 py-2 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <span className="inline-flex w-fit items-center rounded-full border border-stone-300/20 bg-stone-200/10 px-4 py-2 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                   Game Full
                 </span>
               ) : (
@@ -944,7 +973,7 @@ export default function GameDetails({
                     openProfileModal();
                   }}
                   disabled={isGameFull}
-                  className="rounded-3xl bg-stone-200 px-6 py-3 font-bold text-zinc-950 transition hover:bg-stone-100"
+                  className="rounded-3xl border border-stone-200/35 bg-stone-200 px-6 py-3 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.18)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_14px_40px_rgba(214,211,209,0.24)]"
                 >
                   Join Game
                 </button>
@@ -952,8 +981,8 @@ export default function GameDetails({
             </div>
 
             {isGameFull && !alreadyJoined ? (
-              <div className="mt-5 border-t border-zinc-800 pt-5">
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="mt-4 border-t border-zinc-800 pt-4">
+                <div className="rounded-3xl border border-stone-300/10 bg-zinc-900/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-white">Waiting list</p>
@@ -968,7 +997,7 @@ export default function GameDetails({
                         type="button"
                         onClick={leaveWaitingList}
                         disabled={waitingListLoading}
-                        className="rounded-full border border-stone-300/20 bg-zinc-900 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {waitingListLoading ? "Leaving..." : "Leave Waiting List"}
                       </button>
@@ -977,7 +1006,7 @@ export default function GameDetails({
                         type="button"
                         onClick={joinWaitingList}
                         disabled={waitingListLoading}
-                        className="rounded-full border border-stone-300/20 bg-zinc-900 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {waitingListLoading ? "Joining..." : "Join waiting list"}
                       </button>
@@ -985,13 +1014,13 @@ export default function GameDetails({
                   </div>
 
                   {waitingListMessage ? (
-                    <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-900 px-4 py-3 text-sm font-semibold text-stone-200">
+                    <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-950 px-4 py-3 text-sm font-semibold text-stone-200">
                       {waitingListMessage}
                     </div>
                   ) : null}
 
                   {waitingListError ? (
-                    <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-900 px-4 py-3 text-sm font-semibold text-stone-200">
+                    <div className="mt-4 rounded-2xl border border-stone-300/15 bg-zinc-950 px-4 py-3 text-sm font-semibold text-stone-200">
                       {waitingListError}
                     </div>
                   ) : null}

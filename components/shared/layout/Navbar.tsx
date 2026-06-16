@@ -108,7 +108,7 @@ export default function Navbar({ user, profile, unreadNotificationCount = 0, onL
         </span>
         <button
           onClick={isMobile ? handleMobileLogout : onLogout}
-          className="rounded-full bg-emerald-500 px-3 py-1 text-black font-semibold transition hover:bg-emerald-400"
+          className="rounded-full border border-stone-300/20 bg-zinc-900 px-3 py-1 font-semibold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 hover:text-white"
         >
           Sign out
         </button>

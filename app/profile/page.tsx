@@ -897,35 +897,35 @@ export default function ProfilePage() {
                   {notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5"
+                      className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-4 shadow-[0_14px_44px_rgba(0,0,0,0.24)] transition hover:border-stone-200/20 sm:p-5"
                     >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-300">
-                          {notification.status || "unread"}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="rounded-full border border-stone-300/15 bg-stone-200/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-stone-200">
+                          {notification.status === "read" ? "✓ Read" : "● Unread"}
                         </span>
                         {notification.created_at ? (
-                          <span className="text-xs text-zinc-500">
+                          <span className="text-xs font-semibold text-zinc-500">
                             {formatNotificationDate(notification.created_at)}
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-3 font-semibold text-white">
+                      <p className="mt-4 text-base font-bold tracking-tight text-white">
                         {notification.game?.title || "Game update"}
                       </p>
                       {notification.game ? (
-                        <p className="mt-1 text-sm text-zinc-400">
+                        <p className="mt-2 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-300">
                           {notification.game.time || "TBD"} • {notification.game.location}
                         </p>
                       ) : null}
-                      <p className="mt-3 text-sm leading-6 text-zinc-300">
+                      <p className="mt-3 text-sm leading-6 text-zinc-400">
                         A space may be available for this game. Book now to try for the spot. Spots are first paid, first served.
                       </p>
 
-                      <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                      <div className="mt-4 flex w-full flex-col gap-2 border-t border-zinc-800 pt-4 sm:flex-row sm:items-center">
                         <button
                           type="button"
                           onClick={() => void bookNowFromNotification(notification)}
-                          className="w-full rounded-full border border-stone-200/30 bg-stone-200 px-5 py-2 text-sm font-bold text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.16)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_12px_34px_rgba(214,211,209,0.22)] sm:w-auto"
+                          className="w-full rounded-full border border-stone-200/35 bg-stone-200 px-5 py-2.5 text-sm font-bold text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.18)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_12px_34px_rgba(214,211,209,0.24)] sm:w-auto"
                         >
                           Book now
                         </button>
@@ -933,7 +933,7 @@ export default function ProfilePage() {
                           <button
                             type="button"
                             onClick={() => void updateNotificationStatus(notification, "read")}
-                            className="w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-stone-200/25 hover:bg-zinc-800 sm:w-auto"
+                            className="w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-stone-200/25 hover:bg-zinc-800 sm:w-auto"
                           >
                             Mark as read
                           </button>
@@ -941,7 +941,7 @@ export default function ProfilePage() {
                         <button
                           type="button"
                           onClick={() => void updateNotificationStatus(notification, "dismissed")}
-                          className="w-full rounded-full px-3 py-2 text-sm font-semibold text-zinc-500 transition hover:bg-zinc-900 hover:text-stone-200 sm:w-auto"
+                          className="w-full rounded-full px-3 py-2.5 text-sm font-semibold text-zinc-500 transition hover:bg-zinc-900 hover:text-stone-200 sm:w-auto"
                         >
                           Dismiss
                         </button>
