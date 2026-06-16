@@ -266,6 +266,19 @@ export default function Home() {
     setReturnPaymentMessage("Payment is still processing.");
   }
 
+  async function runPostAuthWork(session: { user: User; access_token: string }) {
+    try {
+      await loadOrCreateProfile(session.user);
+      await fetchUnreadNotificationCount();
+      openGameFromNotification();
+      continuePendingJoin();
+      await continuePendingPayment(session.user.id);
+      await checkReturnedPayment(session.access_token);
+    } catch (error) {
+      console.error("Unable to complete post-auth work:", error);
+    }
+  }
+
   useEffect(() => {
     fetchGames();
 
@@ -278,23 +291,13 @@ export default function Home() {
 
       setUser(session?.user ?? null);
       if (session?.user) {
-        await loadOrCreateProfile(session.user);
-        await fetchUnreadNotificationCount();
-        openGameFromNotification();
-        continuePendingJoin();
-        await continuePendingPayment(session.user.id);
-        await checkReturnedPayment(session.access_token);
+        void runPostAuthWork(session);
       }
 
-      const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
-          await loadOrCreateProfile(session.user);
-          await fetchUnreadNotificationCount();
-          openGameFromNotification();
-          continuePendingJoin();
-          await continuePendingPayment(session.user.id);
-          await checkReturnedPayment(session.access_token);
+          void runPostAuthWork(session);
         } else {
           setProfile(null);
           setUnreadNotificationCount(0);
@@ -426,8 +429,15 @@ export default function Home() {
 
       setShowNavbarAuthModal(false);
       setNavbarAuthPassword("");
-      await loadOrCreateProfile(signedInUser);
-      await fetchUnreadNotificationCount();
+      setNavbarAuthLoading(false);
+      setUser(signedInUser);
+      if (data.session) {
+        void runPostAuthWork(data.session);
+      } else {
+        void loadOrCreateProfile(signedInUser).catch((profileError) => {
+          console.error("Unable to load profile after sign in:", profileError);
+        });
+      }
     } catch (error: any) {
       setNavbarAuthError(`Sign in failed. ${error?.message || "Please verify your email and password."}`);
     } finally {
@@ -453,7 +463,10 @@ export default function Home() {
     if (error) {
       setNavbarAuthLoading(false);
       setNavbarAuthError(`Google sign in failed. ${error.message}`);
+      return;
     }
+
+    window.setTimeout(() => setNavbarAuthLoading(false), 2500);
   };
 
   const handleNavbarCreateAccount = async () => {
