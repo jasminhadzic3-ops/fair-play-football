@@ -112,6 +112,12 @@ export default function ProfilePage() {
   const isEmailVerified = Boolean(user?.email_confirmed_at || user?.confirmed_at);
   const displayName: string = profile?.username || username || (user ? getFallbackUsername(user) : "Player");
   const displayEmail = profile?.email || user?.email || "No email found";
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("en-GB", {
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
   const profileCompletenessCount = [
     Boolean(profile?.avatar_url),
     Boolean((profile?.username || username).trim()),
@@ -664,13 +670,7 @@ export default function ProfilePage() {
                         {profile?.favourite_position || favouritePosition || "—"}
                       </span>
                       <span className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
-                        Member since{" "}
-                        {user.created_at
-                          ? new Date(user.created_at).toLocaleDateString("en-GB", {
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "—"}
+                        Member since {memberSince}
                       </span>
                     </div>
                     <p className="mt-2 text-sm font-semibold text-zinc-400">
