@@ -44,6 +44,7 @@ interface AdminSummary {
   games_count: number;
   bookings_count: number;
   players_count: number;
+  profiles_count: number;
   paid_payments_amount_total: number;
 }
 
@@ -72,6 +73,7 @@ export default function AdminPage() {
     games_count: 0,
     bookings_count: 0,
     players_count: 0,
+    profiles_count: 0,
     paid_payments_amount_total: 0,
   });
 
@@ -425,6 +427,7 @@ export default function AdminPage() {
     { label: "Total games", value: summary.games_count },
     { label: "Total bookings", value: summary.bookings_count },
     { label: "Total players", value: summary.players_count },
+    { label: "Total registered users", value: summary.profiles_count },
     {
       label: "Paid payments amount",
       value: `£${summary.paid_payments_amount_total.toFixed(2)}`,
