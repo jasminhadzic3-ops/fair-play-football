@@ -128,7 +128,7 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
     );
 
   return (
-    <nav className="sticky top-0 z-30 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
+    <nav className="sticky top-0 z-40 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3">
           <span className="text-xl font-black text-white tracking-[0.3em]">
