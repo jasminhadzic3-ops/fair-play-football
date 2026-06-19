@@ -606,7 +606,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-black p-8 text-white">
+    <main className="min-h-screen bg-black p-4 sm:p-8 text-white">
       <div className="mx-auto max-w-3xl">
         <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -661,7 +661,7 @@ export default function ProfilePage() {
                       className="sr-only"
                     />
                   </label>
-                  <div>
+                  <div className="min-w-0">
                     <h2 className="max-w-full break-words text-3xl font-black tracking-tight text-white md:text-4xl">
                       {displayName}
                     </h2>
@@ -925,7 +925,7 @@ export default function ProfilePage() {
                         <button
                           type="button"
                           onClick={() => void bookNowFromNotification(notification)}
-                          className="w-full rounded-full border border-stone-200/35 bg-stone-200 px-5 py-2.5 text-sm font-bold text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.18)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_12px_34px_rgba(214,211,209,0.24)] sm:w-auto"
+                          className="w-full rounded-full border border-stone-200/35 bg-stone-200 px-5 py-3 text-sm font-bold text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.18)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_12px_34px_rgba(214,211,209,0.24)] sm:w-auto"
                         >
                           Book now
                         </button>
@@ -933,7 +933,7 @@ export default function ProfilePage() {
                           <button
                             type="button"
                             onClick={() => void updateNotificationStatus(notification, "read")}
-                            className="w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-stone-200/25 hover:bg-zinc-800 sm:w-auto"
+                            className="w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-200 transition hover:border-stone-200/25 hover:bg-zinc-800 sm:w-auto"
                           >
                             Mark as read
                           </button>
@@ -941,7 +941,7 @@ export default function ProfilePage() {
                         <button
                           type="button"
                           onClick={() => void updateNotificationStatus(notification, "dismissed")}
-                          className="w-full rounded-full px-3 py-2.5 text-sm font-semibold text-zinc-500 transition hover:bg-zinc-900 hover:text-stone-200 sm:w-auto"
+                          className="w-full rounded-full px-3 py-3 text-sm font-semibold text-zinc-500 transition hover:bg-zinc-900 hover:text-stone-200 sm:w-auto"
                         >
                           Dismiss
                         </button>

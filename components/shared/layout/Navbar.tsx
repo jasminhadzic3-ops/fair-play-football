@@ -143,12 +143,14 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
 
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="md:hidden flex flex-col gap-1.5 w-6 h-6"
+          className="md:hidden flex h-11 w-11 items-center justify-center"
           aria-label="Toggle navigation menu"
         >
-          <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "rotate-45 translate-y-2" : ""}`} />
-          <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "opacity-0" : ""}`} />
-          <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+          <div className="flex w-6 flex-col gap-1.5">
+            <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "rotate-45 translate-y-2" : ""}`} />
+            <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "opacity-0" : ""}`} />
+            <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+          </div>
         </button>
       </div>
 

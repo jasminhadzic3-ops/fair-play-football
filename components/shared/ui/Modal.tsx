@@ -46,7 +46,7 @@ export default function Modal({
             <h2 className="text-lg font-bold text-white sm:text-2xl">{title}</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition text-xl leading-none sm:text-2xl"
+              className="flex h-11 w-11 items-center justify-center text-gray-400 hover:text-white transition text-xl leading-none sm:text-2xl"
             >
               ✕
             </button>
