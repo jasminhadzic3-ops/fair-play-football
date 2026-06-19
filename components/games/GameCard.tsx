@@ -84,7 +84,7 @@ export default function GameCard({
         className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-[0_14px_44px_rgba(0,0,0,0.22)] transition cursor-pointer hover:border-stone-200/25 hover:shadow-[0_18px_54px_rgba(0,0,0,0.32)] hover:-translate-y-0.5"
         onClick={() => setIsDetailsOpen(true)}
       >
-        <div className="grid gap-6 p-6 md:p-8 md:grid-cols-[auto_1fr_auto] items-center">
+        <div className="grid gap-6 p-5 md:p-8 md:grid-cols-[auto_1fr_auto] items-center">
           {/* Time */}
           <div className="flex flex-col items-center justify-center text-center min-w-[8rem]">
             <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
@@ -96,15 +96,15 @@ export default function GameCard({
           </div>
 
           {/* Title, Venue, Badges */}
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-bold text-white">{game.title}</h3>
+              <h3 className="break-words text-xl font-bold text-white">{game.title}</h3>
               <span className="rounded-full border border-zinc-700 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-zinc-300 font-semibold">
                 {formatBadge}
               </span>
             </div>
 
-            <p className="text-zinc-400">{game.location}</p>
+            <p className="break-words text-zinc-400">{game.location}</p>
 
             <div className="flex flex-wrap gap-2">
               {game.host && (
@@ -120,7 +120,7 @@ export default function GameCard({
           </div>
 
           {/* Price */}
-          <div className="text-right">
+          <div className="text-left md:text-right">
             <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
               Price
             </p>
