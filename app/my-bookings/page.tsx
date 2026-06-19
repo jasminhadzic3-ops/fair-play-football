@@ -148,7 +148,7 @@ export default function MyBookingsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-black text-white p-8">
+    <main className="min-h-screen bg-black text-white p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between gap-4 mb-10 flex-wrap">
           <div>
@@ -188,11 +188,11 @@ export default function MyBookingsPage() {
             {bookings.map(({ booking, game }) => (
               <div
                 key={booking.id}
-                className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.32)] transition hover:border-stone-200/20 hover:shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
+                className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.32)] transition hover:border-stone-200/20 hover:shadow-[0_22px_70px_rgba(0,0,0,0.42)] sm:p-6"
               >
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-2xl font-bold tracking-tight text-white">{game.title}</h2>
+                    <h2 className="break-words text-2xl font-bold tracking-tight text-white">{game.title}</h2>
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
                       <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
                         <p className="truncate text-sm font-semibold text-zinc-200">{game.location}</p>
@@ -213,7 +213,7 @@ export default function MyBookingsPage() {
                     type="button"
                     onClick={() => leaveGame(booking.id)}
                     disabled={leavingBookingId === booking.id}
-                    className="rounded-full border border-stone-300/20 bg-zinc-900 px-5 py-3 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-red-300/40 hover:bg-red-500/10 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-full border border-stone-300/20 bg-zinc-900 px-5 py-3 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-red-300/40 hover:bg-red-500/10 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
                   >
                     {leavingBookingId === booking.id ? "Leaving..." : "Leave Game"}
                   </button>
