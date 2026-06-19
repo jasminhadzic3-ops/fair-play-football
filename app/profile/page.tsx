@@ -484,13 +484,13 @@ export default function ProfilePage() {
     setErrorMessage(null);
 
     const extension = getAvatarExtension(file);
-    const avatarPath = `avatars/${user.id}/profile.${extension}`;
+    const avatarPath = `avatars/${user.id}/${Date.now()}.${extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from("profile-pictures")
       .upload(avatarPath, file, {
         cacheControl: "3600",
-        upsert: true,
+        upsert: false,
       });
 
     if (uploadError) {
