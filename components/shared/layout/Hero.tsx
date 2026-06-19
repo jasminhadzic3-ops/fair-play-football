@@ -90,12 +90,6 @@ export default function Hero() {
               >
                 Find Games
               </a>
-              <a
-                href="/admin"
-                className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 text-white font-semibold rounded-full transition-colors duration-300 hover:bg-zinc-900"
-              >
-                Host a Match
-              </a>
             </div>
           </div>
         </div>
