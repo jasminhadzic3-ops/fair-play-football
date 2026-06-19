@@ -684,12 +684,12 @@ export default function AdminPage() {
                             event.preventDefault();
                             void moveBooking(booking, new FormData(event.currentTarget));
                           }}
-                          className="flex flex-col gap-2 sm:flex-row md:justify-end"
+                          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:justify-end"
                         >
                           <select
                             name="target_game_id"
                             defaultValue={booking.game_id}
-                            className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
+                            className="w-full min-w-0 rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 sm:w-auto"
                           >
                             {games.map((gameOption) => (
                               <option key={gameOption.id} value={gameOption.id}>
@@ -700,7 +700,7 @@ export default function AdminPage() {
 
                           <button
                             type="submit"
-                            className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20"
+                            className="w-full rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 sm:w-auto"
                           >
                             Move
                           </button>
@@ -708,7 +708,7 @@ export default function AdminPage() {
                           <button
                             type="button"
                             onClick={() => removeBooking(booking)}
-                            className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400"
+                            className="w-full rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400 sm:w-auto"
                           >
                             Remove booking
                           </button>
