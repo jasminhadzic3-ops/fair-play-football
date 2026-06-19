@@ -789,7 +789,7 @@ export default function GameDetails({
       >
         <div className="space-y-3 sm:space-y-6">
         <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5">
-          <h3 className="text-lg font-bold text-white mb-1.5 sm:text-2xl sm:mb-3">{game.title}</h3>
+          <h3 className="break-words text-lg font-bold text-white mb-1.5 sm:text-2xl sm:mb-3">{game.title}</h3>
 
           <p className="text-sm text-zinc-400 leading-relaxed sm:text-base">
             Friendly casual football in North London.
@@ -817,7 +817,7 @@ export default function GameDetails({
             <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
               Venue
             </p>
-            <p className="text-white font-semibold text-sm sm:text-lg">{game.location}</p>
+            <p className="break-words text-white font-semibold text-sm sm:text-lg">{game.location}</p>
           </div>
           <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">
             <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
@@ -1118,9 +1118,9 @@ export default function GameDetails({
                 <div className="space-y-3 sm:space-y-4">
                   <div className="rounded-3xl bg-zinc-950 p-3 sm:p-5">
                     <div className="flex items-center justify-between gap-4">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Signed in as</p>
-                        <p className="mt-1.5 text-base font-semibold text-white sm:mt-2 sm:text-lg">{user?.email}</p>
+                        <p className="mt-1.5 break-all text-base font-semibold text-white sm:mt-2 sm:text-lg">{user?.email}</p>
                       </div>
                       <button
                         onClick={handleSignOut}
@@ -1413,10 +1413,10 @@ export default function GameDetails({
         <div className="space-y-3 sm:space-y-6">
           <div className="rounded-[2rem] border border-zinc-700 bg-zinc-950/95 p-3 shadow-[0_20px_70px_rgba(15,23,42,0.55)] sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:tracking-[0.35em]">Booking summary</p>
-                <p className="mt-1.5 text-lg font-bold text-white sm:mt-2 sm:text-xl">{game.title}</p>
-                <p className="text-zinc-400 text-sm">{game.location} • {game.time}</p>
+                <p className="mt-1.5 break-words text-lg font-bold text-white sm:mt-2 sm:text-xl">{game.title}</p>
+                <p className="break-words text-zinc-400 text-sm">{game.location} • {game.time}</p>
               </div>
               <div className="rounded-3xl bg-zinc-900 px-4 py-2.5 text-right sm:py-3">
                 <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:tracking-[0.35em]">Total</p>
@@ -1443,7 +1443,7 @@ export default function GameDetails({
               ].map((field) => (
                 <div key={field.label} className="rounded-3xl bg-zinc-900 px-4 py-3 sm:py-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">{field.label}</p>
-                  <p className="mt-1.5 text-sm text-white sm:mt-2">{field.value}</p>
+                  <p className="mt-1.5 break-words text-sm text-white sm:mt-2">{field.value}</p>
                 </div>
               ))}
             </div>
