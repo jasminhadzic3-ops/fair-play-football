@@ -90,14 +90,17 @@ export default function Home() {
 
   async function fetchGames() {
     const { data: gamesData } = await supabase.from("games").select("*");
-    const { data: bookingsData } = await supabase.from("bookings").select("*");
+    const bookingsResponse = await fetch("/api/bookings");
+    const bookingsResult = await bookingsResponse.json().catch(() => null);
 
     if (gamesData) {
       setGames(gamesData);
     }
 
-    if (bookingsData) {
-      setBookings(bookingsData);
+    if (bookingsResponse.ok) {
+      setBookings(bookingsResult?.bookings ?? []);
+    } else {
+      console.error("Unable to load bookings:", bookingsResult?.error || "Unknown error");
     }
   }
 
@@ -253,7 +256,7 @@ export default function Home() {
         setReturnPaymentState("paid");
         setReturnPaymentMessage("Payment confirmed. Your booking has been added.");
         scrollToGames();
-        setTimeout(() => setSuccessGameId(null), 2000);
+        setTimeout(() => setSuccessGameId(null), 5000);
         return;
       }
 
@@ -847,7 +850,7 @@ export default function Home() {
                   scrollToGames();
                   setTimeout(() => {
                     setSuccessGameId(null);
-                  }, 2000);
+                  }, 5000);
                 }}
                 onSignOut={handleSignOut}
                 pendingCheckoutId={checkoutGameId === game.id ? pendingCheckoutId : null}

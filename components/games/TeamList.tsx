@@ -5,6 +5,7 @@ interface Booking {
   game_id: number;
   player_name: string;
   user_id?: string | null;
+  avatar_url?: string | null;
 }
 
 interface TeamListProps {
@@ -33,41 +34,48 @@ export default function TeamList({
         <span className="text-xs text-zinc-500">{team.length} players</span>
       </div>
       <div className="space-y-3">
-        {team.map((booking) => (
-          <div
-            key={booking.id}
-            className="bg-zinc-900 border border-zinc-800 rounded-3xl px-4 py-3 flex items-center justify-between gap-3 transition hover:border-zinc-600"
-          >
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              <div className="w-11 h-11 overflow-hidden rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
-                {currentUserId && booking.user_id === currentUserId && currentUserAvatarUrl ? (
-                  <img
-                    src={currentUserAvatarUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  booking.player_name
-                    .split(" ")
-                    .map((part) => part.charAt(0).toUpperCase())
-                    .slice(0, 2)
-                    .join("")
-                )}
+        {team.map((booking) => {
+          const avatarUrl =
+            booking.avatar_url ||
+            (currentUserId && booking.user_id === currentUserId ? currentUserAvatarUrl : null);
+          const initials = booking.player_name
+            .split(" ")
+            .map((part) => part.charAt(0).toUpperCase())
+            .slice(0, 2)
+            .join("");
+
+          return (
+            <div
+              key={booking.id}
+              className="bg-zinc-900 border border-zinc-800 rounded-3xl px-4 py-3 flex items-center justify-between gap-3 transition hover:border-zinc-600"
+            >
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="w-11 h-11 overflow-hidden rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    initials
+                  )}
+                </div>
+                <span className="text-sm text-white font-medium truncate">
+                  {booking.player_name}
+                </span>
               </div>
-              <span className="text-sm text-white font-medium truncate">
-                {booking.player_name}
-              </span>
+              {currentUserId && booking.user_id === currentUserId ? (
+                <button
+                  onClick={() => onLeaveGame(booking.id)}
+                  className="text-xs uppercase tracking-[0.1em] text-zinc-300 hover:text-white transition"
+                >
+                  Leave
+                </button>
+              ) : null}
             </div>
-            {currentUserId && booking.user_id === currentUserId ? (
-              <button
-                onClick={() => onLeaveGame(booking.id)}
-                className="text-xs uppercase tracking-[0.1em] text-zinc-300 hover:text-white transition"
-              >
-                Leave
-              </button>
-            ) : null}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

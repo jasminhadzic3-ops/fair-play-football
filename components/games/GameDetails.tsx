@@ -24,6 +24,7 @@ interface GameDetailsProps {
     game_id: number;
     player_name: string;
     user_id?: string | null;
+    avatar_url?: string | null;
   }>;
   successGameId: number | null;
   user: any | null;
@@ -805,6 +806,12 @@ export default function GameDetails({
           </div>
         </div>
 
+        {successGameId === game.id && (
+          <div className="rounded-3xl border border-stone-300/15 bg-zinc-950 px-5 py-3 text-center text-sm font-semibold text-stone-200">
+            Payment confirmed. Your booking has been added.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
           <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">
             <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
@@ -1033,12 +1040,6 @@ export default function GameDetails({
             </div>
           </div>
         </div>
-
-        {successGameId === game.id && (
-          <div className="rounded-3xl border border-stone-300/15 bg-zinc-950 px-5 py-3 text-center text-sm font-semibold text-stone-200">
-            Booking confirmed. See you on the pitch.
-          </div>
-        )}
 
         <div className="flex gap-3 pt-3 border-t border-zinc-800 sm:pt-4">
           <button
