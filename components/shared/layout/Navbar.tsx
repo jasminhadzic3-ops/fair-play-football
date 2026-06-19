@@ -12,12 +12,13 @@ interface Profile {
 interface NavbarProps {
   user: User | null;
   profile: Profile | null;
+  isAdmin?: boolean;
   unreadNotificationCount?: number;
   onLogout: () => void;
   onSignIn: () => void;
 }
 
-export default function Navbar({ user, profile, unreadNotificationCount = 0, onLogout, onSignIn }: NavbarProps) {
+export default function Navbar({ user, profile, isAdmin = false, unreadNotificationCount = 0, onLogout, onSignIn }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const displayName =
     profile?.username?.trim() ||
@@ -40,7 +41,7 @@ export default function Navbar({ user, profile, unreadNotificationCount = 0, onL
     ...(user ? [{ label: "Profile", href: "/profile" }] : []),
     ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
     { label: "About", href: "/#about" },
-    { label: "Admin", href: "/admin" },
+    ...(isAdmin ? [{ label: "Admin", href: "/admin" }] : []),
   ];
 
   const handleMobileLogout = () => {

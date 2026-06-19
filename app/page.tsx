@@ -36,6 +36,7 @@ export default function Home() {
   const [showNavbarAuthPassword, setShowNavbarAuthPassword] = useState(false);
   const [openDetailsGameId, setOpenDetailsGameId] = useState<number | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
   const returnPollingReference = useRef<string | null>(null);
   const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
   const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
@@ -117,6 +118,26 @@ export default function Home() {
     }
 
     setUnreadNotificationCount(count ?? 0);
+  }
+
+  async function refreshAdminStatus(accessToken?: string | null) {
+    if (!accessToken) {
+      setIsAdmin(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/admin/me", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const result = await response.json().catch(() => null);
+
+      setIsAdmin(response.ok && result?.isAdmin === true);
+    } catch {
+      setIsAdmin(false);
+    }
   }
 
   function clearPendingCheckoutState() {
@@ -298,14 +319,19 @@ export default function Home() {
 
       setUser(session?.user ?? null);
       if (session?.user) {
+        void refreshAdminStatus(session.access_token);
         void runPostAuthWork(session);
+      } else {
+        setIsAdmin(false);
       }
 
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
+          void refreshAdminStatus(session.access_token);
           void runPostAuthWork(session);
         } else {
+          setIsAdmin(false);
           setProfile(null);
           setUnreadNotificationCount(0);
           clearPendingCheckoutState();
@@ -381,6 +407,7 @@ export default function Home() {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    setIsAdmin(false);
   };
 
   const handleNavbarSignIn = () => {
@@ -567,6 +594,7 @@ export default function Home() {
       <Navbar
         user={user}
         profile={profile}
+        isAdmin={isAdmin}
         unreadNotificationCount={unreadNotificationCount}
         onLogout={handleSignOut}
         onSignIn={handleNavbarSignIn}
