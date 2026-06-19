@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.fairplayfootball.co.uk"),
   title: {
     default: "Fair Play Football | Casual Football in North London",
     template: "%s | Fair Play Football",
