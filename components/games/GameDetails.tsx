@@ -842,7 +842,7 @@ export default function GameDetails({
         </div>
 
         <div className="space-y-2.5 sm:space-y-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <h3 className="text-base font-bold text-white sm:text-lg">Teams</h3>
             <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 sm:tracking-[0.25em]">
               {gameBookings.length} Confirmed
@@ -955,7 +955,7 @@ export default function GameDetails({
                     type="button"
                     onClick={leaveWaitingList}
                     disabled={waitingListLoading}
-                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-3 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {waitingListLoading ? "Leaving..." : "Leave Waiting List"}
                   </button>
@@ -964,7 +964,7 @@ export default function GameDetails({
                     type="button"
                     onClick={joinWaitingList}
                     disabled={waitingListLoading}
-                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-4 py-3 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {waitingListLoading ? "Joining..." : "Join waiting list"}
                   </button>
@@ -1378,7 +1378,7 @@ export default function GameDetails({
           <div className="flex justify-between gap-3 flex-wrap">
             <button
               onClick={closeProfileModal}
-              className="rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-white transition hover:border-white/20 sm:py-3"
+              className="w-full rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-white transition hover:border-white/20 sm:w-auto sm:py-3"
             >
               Back to match
             </button>
@@ -1393,7 +1393,7 @@ export default function GameDetails({
                       }
                 }
                 disabled={authLoading}
-                className="rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-white transition hover:border-white/20 sm:py-3"
+                className="w-full rounded-3xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-white transition hover:border-white/20 sm:w-auto sm:py-3"
               >
                 {isEditingProfile ? "Save profile" : "Edit profile"}
               </button>

@@ -68,7 +68,7 @@ export default function TeamList({
               {currentUserId && booking.user_id === currentUserId ? (
                 <button
                   onClick={() => onLeaveGame(booking.id)}
-                  className="text-xs uppercase tracking-[0.1em] text-zinc-300 hover:text-white transition"
+                  className="px-3 py-2 text-xs uppercase tracking-[0.1em] text-zinc-300 hover:text-white transition"
                 >
                   Leave
                 </button>
