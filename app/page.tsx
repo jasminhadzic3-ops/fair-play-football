@@ -148,13 +148,20 @@ export default function Home() {
   }
 
   function openGameFromNotification() {
-    const gameId = new URLSearchParams(window.location.search).get("open_game_id");
+    const searchParams = new URLSearchParams(window.location.search);
+    const gameId = searchParams.get("open_game_id") ?? searchParams.get("game");
 
     if (!gameId) {
       return;
     }
 
-    setOpenDetailsGameId(Number(gameId));
+    const parsedGameId = Number(gameId);
+
+    if (!Number.isInteger(parsedGameId) || parsedGameId <= 0) {
+      return;
+    }
+
+    setOpenDetailsGameId(parsedGameId);
     window.setTimeout(scrollToGames, 0);
   }
 
@@ -309,6 +316,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchGames();
+    openGameFromNotification();
 
     let listenerSubscription: { unsubscribe: () => void } | undefined;
 

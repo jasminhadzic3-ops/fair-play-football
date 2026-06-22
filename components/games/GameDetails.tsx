@@ -92,6 +92,7 @@ export default function GameDetails({
   const [waitingListError, setWaitingListError] = useState<string | null>(null);
   const [waitingListEntry, setWaitingListEntry] = useState<WaitingListEntry | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [copyGameLinkMessage, setCopyGameLinkMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
@@ -780,6 +781,14 @@ export default function GameDetails({
     clearAuthState();
   };
 
+  const handleCopyGameLink = async () => {
+    const gameUrl = `${window.location.origin}/?game=${game.id}`;
+
+    await navigator.clipboard.writeText(gameUrl);
+    setCopyGameLinkMessage("Link copied");
+    window.setTimeout(() => setCopyGameLinkMessage(null), 2000);
+  };
+
   return (
     <> 
       <Modal
@@ -803,6 +812,18 @@ export default function GameDetails({
             <span className="rounded-full bg-white/5 border border-zinc-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 sm:tracking-[0.25em]">
               {spotsLeft > 0 ? `${spotsLeft} Spaces Left` : "Full"}
             </span>
+            <button
+              type="button"
+              onClick={handleCopyGameLink}
+              className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 transition hover:border-white/20 hover:text-white sm:tracking-[0.25em]"
+            >
+              Copy game link
+            </button>
+            {copyGameLinkMessage ? (
+              <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300">
+                {copyGameLinkMessage}
+              </span>
+            ) : null}
           </div>
         </div>
 
