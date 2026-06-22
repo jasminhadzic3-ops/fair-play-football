@@ -123,7 +123,7 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
             : "text-gray-300 hover:text-white transition font-medium text-sm"
         }
       >
-        Sign In
+        Sign in
       </button>
     );
 

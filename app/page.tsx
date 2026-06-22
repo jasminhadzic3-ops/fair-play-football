@@ -588,7 +588,7 @@ export default function Home() {
         return;
       }
 
-      setNavbarAuthStatus("Check your email to verify your account. Your profile will be completed after verification.");
+      setNavbarAuthStatus("Almost there. Check your email to activate your account.");
     } catch (error: any) {
       localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
       setNavbarAuthError(error?.message || "Unable to create account. Please try again.");
@@ -618,16 +618,16 @@ export default function Home() {
               {navbarAuthMode === "signup" ? "CREATE ACCOUNT" : "SIGN IN"}
             </p>
             <h2 className="mt-3 text-3xl font-black tracking-tight text-white">
-              {null}
+              Play more football, with less admin.
             </h2>
             <p className="mt-3 text-sm leading-6 text-zinc-400">
               {navbarAuthMode === "signup"
-                ? "Enter your details to continue."
-                : "Enter your credentials to continue."}
+                ? "Create your player profile so you can book games and join waiting lists."
+                : "Sign in to manage bookings and join games faster."}
             </p>
             {navbarAuthMode === "signup" ? (
               <p className="mt-2 text-xs font-semibold text-stone-300">
-                Please check your email and verify your account after signing up.
+                After creating your account, check your email to activate it.
               </p>
             ) : null}
 
@@ -813,7 +813,7 @@ export default function Home() {
                 onClick={() => switchNavbarAuthMode(navbarAuthMode === "signup" ? "signin" : "signup")}
                 className="font-semibold text-stone-200 hover:text-white"
               >
-                {navbarAuthMode === "signup" ? "Sign In" : "Create Account"}
+                {navbarAuthMode === "signup" ? "Sign in" : "Create account"}
               </button>
             </div>
           </div>
