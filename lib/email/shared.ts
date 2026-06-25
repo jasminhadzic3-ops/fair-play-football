@@ -31,6 +31,11 @@ export function getGameUrl(gameId: number) {
   return `${getSiteUrl()}/?open_game_id=${encodeURIComponent(String(gameId))}#games`;
 }
 
+export function getPublicAssetUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${getSiteUrl()}${normalizedPath}`;
+}
+
 export function formatPrice(amount: number | null | undefined, currency: string | null | undefined = "GBP") {
   const normalizedAmount = Number(amount ?? 0);
   const normalizedCurrency = currency || "GBP";
@@ -56,6 +61,7 @@ export function renderEmailLayout({
   const escapedTitle = escapeHtml(title);
   const escapedCtaHref = ctaHref ? escapeHtml(ctaHref) : null;
   const escapedCtaLabel = ctaLabel ? escapeHtml(ctaLabel) : null;
+  const escapedLogoUrl = escapeHtml(getPublicAssetUrl("/email-logo.png"));
 
   return `
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
@@ -65,9 +71,7 @@ export function renderEmailLayout({
       <div style="max-width:640px;margin:0 auto;padding:28px 16px;">
         <div style="border:1px solid #27272a;background:#09090b;border-radius:28px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.35);">
           <div style="padding:28px 24px 20px;border-bottom:1px solid #27272a;background:#0f0f10;">
-            <p style="margin:0 0 12px;font-size:11px;line-height:16px;letter-spacing:0.26em;text-transform:uppercase;color:#d6d3d1;font-weight:700;">
-              Fair Play Football
-            </p>
+            <img src="${escapedLogoUrl}" width="44" height="46" alt="Fair Play Football" style="display:block;width:44px;height:auto;margin:0 0 18px;border:0;outline:none;text-decoration:none;" />
             <h1 style="margin:0;font-size:30px;line-height:36px;letter-spacing:-0.01em;color:#ffffff;font-weight:800;">
               ${escapedTitle}
             </h1>
@@ -89,7 +93,7 @@ export function renderEmailLayout({
 
           <div style="padding:18px 24px;border-top:1px solid #27272a;background:#050505;color:#a1a1aa;font-size:12px;line-height:20px;">
             <p style="margin:0;">
-              You're receiving this because you use Fair Play Football.
+              Questions? Simply reply to this email.
             </p>
           </div>
         </div>
