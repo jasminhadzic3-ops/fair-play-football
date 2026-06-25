@@ -71,8 +71,8 @@ export function renderEmailLayout({
       <div style="max-width:640px;margin:0 auto;padding:28px 16px;">
         <div style="border:1px solid #27272a;background:#09090b;border-radius:28px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.35);">
           <div style="padding:28px 24px 20px;border-bottom:1px solid #27272a;background:#0f0f10;">
-            <img src="${escapedLogoUrl}" width="44" height="46" alt="Fair Play Football" style="display:block;width:44px;height:auto;margin:0 0 18px;border:0;outline:none;text-decoration:none;" />
-            <h1 style="margin:0;font-size:30px;line-height:36px;letter-spacing:-0.01em;color:#ffffff;font-weight:800;">
+            <img src="${escapedLogoUrl}" width="64" height="67" alt="Fair Play Football" style="display:block;width:64px;height:auto;margin:0 auto 18px;border:0;outline:none;text-decoration:none;" />
+            <h1 style="margin:0;font-size:30px;line-height:36px;letter-spacing:-0.01em;color:#ffffff;font-weight:800;text-align:center;">
               ${escapedTitle}
             </h1>
           </div>
@@ -92,8 +92,8 @@ export function renderEmailLayout({
           </div>
 
           <div style="padding:18px 24px;border-top:1px solid #27272a;background:#050505;color:#a1a1aa;font-size:12px;line-height:20px;">
-            <p style="margin:0;">
-              Questions? Simply reply to this email.
+            <p style="margin:0;text-align:center;">
+              Questions? Reply to this email.
             </p>
           </div>
         </div>
