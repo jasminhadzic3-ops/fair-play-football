@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
+import { escapeHtml, formatPrice, getGameUrl, renderEmailLayout } from "./shared";
 
 type BookingConfirmedEmailParams = {
   bookingId: number;
@@ -26,43 +27,6 @@ type ProfileEmailData = {
   email: string | null;
   username: string | null;
 };
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function getSiteUrl() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-
-  if (!siteUrl) {
-    throw new Error("NEXT_PUBLIC_SITE_URL is required.");
-  }
-
-  return siteUrl.replace(/\/$/, "");
-}
-
-function formatMoney(amount: number | null | undefined, currency: string | null | undefined) {
-  const normalizedAmount = Number(amount ?? 0);
-  const normalizedCurrency = currency || "GBP";
-
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: normalizedCurrency,
-    }).format(normalizedAmount);
-  } catch {
-    return `${normalizedCurrency} ${normalizedAmount.toFixed(2)}`;
-  }
-}
-
-function buildBookingUrl(gameId: number) {
-  return `${getSiteUrl()}/?open_game_id=${encodeURIComponent(String(gameId))}#games`;
-}
 
 export async function sendBookingConfirmedEmail(params: BookingConfirmedEmailParams) {
   const [{ data: game, error: gameError }, { data: profile, error: profileError }, { data: authUser, error: authError }] =
@@ -106,8 +70,8 @@ export async function sendBookingConfirmedEmail(params: BookingConfirmedEmailPar
   const gameTitle = game.title || "Your football match";
   const gameLocation = game.location || "TBD";
   const gameTime = game.time || "TBD";
-  const total = formatMoney(params.amount ?? game.price, params.currency);
-  const bookingUrl = buildBookingUrl(params.gameId);
+  const total = formatPrice(params.amount ?? game.price, params.currency);
+  const bookingUrl = getGameUrl(params.gameId);
   const subject = `Booking confirmed: ${gameTitle}`;
   const idempotencyKey = `booking_confirmed:booking:${params.bookingId}`;
 
@@ -129,25 +93,37 @@ export async function sendBookingConfirmedEmail(params: BookingConfirmedEmailPar
     .filter(Boolean)
     .join("\n");
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; color: #18181b; line-height: 1.6;">
-      <h1 style="margin: 0 0 16px;">Booking confirmed</h1>
-      <p>Hi ${escapeHtml(playerName)},</p>
-      <p>Your booking is confirmed for <strong>${escapeHtml(gameTitle)}</strong>.</p>
-      <ul>
-        <li><strong>Location:</strong> ${escapeHtml(gameLocation)}</li>
-        <li><strong>Kick-off:</strong> ${escapeHtml(gameTime)}</li>
-        <li><strong>Total paid:</strong> ${escapeHtml(total)}</li>
-        <li><strong>Booking ID:</strong> ${params.bookingId}</li>
-        <li><strong>Payment ID:</strong> ${params.paymentId}</li>
-      </ul>
-      <p>
-        <a href="${escapeHtml(bookingUrl)}" style="color: #18181b; font-weight: 700;">
-          View your booking
-        </a>
+  const html = renderEmailLayout({
+    previewText: `Your booking is confirmed for ${gameTitle}.`,
+    title: "Booking confirmed",
+    ctaHref: bookingUrl,
+    ctaLabel: "View booking",
+    bodyHtml: `
+      <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
+        Hi ${escapeHtml(playerName)},
       </p>
-    </div>
-  `;
+      <p style="margin:0 0 22px;color:#d4d4d8;">
+        You're booked in for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>. We'll see you on the pitch.
+      </p>
+
+      <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
+        <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
+          Match details
+        </p>
+        <div style="margin:0;">
+          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Game:</strong> ${escapeHtml(gameTitle)}</p>
+          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Location:</strong> ${escapeHtml(gameLocation)}</p>
+          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Kick-off:</strong> ${escapeHtml(gameTime)}</p>
+          <p style="margin:0;color:#f4f4f5;"><strong>Total paid:</strong> ${escapeHtml(total)}</p>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #27272a;padding-top:18px;color:#a1a1aa;font-size:13px;line-height:21px;">
+        <p style="margin:0 0 6px;">Booking ID: ${params.bookingId}</p>
+        <p style="margin:0;">Payment ID: ${params.paymentId}</p>
+      </div>
+    `,
+  });
 
   return sendResendEmail({
     to: recipientEmail,
