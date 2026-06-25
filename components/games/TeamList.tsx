@@ -25,13 +25,18 @@ export default function TeamList({
   const teamA = bookings.slice(0, midpoint);
   const teamB = bookings.slice(midpoint);
 
-  const renderTeam = (team: Booking[], teamName: string) => (
+  const renderTeam = (team: Booking[], teamName: string, teamMarker: string) => (
     <div className="flex-1">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold uppercase tracking-[0.2em] text-white">
-          {teamName}
+        <h3 className="flex items-center gap-2 text-lg font-semibold uppercase tracking-[0.2em] text-white">
+          <span className="text-xl leading-none" aria-hidden="true">
+            {teamMarker}
+          </span>
+          <span>
+            {teamName}
+          </span>
         </h3>
-        <span className="text-xs text-zinc-500">{team.length} players</span>
+        <span className="text-xs text-zinc-500">{team.length} Players</span>
       </div>
       <div className="space-y-3">
         {team.map((booking) => {
@@ -86,8 +91,8 @@ export default function TeamList({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-      {renderTeam(teamA, "TEAM A ⚪")}
-      {renderTeam(teamB, "TEAM B ⚫")}
+      {renderTeam(teamA, "TEAM A", "⚪")}
+      {renderTeam(teamB, "TEAM B", "⚫")}
     </div>
   );
 }
