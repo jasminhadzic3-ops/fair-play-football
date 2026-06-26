@@ -304,3 +304,202 @@ grant execute on function public.create_wallet_debit_if_balance(
   text,
   jsonb
 ) to service_role;
+
+create or replace function public.create_wallet_booking_if_balance(
+  p_user_id uuid,
+  p_game_id bigint,
+  p_player_name text,
+  p_amount numeric,
+  p_currency text default 'GBP',
+  p_idempotency_key text default null,
+  p_metadata jsonb default '{}'::jsonb
+)
+returns table (
+  success boolean,
+  booking_id bigint,
+  wallet_transaction_id bigint,
+  reason text,
+  balance numeric(10, 2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_balance numeric(10, 2);
+  v_booking_count integer;
+  v_booking_id bigint;
+  v_currency text;
+  v_existing_transaction public.wallet_transactions%rowtype;
+  v_idempotency_key text;
+  v_max_players integer;
+  v_player_name text;
+  v_wallet_transaction_id bigint;
+begin
+  v_currency := coalesce(nullif(trim(p_currency), ''), 'GBP');
+  v_idempotency_key := nullif(trim(p_idempotency_key), '');
+  v_player_name := nullif(trim(p_player_name), '');
+
+  if p_user_id is null then
+    return query select false, null::bigint, null::bigint, 'invalid_user'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if p_game_id is null then
+    return query select false, null::bigint, null::bigint, 'invalid_game'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if v_player_name is null then
+    return query select false, null::bigint, null::bigint, 'invalid_player_name'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if p_amount is null or p_amount <= 0 then
+    return query select false, null::bigint, null::bigint, 'invalid_amount'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if v_idempotency_key is null then
+    return query select false, null::bigint, null::bigint, 'missing_idempotency_key'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  select games.max_players
+  into v_max_players
+  from public.games
+  where games.id = p_game_id
+  for update;
+
+  if v_max_players is null then
+    return query select false, null::bigint, null::bigint, 'game_not_found'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_user_id::text), hashtext(v_currency));
+
+  select *
+  into v_existing_transaction
+  from public.wallet_transactions
+  where idempotency_key = v_idempotency_key;
+
+  select public.get_wallet_balance(p_user_id, v_currency)
+  into v_balance;
+
+  if v_existing_transaction.id is not null then
+    if v_existing_transaction.user_id = p_user_id
+      and v_existing_transaction.game_id = p_game_id
+      and v_existing_transaction.amount = -p_amount
+      and v_existing_transaction.currency = v_currency
+      and v_existing_transaction.transaction_type = 'wallet_booking_payment'
+      and v_existing_transaction.status = 'completed'
+    then
+      return query select true, v_existing_transaction.booking_id, v_existing_transaction.id, null::text, v_balance;
+      return;
+    end if;
+
+    return query select false, v_existing_transaction.booking_id, v_existing_transaction.id, 'idempotency_key_conflict'::text, v_balance;
+    return;
+  end if;
+
+  select bookings.id
+  into v_booking_id
+  from public.bookings
+  where bookings.game_id = p_game_id
+    and bookings.user_id = p_user_id
+    and bookings.player_name = v_player_name
+  limit 1;
+
+  if v_booking_id is not null then
+    return query select false, v_booking_id, null::bigint, 'existing_booking'::text, v_balance;
+    return;
+  end if;
+
+  select count(*)
+  into v_booking_count
+  from public.bookings
+  where bookings.game_id = p_game_id;
+
+  if v_booking_count >= v_max_players then
+    return query select false, null::bigint, null::bigint, 'game_full'::text, v_balance;
+    return;
+  end if;
+
+  if v_balance < p_amount then
+    return query select false, null::bigint, null::bigint, 'insufficient_balance'::text, v_balance;
+    return;
+  end if;
+
+  insert into public.bookings (game_id, user_id, player_name)
+  values (p_game_id, p_user_id, v_player_name)
+  returning id into v_booking_id;
+
+  insert into public.wallet_transactions (
+    user_id,
+    amount,
+    idempotency_key,
+    currency,
+    transaction_type,
+    status,
+    game_id,
+    booking_id,
+    description,
+    metadata
+  )
+  values (
+    p_user_id,
+    -p_amount,
+    v_idempotency_key,
+    v_currency,
+    'wallet_booking_payment',
+    'completed',
+    p_game_id,
+    v_booking_id,
+    'Wallet payment for booking',
+    coalesce(p_metadata, '{}'::jsonb)
+  )
+  returning id into v_wallet_transaction_id;
+
+  select public.get_wallet_balance(p_user_id, v_currency)
+  into v_balance;
+
+  return query select true, v_booking_id, v_wallet_transaction_id, null::text, v_balance;
+end;
+$$;
+
+revoke all on function public.create_wallet_booking_if_balance(
+  uuid,
+  bigint,
+  text,
+  numeric,
+  text,
+  text,
+  jsonb
+) from public;
+revoke all on function public.create_wallet_booking_if_balance(
+  uuid,
+  bigint,
+  text,
+  numeric,
+  text,
+  text,
+  jsonb
+) from anon;
+revoke all on function public.create_wallet_booking_if_balance(
+  uuid,
+  bigint,
+  text,
+  numeric,
+  text,
+  text,
+  jsonb
+) from authenticated;
+grant execute on function public.create_wallet_booking_if_balance(
+  uuid,
+  bigint,
+  text,
+  numeric,
+  text,
+  text,
+  jsonb
+) to service_role;
