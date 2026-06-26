@@ -39,6 +39,7 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
     { label: "Home", href: "/" },
     { label: "Games", href: "/#games" },
     ...(user ? [{ label: "Profile", href: "/profile" }] : []),
+    ...(user ? [{ label: "Wallet", href: "/wallet" }] : []),
     ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
     { label: "About", href: "/#about" },
     ...(isAdmin ? [{ label: "Admin", href: "/admin" }] : []),
