@@ -72,6 +72,32 @@ type WalletDebitRpcResult = {
   balance: number | null;
 };
 
+type BookGameWithWalletParams = {
+  userId: string;
+  gameId: number;
+  playerName: string;
+  amount: number;
+  currency?: string;
+  idempotencyKey: string;
+  metadata?: Record<string, unknown>;
+};
+
+type BookGameWithWalletRpcResult = {
+  success: boolean;
+  booking_id: number | null;
+  wallet_transaction_id: number | null;
+  reason: string | null;
+  balance: number | null;
+};
+
+export type BookGameWithWalletResult = {
+  success: boolean;
+  bookingId: number | null;
+  walletTransactionId: number | null;
+  reason: string | null;
+  balance: number | null;
+};
+
 function normalizeCurrency(currency?: string) {
   return currency?.trim() || "GBP";
 }
@@ -257,4 +283,61 @@ export async function debitWallet(params: WalletDebitInput): Promise<WalletTrans
     currency,
     status,
   });
+}
+
+export async function bookGameWithWallet({
+  userId,
+  gameId,
+  playerName,
+  amount,
+  currency,
+  idempotencyKey,
+  metadata,
+}: BookGameWithWalletParams): Promise<BookGameWithWalletResult> {
+  assertSupabaseAdminConfigured();
+  assertUserId(userId);
+  assertPositiveAmount(amount, "debit");
+
+  const normalizedPlayerName = playerName.trim();
+  const normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+
+  if (!gameId) {
+    throw new Error("Wallet booking gameId is required.");
+  }
+
+  if (!normalizedPlayerName) {
+    throw new Error("Wallet booking playerName is required.");
+  }
+
+  if (!normalizedIdempotencyKey) {
+    throw new Error("Wallet booking requires an idempotency key.");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("create_wallet_booking_if_balance", {
+    p_user_id: userId,
+    p_game_id: gameId,
+    p_player_name: normalizedPlayerName,
+    p_amount: amount,
+    p_currency: normalizeCurrency(currency),
+    p_idempotency_key: normalizedIdempotencyKey,
+    p_metadata: metadata ?? {},
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const result = (Array.isArray(data) ? data[0] : data) as BookGameWithWalletRpcResult | null;
+
+  if (!result) {
+    throw new Error("Wallet booking did not return a result.");
+  }
+
+  return {
+    success: result.success,
+    bookingId: result.booking_id,
+    walletTransactionId: result.wallet_transaction_id,
+    reason: result.reason,
+    balance: result.balance === null ? null : Number(result.balance),
+  };
 }
