@@ -1,0 +1,194 @@
+import "server-only";
+
+import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmin";
+
+export type WalletTransactionType =
+  | "game_cancelled_credit"
+  | "wallet_booking_payment"
+  | "refund_requested"
+  | "refund_completed"
+  | "manual_adjustment"
+  | "admin_credit"
+  | "promotion_bonus";
+
+export type WalletTransactionStatus = "pending" | "completed" | "failed" | "cancelled";
+
+export type WalletTransaction = {
+  id: number;
+  user_id: string;
+  amount: number;
+  currency: string;
+  transaction_type: WalletTransactionType;
+  status: WalletTransactionStatus;
+  game_id: number | null;
+  booking_id: number | null;
+  payment_id: number | null;
+  description: string | null;
+  admin_note: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WalletTransactionInput = {
+  userId: string;
+  amount: number;
+  transactionType: WalletTransactionType;
+  status: WalletTransactionStatus;
+  currency?: string;
+  gameId?: number | null;
+  bookingId?: number | null;
+  paymentId?: number | null;
+  description?: string | null;
+  adminNote?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type GetWalletBalanceParams = {
+  userId: string;
+  currency?: string;
+};
+
+type GetWalletTransactionsParams = {
+  userId: string;
+  currency?: string;
+  limit?: number;
+};
+
+type WalletCreditInput = Omit<WalletTransactionInput, "status"> & {
+  status?: WalletTransactionStatus;
+};
+
+type WalletDebitInput = Omit<WalletTransactionInput, "status"> & {
+  status?: WalletTransactionStatus;
+};
+
+function normalizeCurrency(currency?: string) {
+  return currency?.trim() || "GBP";
+}
+
+function assertUserId(userId: string) {
+  if (!userId) {
+    throw new Error("Wallet userId is required.");
+  }
+}
+
+function assertValidAmount(amount: number) {
+  if (!Number.isFinite(amount) || amount === 0) {
+    throw new Error("Wallet transaction amount must be a non-zero number.");
+  }
+}
+
+function assertPositiveAmount(amount: number, action: "credit" | "debit") {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(`Wallet ${action} amount must be greater than zero.`);
+  }
+}
+
+export async function getWalletBalance({ userId, currency }: GetWalletBalanceParams) {
+  assertSupabaseAdminConfigured();
+  assertUserId(userId);
+
+  const { data, error } = await supabaseAdmin.rpc("get_wallet_balance", {
+    p_user_id: userId,
+    p_currency: normalizeCurrency(currency),
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return Number(data ?? 0);
+}
+
+export async function getWalletTransactions({
+  userId,
+  currency,
+  limit = 50,
+}: GetWalletTransactionsParams): Promise<WalletTransaction[]> {
+  assertSupabaseAdminConfigured();
+  assertUserId(userId);
+
+  let query = supabaseAdmin
+    .from("wallet_transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, Math.min(limit, 100)));
+
+  if (currency) {
+    query = query.eq("currency", normalizeCurrency(currency));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as WalletTransaction[];
+}
+
+export async function createWalletTransaction(params: WalletTransactionInput): Promise<WalletTransaction> {
+  assertSupabaseAdminConfigured();
+  assertUserId(params.userId);
+  assertValidAmount(params.amount);
+
+  const { data, error } = await supabaseAdmin
+    .from("wallet_transactions")
+    .insert({
+      user_id: params.userId,
+      amount: params.amount,
+      currency: normalizeCurrency(params.currency),
+      transaction_type: params.transactionType,
+      status: params.status,
+      game_id: params.gameId ?? null,
+      booking_id: params.bookingId ?? null,
+      payment_id: params.paymentId ?? null,
+      description: params.description ?? null,
+      admin_note: params.adminNote ?? null,
+      metadata: params.metadata ?? {},
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as WalletTransaction;
+}
+
+export async function creditWallet(params: WalletCreditInput): Promise<WalletTransaction> {
+  assertPositiveAmount(params.amount, "credit");
+
+  return createWalletTransaction({
+    ...params,
+    status: params.status ?? "completed",
+  });
+}
+
+export async function debitWallet(params: WalletDebitInput): Promise<WalletTransaction> {
+  assertPositiveAmount(params.amount, "debit");
+
+  const status = params.status ?? "completed";
+  const currency = normalizeCurrency(params.currency);
+
+  if (status === "completed") {
+    const availableBalance = await getWalletBalance({
+      userId: params.userId,
+      currency,
+    });
+
+    if (availableBalance < params.amount) {
+      throw new Error("Insufficient wallet balance for this debit.");
+    }
+  }
+
+  return createWalletTransaction({
+    ...params,
+    amount: -params.amount,
+    currency,
+    status,
+  });
+}
