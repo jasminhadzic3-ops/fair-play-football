@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
+import { sendNewGamePostedEmails } from "@/lib/email/newGamePosted";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type GamePayload = {
@@ -64,6 +65,13 @@ export async function POST(request: NextRequest) {
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
     }
+
+    await sendNewGamePostedEmails({ gameId: data.id }).catch((emailError) => {
+      console.error("Unable to send new game posted email:", {
+        gameId: data.id,
+        error: emailError,
+      });
+    });
 
     return Response.json({ game: data }, { status: 201 });
   } catch (error) {
