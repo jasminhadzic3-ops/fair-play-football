@@ -157,6 +157,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!result.bookingId || !result.walletTransactionId) {
+      console.error("Wallet booking completed without required records:", result);
+      return Response.json(
+        { error: "Wallet booking completed without required records." },
+        { status: 500 }
+      );
+    }
+
     return Response.json({
       booking_id: result.bookingId,
       wallet_transaction_id: result.walletTransactionId,
