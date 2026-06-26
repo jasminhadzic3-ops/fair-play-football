@@ -68,7 +68,7 @@ export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotA
   const gameTime = game.time || "TBD";
   const gamePrice = formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(params.gameId);
-  const subject = `A spot has opened: ${gameTitle}`;
+  const subject = `Waiting List: ${gameTitle}`;
   const idempotencyKey = `waiting_list_spot_available:notification:${params.notificationId}`;
 
   const text = [
@@ -76,7 +76,7 @@ export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotA
     "",
     `Good news! A spot may now be available for ${gameTitle}.`,
     "",
-    "If you'd still like to play, open the game and complete your booking as soon as possible.",
+    "If you'd still like to play, open the game and complete your booking.",
     "",
     "Places are allocated on a first paid, first served basis. This email does not reserve or guarantee a place.",
     "",
@@ -101,7 +101,7 @@ export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotA
         Good news! A spot may now be available for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
-        If you'd still like to play, open the game and complete your booking as soon as possible.
+        If you'd still like to play, open the game and complete your booking.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
         Places are allocated on a <strong style="color:#ffffff;">first paid, first served</strong> basis. This email does not reserve or guarantee a place.
