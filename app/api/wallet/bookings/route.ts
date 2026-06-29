@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { runPostBookingActions } from "@/lib/postBookingActions";
 import { getAuthenticatedUser } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { bookGameWithWallet } from "@/lib/wallet";
@@ -164,6 +165,13 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await runPostBookingActions({
+      bookingId: result.bookingId,
+      userId: user.id,
+      gameId,
+      playerName,
+    });
 
     return Response.json({
       booking_id: result.bookingId,
