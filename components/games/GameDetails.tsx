@@ -131,6 +131,7 @@ export default function GameDetails({
   const maxPlayers = game.max_players || 12;
   const gameFormat = getFormatFromMaxPlayers(maxPlayers);
   const spotsLeft = maxPlayers - gameBookings.length;
+  const gamePrice = Number(game.price ?? 0);
 
   useEffect(() => {
     if (profile) {
@@ -166,6 +167,8 @@ export default function GameDetails({
         (booking) => booking.player_name.trim().toLowerCase() === normalizedProfileName
       );
   const canBookGame = !isGameFull && !alreadyJoined;
+  const canPayWithWallet =
+    isAuthenticated && walletBalance !== null && walletBalance >= gamePrice && gamePrice > 0;
 
   useEffect(() => {
     let isCancelled = false;
@@ -377,6 +380,64 @@ export default function GameDetails({
     }
   };
 
+  const handleWalletBooking = async () => {
+    if (!canBookGame || bookingLoading || walletBalance === null || walletBalance < gamePrice) {
+      return;
+    }
+
+    setBookingLoading(true);
+    setPaymentCheckoutId(null);
+    setPaymentCheckoutReference(null);
+    setPaymentStatus("creating");
+    setPaymentMessage("Confirming wallet payment...");
+
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+
+      if (!session?.access_token) {
+        throw new Error("Please sign in again before paying with wallet.");
+      }
+
+      const response = await fetch("/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: game.id,
+          playerName: profileName,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(result?.error || "Unable to complete wallet payment.");
+      }
+
+      setPaymentStatus("paid");
+      setPaymentMessage("Wallet payment confirmed. Your booking has been added.");
+
+      const updatedBalance = Number(result?.balance);
+      if (Number.isFinite(updatedBalance)) {
+        setWalletBalance(updatedBalance);
+      }
+
+      localStorage.removeItem("pendingSumUpGameId");
+      localStorage.removeItem("pendingSumUpCheckoutId");
+      localStorage.removeItem("pendingSumUpCheckoutReference");
+      localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
+      await onPaymentComplete?.();
+      setShowPaymentModal(false);
+    } catch (error) {
+      setPaymentStatus("failed");
+      setPaymentMessage(error instanceof Error ? error.message : "Unable to complete wallet payment.");
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
   const joinWaitingList = async () => {
     if (waitingListLoading) {
       return;
@@ -522,6 +583,7 @@ export default function GameDetails({
         setPaymentStatus("paid");
         setPaymentMessage("Payment confirmed. Your booking has been added.");
         await onPaymentComplete?.();
+        setShowPaymentModal(false);
         return;
       }
 
@@ -924,9 +986,19 @@ export default function GameDetails({
                   Credit available on your Fair Play Football account.
                 </p>
               </div>
-              <p className="text-2xl font-black text-stone-100 sm:text-3xl">
-                {walletBalanceLoading ? "Loading..." : formatWalletBalance(walletBalance ?? 0)}
-              </p>
+              {walletBalanceLoading ? (
+                <div
+                  className="flex h-9 items-center justify-start sm:h-10 sm:justify-end"
+                  role="status"
+                  aria-label="Loading wallet balance"
+                >
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300/20 border-t-stone-200" />
+                </div>
+              ) : (
+                <p className="text-2xl font-black text-stone-100 sm:text-3xl">
+                  {formatWalletBalance(walletBalance ?? 0)}
+                </p>
+              )}
             </div>
           </div>
         ) : null}
@@ -1518,7 +1590,9 @@ export default function GameDetails({
           <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:text-sm sm:tracking-[0.3em]">Secure payment</p>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              All payments are processed securely through SumUp. You’ll be able to choose your preferred payment method, including card, Apple Pay or Google Pay, during checkout.
+              {canPayWithWallet
+                ? "Use your Fair Play Football wallet balance for this booking, or pay by card instead."
+                : "All card payments are processed securely through SumUp. You’ll be able to choose your preferred payment method, including card, Apple Pay or Google Pay, during checkout."}
             </p>
           </div>
 
@@ -1529,7 +1603,10 @@ export default function GameDetails({
                 { label: "Username", value: profileName },
                 { label: "Position", value: favouritePosition || "Midfielder" },
                 { label: "Email", value: profile?.email || user?.email || email || "you@example.com" },
-                { label: "Payment", value: "SumUp Secure Checkout" },
+                {
+                  label: "Payment",
+                  value: canPayWithWallet ? "Wallet or SumUp Secure Checkout" : "SumUp Secure Checkout",
+                },
               ].map((field) => (
                 <div key={field.label} className="rounded-3xl bg-zinc-900 px-4 py-3 sm:py-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">{field.label}</p>
@@ -1553,14 +1630,34 @@ export default function GameDetails({
             </div>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-[1.25fr_0.75fr]">
-            <button
-              onClick={handleOpenPaymentLink}
-              disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
-              className="rounded-3xl bg-stone-200 px-6 py-3 text-zinc-950 font-bold transition duration-150 ease-out enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4"
-            >
-              {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : `Pay £${game.price} with SumUp`}
-            </button>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1.6fr)_minmax(12rem,0.7fr)]">
+            {canPayWithWallet ? (
+              <div className="grid gap-2">
+                <button
+                  onClick={handleWalletBooking}
+                  disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
+                  className="rounded-3xl bg-stone-200 px-6 py-3 text-zinc-950 font-bold transition duration-150 ease-out enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4"
+                >
+                  {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : `Pay £${game.price} with Wallet`}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenPaymentLink}
+                  disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
+                  className="text-sm font-semibold text-zinc-400 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Pay by Card
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleOpenPaymentLink}
+                disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
+                className="rounded-3xl bg-stone-200 px-6 py-3 text-zinc-950 font-bold transition duration-150 ease-out enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4"
+              >
+                {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : `Pay £${game.price} with SumUp`}
+              </button>
+            )}
             <button
               onClick={() => {
                 setShowPaymentModal(false);
