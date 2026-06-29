@@ -52,6 +52,17 @@ type WaitingListEntry = {
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 
+function formatWalletBalance(amount: number) {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP",
+    }).format(amount);
+  } catch {
+    return `GBP ${amount.toFixed(2)}`;
+  }
+}
+
 export default function GameDetails({
   isOpen,
   onClose,
@@ -93,6 +104,8 @@ export default function GameDetails({
   const [waitingListEntry, setWaitingListEntry] = useState<WaitingListEntry | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [copyGameLinkMessage, setCopyGameLinkMessage] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletBalanceLoading, setWalletBalanceLoading] = useState(false);
 
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
@@ -153,6 +166,44 @@ export default function GameDetails({
         (booking) => booking.player_name.trim().toLowerCase() === normalizedProfileName
       );
   const canBookGame = !isGameFull && !alreadyJoined;
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadWalletBalance = async () => {
+      setWalletBalance(null);
+
+      if (!isOpen || !isAuthenticated || !user?.id) {
+        setWalletBalanceLoading(false);
+        return;
+      }
+
+      setWalletBalanceLoading(true);
+
+      const { data, error } = await supabase.rpc("get_my_wallet_balance", {
+        p_currency: "GBP",
+      });
+
+      if (isCancelled) {
+        return;
+      }
+
+      setWalletBalanceLoading(false);
+
+      if (error) {
+        setWalletBalance(null);
+        return;
+      }
+
+      setWalletBalance(Number(data ?? 0));
+    };
+
+    void loadWalletBalance();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated, isOpen, user?.id]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -861,6 +912,24 @@ export default function GameDetails({
             </p>
           </div>
         </div>
+
+        {isAuthenticated && (walletBalanceLoading || walletBalance !== null) ? (
+          <div className="rounded-3xl border border-stone-300/15 bg-zinc-950/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500 sm:tracking-[0.3em]">
+                  Available wallet balance
+                </p>
+                <p className="mt-1.5 text-sm text-zinc-400">
+                  Credit available on your Fair Play Football account.
+                </p>
+              </div>
+              <p className="text-2xl font-black text-stone-100 sm:text-3xl">
+                {walletBalanceLoading ? "Loading..." : formatWalletBalance(walletBalance ?? 0)}
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         <div className="space-y-2.5 sm:space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
