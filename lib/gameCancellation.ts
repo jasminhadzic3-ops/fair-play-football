@@ -35,6 +35,28 @@ type WalletBookingPaymentRow = {
   currency: string | null;
 };
 
+type CurrentBookingRow = {
+  id: number;
+  user_id: string;
+  player_name: string | null;
+};
+
+type SumUpCreditPlan = {
+  type: "sumup";
+  booking: CurrentBookingRow;
+  payment: SumUpPaymentRow;
+  amount: number;
+};
+
+type WalletCreditPlan = {
+  type: "wallet";
+  booking: CurrentBookingRow;
+  walletTransaction: WalletBookingPaymentRow;
+  amount: number;
+};
+
+type CancellationCreditPlan = SumUpCreditPlan | WalletCreditPlan;
+
 export type CancelGameResult = {
   game: GameRow;
   sumup_credited_count: number;
@@ -70,6 +92,10 @@ function parsePositiveMoneyAmount(value: number | string | null, context: string
   return amount;
 }
 
+function createReconciliationError(message: string) {
+  return new GameCancellationError(message, 409);
+}
+
 async function loadGame(gameId: number) {
   const { data: game, error } = await supabaseAdmin
     .from("games")
@@ -88,15 +114,46 @@ async function loadGame(gameId: number) {
   return game;
 }
 
-async function creditSumUpPayments(params: {
-  game: GameRow;
-  adminUserId: string;
-  cancellationReason: string | null;
-}) {
+async function loadCurrentAffectedBookings(gameId: number) {
+  const { data: bookings, error } = await supabaseAdmin
+    .from("bookings")
+    .select("id,user_id,player_name")
+    .eq("game_id", gameId)
+    .not("user_id", "is", null)
+    .order("id", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (bookings ?? []) as CurrentBookingRow[];
+}
+
+function addGroupedRow<T extends { booking_id: number | null }>(
+  groupedRows: Map<number, T[]>,
+  row: T
+) {
+  if (!row.booking_id) {
+    return;
+  }
+
+  const rows = groupedRows.get(row.booking_id) ?? [];
+  rows.push(row);
+  groupedRows.set(row.booking_id, rows);
+}
+
+async function loadValidSumUpPaymentsByBooking(bookingsById: Map<number, CurrentBookingRow>) {
+  const bookingIds = Array.from(bookingsById.keys());
+  const paymentsByBookingId = new Map<number, SumUpPaymentRow[]>();
+
+  if (bookingIds.length === 0) {
+    return paymentsByBookingId;
+  }
+
   const { data: payments, error } = await supabaseAdmin
     .from("booking_payments")
     .select("id,user_id,booking_id,amount,currency")
-    .eq("game_id", params.game.id)
+    .in("booking_id", bookingIds)
     .eq("payment_status", "paid")
     .gt("amount", 0)
     .not("user_id", "is", null);
@@ -106,42 +163,37 @@ async function creditSumUpPayments(params: {
   }
 
   for (const payment of (payments ?? []) as SumUpPaymentRow[]) {
-    if (!payment.user_id) {
-      throw new GameCancellationError(`Paid payment ${payment.id} has no user_id.`);
+    const booking = payment.booking_id ? bookingsById.get(payment.booking_id) : null;
+
+    if (!booking) {
+      continue;
     }
 
-    const amount = parsePositiveMoneyAmount(payment.amount, `payment ${payment.id}`);
+    if (!payment.user_id || payment.user_id !== booking.user_id) {
+      throw createReconciliationError(
+        `Booking ${booking.id} has a SumUp payment with mismatched user details and must be reconciled before cancellation.`
+      );
+    }
 
-    await creditWallet({
-      userId: payment.user_id,
-      amount,
-      currency: payment.currency ?? "GBP",
-      transactionType: "game_cancelled_credit",
-      gameId: params.game.id,
-      bookingId: payment.booking_id ?? null,
-      paymentId: payment.id,
-      idempotencyKey: `game_cancelled_credit:game:${params.game.id}:payment:${payment.id}`,
-      description: `Credit for cancelled game: ${params.game.title || "Football match"}`,
-      adminNote: params.cancellationReason,
-      metadata: {
-        original_payment_method: "sumup",
-        cancelled_by: params.adminUserId,
-      },
-    });
+    parsePositiveMoneyAmount(payment.amount, `payment ${payment.id}`);
+    addGroupedRow(paymentsByBookingId, payment);
   }
 
-  return (payments ?? []).length;
+  return paymentsByBookingId;
 }
 
-async function restoreWalletBookingPayments(params: {
-  game: GameRow;
-  adminUserId: string;
-  cancellationReason: string | null;
-}) {
+async function loadValidWalletDebitsByBooking(bookingsById: Map<number, CurrentBookingRow>) {
+  const bookingIds = Array.from(bookingsById.keys());
+  const walletDebitsByBookingId = new Map<number, WalletBookingPaymentRow[]>();
+
+  if (bookingIds.length === 0) {
+    return walletDebitsByBookingId;
+  }
+
   const { data: walletTransactions, error } = await supabaseAdmin
     .from("wallet_transactions")
     .select("id,user_id,booking_id,amount,currency")
-    .eq("game_id", params.game.id)
+    .in("booking_id", bookingIds)
     .eq("transaction_type", "wallet_booking_payment")
     .eq("status", "completed")
     .lt("amount", 0)
@@ -152,34 +204,141 @@ async function restoreWalletBookingPayments(params: {
   }
 
   for (const walletTransaction of (walletTransactions ?? []) as WalletBookingPaymentRow[]) {
-    if (!walletTransaction.user_id) {
-      throw new GameCancellationError(`Wallet booking transaction ${walletTransaction.id} has no user_id.`);
+    const booking = walletTransaction.booking_id ? bookingsById.get(walletTransaction.booking_id) : null;
+
+    if (!booking) {
+      continue;
     }
 
-    const amount = parsePositiveMoneyAmount(
+    if (!walletTransaction.user_id || walletTransaction.user_id !== booking.user_id) {
+      throw createReconciliationError(
+        `Booking ${booking.id} has a wallet transaction with mismatched user details and must be reconciled before cancellation.`
+      );
+    }
+
+    parsePositiveMoneyAmount(
       Math.abs(Number(walletTransaction.amount)),
       `wallet transaction ${walletTransaction.id}`
     );
+    addGroupedRow(walletDebitsByBookingId, walletTransaction);
+  }
+
+  return walletDebitsByBookingId;
+}
+
+async function buildCancellationCreditPlan(gameId: number) {
+  const currentBookings = await loadCurrentAffectedBookings(gameId);
+  const bookingsById = new Map(currentBookings.map((booking) => [booking.id, booking]));
+  const [sumUpPaymentsByBookingId, walletDebitsByBookingId] = await Promise.all([
+    loadValidSumUpPaymentsByBooking(bookingsById),
+    loadValidWalletDebitsByBooking(bookingsById),
+  ]);
+  const creditPlan: CancellationCreditPlan[] = [];
+
+  for (const booking of currentBookings) {
+    const sumUpPayments = sumUpPaymentsByBookingId.get(booking.id) ?? [];
+    const walletDebits = walletDebitsByBookingId.get(booking.id) ?? [];
+
+    if (sumUpPayments.length > 1) {
+      throw createReconciliationError(
+        `Booking ${booking.id} has multiple paid SumUp payment records and must be reconciled before cancellation.`
+      );
+    }
+
+    if (walletDebits.length > 1) {
+      throw createReconciliationError(
+        `Booking ${booking.id} has multiple wallet booking payment records and must be reconciled before cancellation.`
+      );
+    }
+
+    if (sumUpPayments.length === 1 && walletDebits.length === 1) {
+      throw createReconciliationError(
+        `Booking ${booking.id} has both SumUp and wallet payment records and must be reconciled before cancellation.`
+      );
+    }
+
+    const [sumUpPayment] = sumUpPayments;
+    const [walletDebit] = walletDebits;
+
+    if (sumUpPayment) {
+      creditPlan.push({
+        type: "sumup",
+        booking,
+        payment: sumUpPayment,
+        amount: parsePositiveMoneyAmount(sumUpPayment.amount, `payment ${sumUpPayment.id}`),
+      });
+    }
+
+    if (walletDebit) {
+      creditPlan.push({
+        type: "wallet",
+        booking,
+        walletTransaction: walletDebit,
+        amount: parsePositiveMoneyAmount(
+          Math.abs(Number(walletDebit.amount)),
+          `wallet transaction ${walletDebit.id}`
+        ),
+      });
+    }
+  }
+
+  return creditPlan;
+}
+
+async function createCancellationCredits(params: {
+  game: GameRow;
+  adminUserId: string;
+  cancellationReason: string | null;
+}) {
+  const creditPlan = await buildCancellationCreditPlan(params.game.id);
+  let sumupCreditedCount = 0;
+  let walletCreditedCount = 0;
+
+  for (const credit of creditPlan) {
+    if (credit.type === "sumup") {
+      await creditWallet({
+        userId: credit.booking.user_id,
+        amount: credit.amount,
+        currency: credit.payment.currency ?? "GBP",
+        transactionType: "game_cancelled_credit",
+        gameId: params.game.id,
+        bookingId: credit.booking.id,
+        paymentId: credit.payment.id,
+        idempotencyKey: `game_cancelled_credit:game:${params.game.id}:payment:${credit.payment.id}`,
+        description: `Credit for cancelled game: ${params.game.title || "Football match"}`,
+        adminNote: params.cancellationReason,
+        metadata: {
+          original_payment_method: "sumup",
+          cancelled_by: params.adminUserId,
+        },
+      });
+      sumupCreditedCount += 1;
+      continue;
+    }
 
     await creditWallet({
-      userId: walletTransaction.user_id,
-      amount,
-      currency: walletTransaction.currency ?? "GBP",
+      userId: credit.booking.user_id,
+      amount: credit.amount,
+      currency: credit.walletTransaction.currency ?? "GBP",
       transactionType: "game_cancelled_credit",
       gameId: params.game.id,
-      bookingId: walletTransaction.booking_id ?? null,
-      idempotencyKey: `game_cancelled_credit:game:${params.game.id}:wallet_transaction:${walletTransaction.id}`,
+      bookingId: credit.booking.id,
+      idempotencyKey: `game_cancelled_credit:game:${params.game.id}:wallet_transaction:${credit.walletTransaction.id}`,
       description: `Credit for cancelled game: ${params.game.title || "Football match"}`,
       adminNote: params.cancellationReason,
       metadata: {
         original_payment_method: "wallet",
-        original_wallet_transaction_id: walletTransaction.id,
+        original_wallet_transaction_id: credit.walletTransaction.id,
         cancelled_by: params.adminUserId,
       },
     });
+    walletCreditedCount += 1;
   }
 
-  return (walletTransactions ?? []).length;
+  return {
+    sumupCreditedCount,
+    walletCreditedCount,
+  };
 }
 
 async function markGameCancelled(params: {
@@ -235,12 +394,7 @@ export async function cancelGameWithWalletCredits({
     };
   }
 
-  const sumupCreditedCount = await creditSumUpPayments({
-    game,
-    adminUserId,
-    cancellationReason: reason,
-  });
-  const walletCreditedCount = await restoreWalletBookingPayments({
+  const { sumupCreditedCount, walletCreditedCount } = await createCancellationCredits({
     game,
     adminUserId,
     cancellationReason: reason,
