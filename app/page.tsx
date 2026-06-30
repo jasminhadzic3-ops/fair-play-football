@@ -20,7 +20,7 @@ export default function Home() {
   const [pendingCheckoutId, setPendingCheckoutId] = useState<string | null>(null);
   const [pendingCheckoutReference, setPendingCheckoutReference] = useState<string | null>(null);
   const [returnPaymentMessage, setReturnPaymentMessage] = useState<string | null>(null);
-  const [returnPaymentState, setReturnPaymentState] = useState<"checking" | "paid" | "pending" | "failed" | null>(null);
+  const [returnPaymentState, setReturnPaymentState] = useState<"checking" | "paid" | "paid_no_space" | "pending" | "failed" | null>(null);
   const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
   const [navbarAuthEmail, setNavbarAuthEmail] = useState("");
   const [navbarAuthPassword, setNavbarAuthPassword] = useState("");
@@ -264,7 +264,7 @@ export default function Home() {
         return;
       }
 
-      const paymentStatus = String(result?.paymentStatus || "").toLowerCase();
+      const paymentStatus = String(result?.paymentStatus || result?.payment_status || result?.status || "").toLowerCase();
 
       if (paymentStatus === "paid" || paymentStatus === "successful") {
         const paidGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
@@ -285,6 +285,25 @@ export default function Home() {
         setReturnPaymentMessage("Payment confirmed. Your booking has been added.");
         scrollToGames();
         setTimeout(() => setSuccessGameId(null), 5000);
+        return;
+      }
+
+      if (paymentStatus === "paid_no_space") {
+        const paidNoSpaceGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
+        localStorage.removeItem("pendingSumUpGameId");
+        localStorage.removeItem("pendingSumUpCheckoutId");
+        localStorage.removeItem("pendingSumUpCheckoutReference");
+        setPendingCheckoutId(null);
+        setPendingCheckoutReference(null);
+        setCheckoutGameId(null);
+        await fetchGames();
+        if (paidNoSpaceGameId) {
+          setOpenDetailsGameId(paidNoSpaceGameId);
+        }
+        clearSumUpCheckoutReferenceFromUrl();
+        setReturnPaymentState("paid_no_space");
+        setReturnPaymentMessage("Payment received, but this game is now full. You are still on the waiting list and we’ll notify you if a spot opens.");
+        scrollToGames();
         return;
       }
 
@@ -839,7 +858,7 @@ export default function Home() {
               className={`mb-6 rounded-3xl border px-5 py-4 text-sm font-semibold ${
                 returnPaymentState === "paid"
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                  : returnPaymentState === "failed"
+                  : returnPaymentState === "failed" || returnPaymentState === "paid_no_space"
                     ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
                     : "border-amber-500/30 bg-amber-500/10 text-amber-100"
               }`}
