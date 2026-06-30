@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
+import { cancelGameWithWalletCredits, GameCancellationError } from "@/lib/gameCancellation";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type GamePayload = {
+  action?: unknown;
+  cancellation_reason?: unknown;
   title?: unknown;
   location?: unknown;
   time?: unknown;
@@ -43,6 +46,14 @@ function parseGameId(id: string) {
   return Number.isInteger(gameId) && gameId > 0 ? gameId : null;
 }
 
+function isCancelGamePayload(body: GamePayload | null): body is GamePayload {
+  return body?.action === "cancel";
+}
+
+function parseCancellationReason(body: GamePayload | null) {
+  return typeof body?.cancellation_reason === "string" ? body.cancellation_reason.trim() || null : null;
+}
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -62,6 +73,17 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => null);
+
+    if (isCancelGamePayload(body)) {
+      const result = await cancelGameWithWalletCredits({
+        gameId,
+        adminUserId: adminUser.id,
+        cancellationReason: parseCancellationReason(body),
+      });
+
+      return Response.json(result);
+    }
+
     const payload = parseGamePayload(body);
 
     if (!payload) {
@@ -84,6 +106,10 @@ export async function PATCH(
 
     return Response.json({ game: data });
   } catch (error) {
+    if (error instanceof GameCancellationError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : "Unable to update game.";
     return Response.json({ error: message }, { status: 500 });
   }
