@@ -60,6 +60,16 @@ interface AdminDashboardData {
   summary: AdminSummary;
 }
 
+interface CancelGameResponse {
+  game?: Game;
+  sumup_credited_count?: number;
+  wallet_credited_count?: number;
+  total_credited_count?: number;
+  already_cancelled?: boolean;
+  email_warning?: string;
+  error?: string;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [games, setGames] = useState<Game[]>([]);
@@ -73,6 +83,7 @@ export default function AdminPage() {
   const [maxPlayers, setMaxPlayers] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingGameId, setEditingGameId] = useState<number | null>(null);
+  const [cancellingGameId, setCancellingGameId] = useState<number | null>(null);
   const [summary, setSummary] = useState<AdminSummary>({
     games_count: 0,
     bookings_count: 0,
@@ -270,6 +281,64 @@ export default function AdminPage() {
     }
 
     await fetchAdminData();
+  };
+
+  const cancelGame = async (game: Game) => {
+    if (cancellingGameId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Cancel "${game.title}"? Paid players will be credited to wallet and cancellation emails may be sent. This does not delete bookings or payment records.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const reason = window.prompt("Optional cancellation reason for admin records:");
+
+    setCancellingGameId(game.id);
+
+    try {
+      const response = await fetch(`/api/admin/games/${game.id}`, {
+        method: "PATCH",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({
+          action: "cancel",
+          cancellation_reason: reason?.trim() || null,
+        }),
+      });
+      const result = (await response.json().catch(() => null)) as CancelGameResponse | null;
+
+      if (!response.ok) {
+        alert(result?.error || "Unable to cancel game.");
+        return;
+      }
+
+      const message = result?.already_cancelled
+        ? "This game was already cancelled. No new credits were created."
+        : [
+            "Game cancelled.",
+            "",
+            `SumUp payments credited: ${result?.sumup_credited_count ?? 0}`,
+            `Wallet payments restored: ${result?.wallet_credited_count ?? 0}`,
+            `Total credits: ${result?.total_credited_count ?? 0}`,
+          ].join("\n");
+      const emailWarning = result?.email_warning ? `\n\nEmail warning: ${result.email_warning}` : "";
+
+      alert(`${message}${emailWarning}`);
+
+      if (editingGameId === game.id) {
+        resetForm();
+      }
+
+      await fetchAdminData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to cancel game.");
+    } finally {
+      setCancellingGameId(null);
+    }
   };
 
   const removeBooking = async (booking: Booking) => {
@@ -577,6 +646,16 @@ export default function AdminPage() {
                         >
                           Edit
                         </button>
+                        {game.status !== "cancelled" ? (
+                          <button
+                            type="button"
+                            onClick={() => cancelGame(game)}
+                            disabled={cancellingGameId === game.id}
+                            className="rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {cancellingGameId === game.id ? "Cancelling..." : "Cancel Game"}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => deleteGame(game)}
