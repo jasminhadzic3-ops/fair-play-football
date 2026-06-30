@@ -1,4 +1,4 @@
-"use client";
+import Image from "next/image";
 
 export default function Hero() {
   return (
@@ -11,10 +11,13 @@ export default function Hero() {
           <div className="relative flex flex-col items-center gap-8">
             <div className="relative flex items-center justify-center w-40 h-40 md:w-48 md:h-48 rounded-full overflow-hidden border border-white/10 bg-black shadow-[0_0_42px_rgba(255,255,255,0.12)]">
               <span className="absolute inset-0 rounded-full bg-white/10 blur-3xl" />
-              <img
+              <Image
                 src="/image.png"
                 alt="Fair Play Football logo"
-                className="relative h-full w-full object-cover"
+                fill
+                sizes="(min-width: 768px) 12rem, 10rem"
+                preload
+                className="object-cover"
               />
             </div>
 
