@@ -107,6 +107,35 @@ export async function DELETE(
       return Response.json({ error: "Invalid game id." }, { status: 400 });
     }
 
+    const [{ count: bookingCount, error: bookingCountError }, { count: paymentCount, error: paymentCountError }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("game_id", gameId),
+        supabaseAdmin
+          .from("booking_payments")
+          .select("id", { count: "exact", head: true })
+          .eq("game_id", gameId),
+      ]);
+
+    if (bookingCountError || paymentCountError) {
+      return Response.json(
+        { error: bookingCountError?.message || paymentCountError?.message || "Unable to check game records." },
+        { status: 500 }
+      );
+    }
+
+    if ((bookingCount ?? 0) > 0 || (paymentCount ?? 0) > 0) {
+      return Response.json(
+        {
+          error:
+            "This game cannot be deleted because it has bookings or payment records. Cancel/refund or reconcile the game first, then delete it.",
+        },
+        { status: 409 }
+      );
+    }
+
     const { error } = await supabaseAdmin.from("games").delete().eq("id", gameId);
 
     if (error) {
