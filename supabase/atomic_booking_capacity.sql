@@ -43,6 +43,7 @@ declare
   v_max_players integer;
   v_booking_count integer;
   v_booking_id bigint;
+  v_game_status text;
   v_player_name text;
 begin
   v_player_name := nullif(trim(p_player_name), '');
@@ -52,14 +53,19 @@ begin
     return;
   end if;
 
-  select games.max_players
-  into v_max_players
+  select games.max_players, games.status
+  into v_max_players, v_game_status
   from public.games
   where games.id = p_game_id
   for update;
 
   if v_max_players is null then
     return query select false, null::bigint, 'game_not_found'::text;
+    return;
+  end if;
+
+  if v_game_status = 'cancelled' then
+    return query select false, null::bigint, 'game_cancelled'::text;
     return;
   end if;
 
