@@ -305,6 +305,179 @@ grant execute on function public.create_wallet_debit_if_balance(
   jsonb
 ) to service_role;
 
+create or replace function public.create_wallet_credit_once(
+  p_user_id uuid,
+  p_amount numeric,
+  p_currency text default 'GBP',
+  p_transaction_type text default 'game_cancelled_credit',
+  p_idempotency_key text default null,
+  p_game_id bigint default null,
+  p_booking_id bigint default null,
+  p_payment_id bigint default null,
+  p_description text default null,
+  p_admin_note text default null,
+  p_metadata jsonb default '{}'::jsonb
+)
+returns table (
+  success boolean,
+  transaction_id bigint,
+  reason text,
+  balance numeric(10, 2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_balance numeric(10, 2);
+  v_currency text;
+  v_existing_transaction public.wallet_transactions%rowtype;
+  v_idempotency_key text;
+  v_transaction_id bigint;
+begin
+  v_currency := coalesce(nullif(trim(p_currency), ''), 'GBP');
+  v_idempotency_key := nullif(trim(p_idempotency_key), '');
+
+  if p_user_id is null then
+    return query select false, null::bigint, 'invalid_user'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if p_amount is null or p_amount <= 0 then
+    return query select false, null::bigint, 'invalid_amount'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if v_idempotency_key is null then
+    return query select false, null::bigint, 'missing_idempotency_key'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if p_transaction_type not in (
+    'game_cancelled_credit',
+    'refund_requested',
+    'admin_credit',
+    'promotion_bonus'
+  ) then
+    return query select false, null::bigint, 'invalid_credit_transaction_type'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_user_id::text), hashtext(v_currency));
+
+  select *
+  into v_existing_transaction
+  from public.wallet_transactions
+  where idempotency_key = v_idempotency_key;
+
+  if v_existing_transaction.id is not null then
+    select public.get_wallet_balance(p_user_id, v_currency)
+    into v_balance;
+
+    if v_existing_transaction.user_id = p_user_id
+      and v_existing_transaction.amount = p_amount
+      and v_existing_transaction.currency = v_currency
+      and v_existing_transaction.transaction_type = p_transaction_type
+      and v_existing_transaction.status = 'completed'
+    then
+      return query select true, v_existing_transaction.id, null::text, v_balance;
+      return;
+    end if;
+
+    return query select false, v_existing_transaction.id, 'idempotency_key_conflict'::text, v_balance;
+    return;
+  end if;
+
+  insert into public.wallet_transactions (
+    user_id,
+    amount,
+    idempotency_key,
+    currency,
+    transaction_type,
+    status,
+    game_id,
+    booking_id,
+    payment_id,
+    description,
+    admin_note,
+    metadata
+  )
+  values (
+    p_user_id,
+    p_amount,
+    v_idempotency_key,
+    v_currency,
+    p_transaction_type,
+    'completed',
+    p_game_id,
+    p_booking_id,
+    p_payment_id,
+    p_description,
+    p_admin_note,
+    coalesce(p_metadata, '{}'::jsonb)
+  )
+  returning id into v_transaction_id;
+
+  select public.get_wallet_balance(p_user_id, v_currency)
+  into v_balance;
+
+  return query select true, v_transaction_id, null::text, v_balance;
+end;
+$$;
+
+revoke all on function public.create_wallet_credit_once(
+  uuid,
+  numeric,
+  text,
+  text,
+  text,
+  bigint,
+  bigint,
+  bigint,
+  text,
+  text,
+  jsonb
+) from public;
+revoke all on function public.create_wallet_credit_once(
+  uuid,
+  numeric,
+  text,
+  text,
+  text,
+  bigint,
+  bigint,
+  bigint,
+  text,
+  text,
+  jsonb
+) from anon;
+revoke all on function public.create_wallet_credit_once(
+  uuid,
+  numeric,
+  text,
+  text,
+  text,
+  bigint,
+  bigint,
+  bigint,
+  text,
+  text,
+  jsonb
+) from authenticated;
+grant execute on function public.create_wallet_credit_once(
+  uuid,
+  numeric,
+  text,
+  text,
+  text,
+  bigint,
+  bigint,
+  bigint,
+  text,
+  text,
+  jsonb
+) to service_role;
+
 create or replace function public.create_wallet_booking_if_balance(
   p_user_id uuid,
   p_game_id bigint,

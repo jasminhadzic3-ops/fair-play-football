@@ -72,6 +72,8 @@ type WalletDebitRpcResult = {
   balance: number | null;
 };
 
+type WalletCreditRpcResult = WalletDebitRpcResult;
+
 type BookGameWithWalletParams = {
   userId: string;
   gameId: number;
@@ -216,9 +218,53 @@ async function getWalletTransactionById(transactionId: number): Promise<WalletTr
 export async function creditWallet(params: WalletCreditInput): Promise<WalletTransaction> {
   assertPositiveAmount(params.amount, "credit");
 
+  const status = params.status ?? "completed";
+  const currency = normalizeCurrency(params.currency);
+  const idempotencyKey = normalizeIdempotencyKey(params.idempotencyKey);
+
+  if (status === "completed" && idempotencyKey) {
+    assertSupabaseAdminConfigured();
+    assertUserId(params.userId);
+
+    const { data, error } = await supabaseAdmin.rpc("create_wallet_credit_once", {
+      p_user_id: params.userId,
+      p_amount: params.amount,
+      p_currency: currency,
+      p_transaction_type: params.transactionType,
+      p_idempotency_key: idempotencyKey,
+      p_game_id: params.gameId ?? null,
+      p_booking_id: params.bookingId ?? null,
+      p_payment_id: params.paymentId ?? null,
+      p_description: params.description ?? null,
+      p_admin_note: params.adminNote ?? null,
+      p_metadata: params.metadata ?? {},
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const result = (Array.isArray(data) ? data[0] : data) as WalletCreditRpcResult | null;
+
+    if (!result) {
+      throw new Error("Wallet credit did not return a result.");
+    }
+
+    if (!result.success) {
+      throw new Error(`Unable to complete wallet credit: ${result.reason || "unknown_reason"}.`);
+    }
+
+    if (!result.transaction_id) {
+      throw new Error("Wallet credit did not return a transaction id.");
+    }
+
+    return getWalletTransactionById(result.transaction_id);
+  }
+
   return createWalletTransaction({
     ...params,
-    status: params.status ?? "completed",
+    currency,
+    status,
   });
 }
 
