@@ -67,6 +67,45 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "You have already joined this game." }, { status: 409 });
     }
 
+    const { data: existingPayments, error: existingPaymentError } = await supabaseAdmin
+      .from("booking_payments")
+      .select("checkout_id,checkout_reference,hosted_checkout_url,payment_status")
+      .eq("user_id", user.id)
+      .eq("game_id", gameId)
+      .in("payment_status", ["pending", "paid", "paid_no_space"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (existingPaymentError) {
+      console.error("Unable to check existing SumUp payments:", existingPaymentError);
+      return Response.json({ error: existingPaymentError.message }, { status: 500 });
+    }
+
+    const existingPayment = existingPayments?.[0];
+
+    if (existingPayment?.payment_status === "pending") {
+      return Response.json({
+        checkout_id: existingPayment.checkout_id,
+        checkout_reference: existingPayment.checkout_reference,
+        hosted_checkout_url: existingPayment.hosted_checkout_url,
+        payment_status: existingPayment.payment_status,
+      });
+    }
+
+    if (existingPayment?.payment_status === "paid") {
+      return Response.json(
+        { error: "You have already paid for this game." },
+        { status: 409 }
+      );
+    }
+
+    if (existingPayment?.payment_status === "paid_no_space") {
+      return Response.json(
+        { error: "You have already paid for this game, but no space was available." },
+        { status: 409 }
+      );
+    }
+
     const checkoutReference = randomUUID();
     const redirectUrl = `${request.nextUrl.origin}/?sumup_checkout_reference=${checkoutReference}`;
     const checkout = await createSumUpCheckout({
