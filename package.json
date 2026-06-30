@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "lighthouse": "sh -c 'npm run start -- -p 3000 > /tmp/fair-play-lighthouse-next.log 2>&1 & server=$!; trap \"kill $server\" EXIT; sleep 5; lighthouse http://localhost:3000 --preset=desktop --output=json --output=html --output-path=./lighthouse-report --chrome-flags=\"--headless --no-sandbox\"'",
+    "lighthouse:mobile": "sh -c 'npm run start -- -p 3000 > /tmp/fair-play-lighthouse-next.log 2>&1 & server=$!; trap \"kill $server\" EXIT; sleep 5; lighthouse http://localhost:3000 --form-factor=mobile --screenEmulation.mobile=true --screenEmulation.width=390 --screenEmulation.height=844 --screenEmulation.deviceScaleFactor=3 --output=json --output=html --output-path=./lighthouse-report-mobile --chrome-flags=\"--headless --no-sandbox\"'",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed"
@@ -25,6 +27,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "lighthouse": "^13.4.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
