@@ -171,6 +171,13 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       gameId,
       playerName,
+      bookingConfirmation: {
+        paymentId: result.walletTransactionId,
+        amount,
+        currency: "GBP",
+        checkoutId: null,
+        checkoutReference: null,
+      },
     });
 
     return Response.json({
