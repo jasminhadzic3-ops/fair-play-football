@@ -11,6 +11,10 @@ interface Game {
   time: string;
   price: number;
   max_players: number;
+  status?: "active" | "cancelled" | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  cancellation_reason?: string | null;
 }
 
 interface Booking {
@@ -545,7 +549,18 @@ export default function AdminPage() {
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-white">{game.title}</h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-xl font-bold text-white">{game.title}</h3>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+                              game.status === "cancelled"
+                                ? "border-red-500/30 bg-red-500/10 text-red-200"
+                                : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                            }`}
+                          >
+                            {game.status === "cancelled" ? "Cancelled" : "Active"}
+                          </span>
+                        </div>
                         <p className="mt-1 text-sm text-zinc-400">
                           {game.location} • {game.time} • £{game.price} • {game.max_players} players
                         </p>

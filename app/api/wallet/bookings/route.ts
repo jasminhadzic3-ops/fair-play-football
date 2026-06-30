@@ -4,6 +4,8 @@ import { getAuthenticatedUser } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { bookGameWithWallet } from "@/lib/wallet";
 
+const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
+
 type WalletBookingPayload = {
   gameId?: unknown;
   playerName?: unknown;
@@ -13,6 +15,7 @@ type GameData = {
   id: number;
   title: string | null;
   price: number | null;
+  status: string | null;
 };
 
 type ProfileData = {
@@ -37,6 +40,7 @@ function getStatusForWalletReason(reason: string | null) {
     case "game_full":
     case "existing_booking":
     case "idempotency_key_conflict":
+    case "game_cancelled":
       return 409;
     case "game_not_found":
       return 404;
@@ -57,6 +61,8 @@ function getMessageForWalletReason(reason: string | null) {
       return "Insufficient wallet balance.";
     case "game_full":
       return "This game is already full.";
+    case "game_cancelled":
+      return cancelledGameMessage;
     case "existing_booking":
       return "You have already joined this game.";
     case "idempotency_key_conflict":
@@ -94,7 +100,7 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         supabaseAdmin
           .from("games")
-          .select("id,title,price")
+          .select("id,title,price,status")
           .eq("id", gameId)
           .maybeSingle<GameData>(),
         supabaseAdmin
@@ -114,6 +120,10 @@ export async function POST(request: NextRequest) {
 
     if (!game) {
       return Response.json({ error: "Game not found." }, { status: 404 });
+    }
+
+    if (game.status === "cancelled") {
+      return Response.json({ error: cancelledGameMessage }, { status: 409 });
     }
 
     const amount = Number(game.price);

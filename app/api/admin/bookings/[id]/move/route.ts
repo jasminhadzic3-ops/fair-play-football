@@ -3,6 +3,8 @@ import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { notifyWaitingListForOpenSpace } from "@/lib/waitingListNotifications";
 
+const cancelledTargetGameMessage = "Bookings cannot be moved into a cancelled game.";
+
 type MoveBookingPayload = {
   target_game_id?: unknown;
 };
@@ -54,7 +56,7 @@ export async function PATCH(
 
     const { data: targetGame, error: targetGameError } = await supabaseAdmin
       .from("games")
-      .select("id,max_players")
+      .select("id,max_players,status")
       .eq("id", targetGameId)
       .maybeSingle();
 
@@ -64,6 +66,10 @@ export async function PATCH(
 
     if (!targetGame) {
       return Response.json({ error: "Target game not found." }, { status: 404 });
+    }
+
+    if (targetGame.status === "cancelled") {
+      return Response.json({ error: cancelledTargetGameMessage }, { status: 409 });
     }
 
     if (booking.game_id === targetGameId) {

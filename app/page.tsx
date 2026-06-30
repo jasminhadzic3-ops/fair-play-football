@@ -90,7 +90,10 @@ export default function Home() {
   }
 
   async function fetchGames() {
-    const { data: gamesData } = await supabase.from("games").select("*");
+    const { data: gamesData } = await supabase
+      .from("games")
+      .select("*")
+      .eq("status", "active");
     const bookingsResponse = await fetch("/api/bookings");
     const bookingsResult = await bookingsResponse.json().catch(() => null);
 

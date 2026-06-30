@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmin";
 
+const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
+
 type WaitingListPayload = {
   game_id?: unknown;
   player_name?: unknown;
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const { data: game, error: gameError } = await supabaseAdmin
       .from("games")
-      .select("id,max_players")
+      .select("id,max_players,status")
       .eq("id", gameId)
       .maybeSingle();
 
@@ -65,6 +67,10 @@ export async function POST(request: NextRequest) {
 
     if (!game) {
       return Response.json({ error: "Game not found." }, { status: 404 });
+    }
+
+    if (game.status === "cancelled") {
+      return Response.json({ error: cancelledGameMessage }, { status: 409 });
     }
 
     const { count: bookingCount, error: bookingCountError } = await supabaseAdmin

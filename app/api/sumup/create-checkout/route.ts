@@ -9,6 +9,7 @@ const requiredEnvVars = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "SUMUP_CURRENCY",
 ];
+const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
 
 function getMissingEnvVars() {
   return requiredEnvVars.filter((name) => !process.env[name]);
@@ -47,12 +48,16 @@ export async function POST(request: NextRequest) {
 
     const { data: game, error: gameError } = await supabaseAdmin
       .from("games")
-      .select("id,title,location,time,price")
+      .select("id,title,location,time,price,status")
       .eq("id", gameId)
       .single();
 
     if (gameError || !game) {
       return Response.json({ error: "Game not found." }, { status: 404 });
+    }
+
+    if (game.status === "cancelled") {
+      return Response.json({ error: cancelledGameMessage }, { status: 409 });
     }
 
     const { data: existingBooking } = await supabaseAdmin

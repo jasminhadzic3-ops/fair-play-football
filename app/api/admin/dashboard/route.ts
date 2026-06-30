@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const [gamesResult, bookingsResult, profilesResult, paymentsResult, waitingListResult] = await Promise.all([
       supabaseAdmin
         .from("games")
-        .select("id,title,location,time,price,max_players")
+        .select("id,title,location,time,price,max_players,status,cancelled_at,cancelled_by,cancellation_reason")
         .order("id", { ascending: true }),
       supabaseAdmin
         .from("bookings")
