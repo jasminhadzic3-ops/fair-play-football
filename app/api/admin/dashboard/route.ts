@@ -43,7 +43,14 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [gamesResult, bookingsResult, profilesResult, paymentsResult, waitingListResult] = await Promise.all([
+    const [
+      gamesResult,
+      bookingsResult,
+      profilesResult,
+      paymentsResult,
+      walletTransactionsResult,
+      waitingListResult,
+    ] = await Promise.all([
       supabaseAdmin
         .from("games")
         .select("id,title,location,time,price,max_players,status,cancelled_at,cancelled_by,cancellation_reason")
@@ -62,6 +69,13 @@ export async function GET(request: NextRequest) {
         )
         .order("created_at", { ascending: false }),
       supabaseAdmin
+        .from("wallet_transactions")
+        .select("id,user_id,game_id,booking_id,amount,currency,transaction_type,status,created_at")
+        .eq("transaction_type", "wallet_booking_payment")
+        .eq("status", "completed")
+        .lt("amount", 0)
+        .order("created_at", { ascending: false }),
+      supabaseAdmin
         .from("waiting_list")
         .select("id,game_id,user_id,player_name,status,created_at")
         .eq("status", "waiting")
@@ -73,6 +87,7 @@ export async function GET(request: NextRequest) {
       bookingsResult.error ||
       profilesResult.error ||
       paymentsResult.error ||
+      walletTransactionsResult.error ||
       waitingListResult.error;
 
     if (firstError) {
@@ -83,6 +98,7 @@ export async function GET(request: NextRequest) {
     const bookings = bookingsResult.data ?? [];
     const profiles = profilesResult.data ?? [];
     const bookingPayments = paymentsResult.data ?? [];
+    const walletTransactions = walletTransactionsResult.data ?? [];
     const waitingList = waitingListResult.data ?? [];
 
     return Response.json({
@@ -90,6 +106,7 @@ export async function GET(request: NextRequest) {
       bookings,
       profiles,
       booking_payments: bookingPayments,
+      wallet_transactions: walletTransactions,
       waiting_list: waitingList,
       summary: {
         games_count: games.length,

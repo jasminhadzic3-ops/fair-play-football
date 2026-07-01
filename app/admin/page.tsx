@@ -35,6 +35,23 @@ interface BookingPayment {
   currency?: string | null;
 }
 
+interface WalletTransaction {
+  id: number;
+  game_id: number | null;
+  user_id?: string | null;
+  booking_id?: number | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  transaction_type?: string | null;
+  status?: string | null;
+}
+
+type BookingPaymentDisplay = {
+  payment_status?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+};
+
 interface WaitingListEntry {
   id: number;
   game_id: number;
@@ -56,6 +73,7 @@ interface AdminDashboardData {
   games: Game[];
   bookings: Booking[];
   booking_payments: BookingPayment[];
+  wallet_transactions?: WalletTransaction[];
   waiting_list: WaitingListEntry[];
   summary: AdminSummary;
 }
@@ -75,6 +93,7 @@ export default function AdminPage() {
   const [games, setGames] = useState<Game[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingPayments, setBookingPayments] = useState<BookingPayment[]>([]);
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
   const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
@@ -124,6 +143,7 @@ export default function AdminPage() {
         setGames(result.games ?? []);
         setBookings(result.bookings ?? []);
         setBookingPayments(result.booking_payments ?? []);
+        setWalletTransactions(result.wallet_transactions ?? []);
         setWaitingList(result.waiting_list ?? []);
         setSummary(result.summary);
       }
@@ -434,24 +454,51 @@ export default function AdminPage() {
     bookings.filter((booking) => booking.game_id === gameId);
 
   const getPaymentStatusForBooking = (booking: Booking) => {
-    const matchedPayment = getPaymentForBooking(booking);
+    const matchedPayment = getPaymentDisplayForBooking(booking);
 
     return matchedPayment?.payment_status || "unknown";
   };
 
-  const getPaymentForBooking = (booking: Booking) => {
+  const isPaidBookingPayment = (payment: BookingPayment) =>
+    payment.payment_status?.toLowerCase() === "paid";
+
+  const getWalletTransactionForBooking = (booking: Booking) =>
+    walletTransactions.find(
+      (transaction) =>
+        transaction.booking_id === booking.id &&
+        transaction.transaction_type === "wallet_booking_payment" &&
+        transaction.status === "completed" &&
+        Number(transaction.amount) < 0
+    );
+
+  const getPaymentDisplayForBooking = (booking: Booking): BookingPaymentDisplay | undefined => {
     const normalizedPlayerName = booking.player_name?.trim().toLowerCase();
+    const directBookingPayment = bookingPayments.find((payment) => payment.booking_id === booking.id);
+    const walletTransaction = getWalletTransactionForBooking(booking);
+
+    if (directBookingPayment) {
+      return directBookingPayment;
+    }
+
+    if (walletTransaction) {
+      return {
+        payment_status: "wallet paid",
+        amount: Math.abs(Number(walletTransaction.amount)),
+        currency: walletTransaction.currency ?? "GBP",
+      };
+    }
 
     return (
-      bookingPayments.find((payment) => payment.booking_id === booking.id) ||
       bookingPayments.find(
         (payment) =>
+          isPaidBookingPayment(payment) &&
           booking.user_id &&
           payment.user_id === booking.user_id &&
           payment.game_id === booking.game_id
       ) ||
       bookingPayments.find(
         (payment) =>
+          isPaidBookingPayment(payment) &&
           normalizedPlayerName &&
           payment.game_id === booking.game_id &&
           payment.player_name?.trim().toLowerCase() === normalizedPlayerName
@@ -482,7 +529,7 @@ export default function AdminPage() {
     });
   };
 
-  const formatPaymentAmount = (payment: BookingPayment | undefined) => {
+  const formatPaymentAmount = (payment: BookingPaymentDisplay | undefined) => {
     if (payment?.amount === null || payment?.amount === undefined) {
       return "—";
     }
@@ -728,7 +775,7 @@ export default function AdminPage() {
             <div className="space-y-3">
               {bookings.map((booking) => {
                 const game = getGameForBooking(booking);
-                const payment = getPaymentForBooking(booking);
+                const payment = getPaymentDisplayForBooking(booking);
 
                 return (
                   <div
