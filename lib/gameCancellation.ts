@@ -56,6 +56,7 @@ type WalletCreditPlan = {
 };
 
 type CancellationCreditPlan = SumUpCreditPlan | WalletCreditPlan;
+type GameCancelledEmailResult = Awaited<ReturnType<typeof sendGameCancelledEmails>>;
 
 export type CancelGameResult = {
   game: GameRow;
@@ -368,7 +369,16 @@ async function markGameCancelled(params: {
 
 async function sendCancellationEmails(gameId: number) {
   try {
-    await sendGameCancelledEmails({ gameId });
+    const result = (await sendGameCancelledEmails({ gameId })) as GameCancelledEmailResult;
+
+    if (result.skipped) {
+      return "Game cancellation emails were skipped. Check EMAIL_ENABLE_GAME_CANCELLED is set to true.";
+    }
+
+    if (result.sentCount === 0) {
+      return "Game cancellation emails were not sent because no email recipients were found.";
+    }
+
     return undefined;
   } catch (error) {
     console.error("Unable to send game cancellation emails:", error);

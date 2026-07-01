@@ -89,12 +89,28 @@ async function getGameCancelledRecipients(gameId: number): Promise<EmailRecipien
   const profileByUserId = new Map(
     ((profiles ?? []) as ProfileEmailData[]).map((profile) => [profile.id, profile])
   );
+  const authEmailByUserId = new Map<string, string>();
+  const userIdsMissingProfileEmail = userIds.filter((userId) => !profileByUserId.get(userId)?.email);
+
+  await Promise.all(
+    userIdsMissingProfileEmail.map(async (userId) => {
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (authUser.user?.email) {
+        authEmailByUserId.set(userId, authUser.user.email);
+      }
+    })
+  );
 
   return userIds
     .map((userId) => {
       const booking = bookingsByUserId.get(userId);
       const profile = profileByUserId.get(userId);
-      const email = profile?.email;
+      const email = profile?.email || authEmailByUserId.get(userId);
 
       if (!email) {
         return null;

@@ -475,6 +475,38 @@ describe("cancelGameWithWalletCredits", () => {
     expect(result.email_warning).toBe("resend down");
   });
 
+  it("returns an email warning when cancellation emails are skipped", async () => {
+    sendGameCancelledEmailsMock.mockResolvedValue({ skipped: true, sentCount: 0 });
+    resetDb({
+      bookings: [booking()],
+      payments: [paidPayment()],
+    });
+
+    const result = await cancelGame();
+
+    expect(creditWalletMock).toHaveBeenCalledTimes(1);
+    expect(state.game?.status).toBe("cancelled");
+    expect(result.email_warning).toBe(
+      "Game cancellation emails were skipped. Check EMAIL_ENABLE_GAME_CANCELLED is set to true."
+    );
+  });
+
+  it("returns an email warning when no cancellation email recipients are found", async () => {
+    sendGameCancelledEmailsMock.mockResolvedValue({ skipped: false, sentCount: 0 });
+    resetDb({
+      bookings: [booking()],
+      payments: [paidPayment()],
+    });
+
+    const result = await cancelGame();
+
+    expect(creditWalletMock).toHaveBeenCalledTimes(1);
+    expect(state.game?.status).toBe("cancelled");
+    expect(result.email_warning).toBe(
+      "Game cancellation emails were not sent because no email recipients were found."
+    );
+  });
+
   it("returns success with zero credits and no email for an already-cancelled game", async () => {
     resetDb({
       game: {
