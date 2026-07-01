@@ -46,6 +46,18 @@ interface WalletTransaction {
   status?: string | null;
 }
 
+interface RefundRequest {
+  id: number;
+  user_id?: string | null;
+  player_name?: string | null;
+  player_email?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  status?: string | null;
+  description?: string | null;
+  created_at?: string | null;
+}
+
 type BookingPaymentDisplay = {
   payment_status?: string | null;
   amount?: number | string | null;
@@ -74,6 +86,7 @@ interface AdminDashboardData {
   bookings: Booking[];
   booking_payments: BookingPayment[];
   wallet_transactions?: WalletTransaction[];
+  refund_requests?: RefundRequest[];
   waiting_list: WaitingListEntry[];
   summary: AdminSummary;
 }
@@ -94,6 +107,7 @@ export default function AdminPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingPayments, setBookingPayments] = useState<BookingPayment[]>([]);
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
@@ -144,6 +158,7 @@ export default function AdminPage() {
         setBookings(result.bookings ?? []);
         setBookingPayments(result.booking_payments ?? []);
         setWalletTransactions(result.wallet_transactions ?? []);
+        setRefundRequests(result.refund_requests ?? []);
         setWaitingList(result.waiting_list ?? []);
         setSummary(result.summary);
       }
@@ -543,6 +558,20 @@ export default function AdminPage() {
     return `${payment.currency === "GBP" || !payment.currency ? "£" : `${payment.currency} `}${amount.toFixed(2)}`;
   };
 
+  const formatRefundRequestAmount = (request: RefundRequest) => {
+    if (request.amount === null || request.amount === undefined) {
+      return "—";
+    }
+
+    const amount = Math.abs(Number(request.amount));
+
+    if (Number.isNaN(amount)) {
+      return "—";
+    }
+
+    return `${request.currency === "GBP" || !request.currency ? "£" : `${request.currency} `}${amount.toFixed(2)}`;
+  };
+
   const summaryCards = [
     { label: "Total games", value: summary.games_count },
     { label: "Total bookings", value: summary.bookings_count },
@@ -862,6 +891,74 @@ export default function AdminPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-12 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h2 className="text-2xl font-bold">Refund Requests</h2>
+            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-400">
+              {refundRequests.length} pending
+            </span>
+          </div>
+
+          {refundRequests.length === 0 ? (
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-400">
+              No pending refund requests.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {refundRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                >
+                  <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.7fr_0.9fr] md:items-center">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Player
+                      </p>
+                      <p className="mt-2 font-semibold text-white">
+                        {request.player_name || "Unknown player"}
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-400">
+                        {request.player_email || request.user_id || "No email"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Request
+                      </p>
+                      <p className="mt-2 font-semibold text-white">
+                        {request.description || "Refund requested"}
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-400">
+                        {formatJoinedDate(request.created_at)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Amount
+                      </p>
+                      <p className="mt-2 font-semibold text-white">
+                        {formatRefundRequestAmount(request)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Status
+                      </p>
+                      <span className="mt-2 inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100">
+                        {request.status || "pending"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -55,6 +55,11 @@ create unique index if not exists wallet_transactions_idempotency_key_uidx
 on public.wallet_transactions(idempotency_key)
 where idempotency_key is not null;
 
+create unique index if not exists wallet_refund_requests_one_pending_per_user_currency_uidx
+on public.wallet_transactions(user_id, currency)
+where transaction_type = 'refund_requested'
+  and status = 'pending';
+
 create or replace function public.set_wallet_transactions_updated_at()
 returns trigger
 language plpgsql

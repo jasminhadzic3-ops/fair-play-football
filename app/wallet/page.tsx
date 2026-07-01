@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
@@ -72,65 +72,126 @@ function formatTransactionType(transactionType: string | null) {
 
 export default function WalletPage() {
   const [balance, setBalance] = useState(0);
+  const [refundAmount, setRefundAmount] = useState("");
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefundSubmitting, setIsRefundSubmitting] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [refundMessage, setRefundMessage] = useState<string | null>(null);
+
+  const loadWallet = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError) {
+      setErrorMessage(userError.message);
+      setUserId(null);
+      setTransactions([]);
+      setBalance(0);
+      setRefundAmount("");
+      setIsLoading(false);
+      return;
+    }
+
+    setUserId(user?.id ?? null);
+
+    if (!user) {
+      setTransactions([]);
+      setBalance(0);
+      setRefundAmount("");
+      setIsLoading(false);
+      return;
+    }
+
+    const [{ data: balanceData, error: balanceError }, { data: transactionData, error: transactionError }] =
+      await Promise.all([
+        supabase.rpc("get_my_wallet_balance", { p_currency: "GBP" }),
+        supabase
+          .from("wallet_transactions")
+          .select("id,amount,currency,transaction_type,status,description,created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(20),
+      ]);
+
+    if (balanceError || transactionError) {
+      setErrorMessage(balanceError?.message || transactionError?.message || "Unable to load wallet.");
+      setTransactions([]);
+      setBalance(0);
+      setRefundAmount("");
+      setIsLoading(false);
+      return;
+    }
+
+    const nextBalance = Number(balanceData ?? 0);
+
+    setBalance(nextBalance);
+    setRefundAmount(nextBalance > 0 ? nextBalance.toFixed(2) : "");
+    setTransactions((transactionData ?? []) as WalletTransaction[]);
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
-    const loadWallet = async () => {
-      setIsLoading(true);
-      setErrorMessage(null);
+    void loadWallet();
+  }, [loadWallet]);
 
+  const requestRefund = async () => {
+    if (isRefundSubmitting) return;
+
+    const amount = Number(refundAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setRefundMessage("Enter a refund amount greater than zero.");
+      return;
+    }
+
+    if (amount > balance) {
+      setRefundMessage("Refund amount cannot be greater than your wallet balance.");
+      return;
+    }
+
+    setIsRefundSubmitting(true);
+    setRefundMessage(null);
+
+    try {
       const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (userError) {
-        setErrorMessage(userError.message);
-        setUserId(null);
-        setTransactions([]);
-        setBalance(0);
-        setIsLoading(false);
+      if (!session?.access_token) {
+        setRefundMessage("Please sign in to request a refund.");
         return;
       }
 
-      setUserId(user?.id ?? null);
+      const response = await fetch("/api/wallet/refund-requests", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount }),
+      });
+      const result = await response.json().catch(() => null);
 
-      if (!user) {
-        setTransactions([]);
-        setBalance(0);
-        setIsLoading(false);
+      if (!response.ok) {
+        setRefundMessage(result?.error || "Unable to request refund.");
         return;
       }
 
-      const [{ data: balanceData, error: balanceError }, { data: transactionData, error: transactionError }] =
-        await Promise.all([
-          supabase.rpc("get_my_wallet_balance", { p_currency: "GBP" }),
-          supabase
-            .from("wallet_transactions")
-            .select("id,amount,currency,transaction_type,status,description,created_at")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(20),
-        ]);
-
-      if (balanceError || transactionError) {
-        setErrorMessage(balanceError?.message || transactionError?.message || "Unable to load wallet.");
-        setTransactions([]);
-        setBalance(0);
-        setIsLoading(false);
-        return;
-      }
-
-      setBalance(Number(balanceData ?? 0));
-      setTransactions((transactionData ?? []) as WalletTransaction[]);
-      setIsLoading(false);
-    };
-
-    loadWallet();
-  }, []);
+      setRefundMessage("Refund request sent. Your wallet balance is unchanged until an admin processes it.");
+      await loadWallet();
+    } catch (error) {
+      setRefundMessage(error instanceof Error ? error.message : "Unable to request refund.");
+    } finally {
+      setIsRefundSubmitting(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-black p-4 text-white sm:p-8">
@@ -177,6 +238,40 @@ export default function WalletPage() {
               <p className="mt-4 text-5xl font-black tracking-tight text-stone-100 sm:text-6xl">
                 {formatBalance(balance)}
               </p>
+              <div className="mt-6 border-t border-zinc-800 pt-5">
+                <p className="text-sm font-semibold text-zinc-300">
+                  Request a manual refund to your card.
+                </p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <label className="flex-1">
+                    <span className="text-xs uppercase tracking-[0.24em] text-zinc-500">
+                      Refund amount
+                    </span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      max={balance > 0 ? balance : undefined}
+                      step="0.01"
+                      inputMode="decimal"
+                      value={refundAmount}
+                      onChange={(event) => setRefundAmount(event.target.value)}
+                      disabled={balance <= 0 || isRefundSubmitting}
+                      className="mt-2 w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-stone-200/40 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void requestRefund()}
+                    disabled={balance <= 0 || isRefundSubmitting}
+                    className="rounded-2xl border border-stone-300/20 bg-stone-200 px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isRefundSubmitting ? "Requesting..." : "Request refund"}
+                  </button>
+                </div>
+                {refundMessage ? (
+                  <p className="mt-3 text-sm font-semibold text-zinc-300">{refundMessage}</p>
+                ) : null}
+              </div>
             </section>
 
             <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:p-6">

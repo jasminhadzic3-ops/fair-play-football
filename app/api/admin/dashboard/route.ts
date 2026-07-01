@@ -7,6 +7,24 @@ type Payment = {
   amount: number | string | null;
 };
 
+type Profile = {
+  id: string;
+  email: string | null;
+  username: string | null;
+};
+
+type RefundRequest = {
+  id: number;
+  user_id: string | null;
+  amount: number | string | null;
+  currency: string | null;
+  transaction_type: string | null;
+  status: string | null;
+  description: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: string | null;
+};
+
 function countPaymentsByStatus(payments: Payment[]) {
   return payments.reduce<Record<string, number>>((counts, payment) => {
     const status = payment.payment_status || "unknown";
@@ -49,6 +67,7 @@ export async function GET(request: NextRequest) {
       profilesResult,
       paymentsResult,
       walletTransactionsResult,
+      refundRequestsResult,
       waitingListResult,
     ] = await Promise.all([
       supabaseAdmin
@@ -76,6 +95,12 @@ export async function GET(request: NextRequest) {
         .lt("amount", 0)
         .order("created_at", { ascending: false }),
       supabaseAdmin
+        .from("wallet_transactions")
+        .select("id,user_id,amount,currency,transaction_type,status,description,metadata,created_at")
+        .eq("transaction_type", "refund_requested")
+        .eq("status", "pending")
+        .order("created_at", { ascending: true }),
+      supabaseAdmin
         .from("waiting_list")
         .select("id,game_id,user_id,player_name,status,created_at")
         .eq("status", "waiting")
@@ -88,6 +113,7 @@ export async function GET(request: NextRequest) {
       profilesResult.error ||
       paymentsResult.error ||
       walletTransactionsResult.error ||
+      refundRequestsResult.error ||
       waitingListResult.error;
 
     if (firstError) {
@@ -99,6 +125,16 @@ export async function GET(request: NextRequest) {
     const profiles = profilesResult.data ?? [];
     const bookingPayments = paymentsResult.data ?? [];
     const walletTransactions = walletTransactionsResult.data ?? [];
+    const profileById = new Map((profiles as Profile[]).map((profile) => [profile.id, profile]));
+    const refundRequests = ((refundRequestsResult.data ?? []) as RefundRequest[]).map((request) => {
+      const profile = request.user_id ? profileById.get(request.user_id) : null;
+
+      return {
+        ...request,
+        player_name: profile?.username ?? null,
+        player_email: profile?.email ?? null,
+      };
+    });
     const waitingList = waitingListResult.data ?? [];
 
     return Response.json({
@@ -107,6 +143,7 @@ export async function GET(request: NextRequest) {
       profiles,
       booking_payments: bookingPayments,
       wallet_transactions: walletTransactions,
+      refund_requests: refundRequests,
       waiting_list: waitingList,
       summary: {
         games_count: games.length,
