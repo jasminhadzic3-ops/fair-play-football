@@ -3,8 +3,21 @@ import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type Payment = {
+  id: number;
   payment_status: string | null;
   amount: number | string | null;
+  checkout_reference?: string | null;
+  transaction_code?: string | null;
+};
+
+type Game = {
+  id: number;
+  title: string | null;
+};
+
+type Booking = {
+  id: number;
+  player_name: string | null;
 };
 
 type Profile = {
@@ -53,6 +66,13 @@ function sumPaidPaymentAmounts(payments: Payment[]) {
     .reduce((total, payment) => total + Number(payment.amount || 0), 0);
 }
 
+function getMetadataNumber(metadata: Record<string, unknown> | null | undefined, key: string) {
+  const value = metadata?.[key];
+  const numberValue = Number(value);
+
+  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const adminUser = await getAuthenticatedAdminUser(request.headers.get("authorization"));
@@ -84,7 +104,7 @@ export async function GET(request: NextRequest) {
       supabaseAdmin
         .from("booking_payments")
         .select(
-          "id,user_id,game_id,player_name,checkout_id,checkout_reference,payment_status,booking_id,hosted_checkout_url,amount,currency,raw_checkout,created_at,updated_at"
+          "id,user_id,game_id,player_name,checkout_id,checkout_reference,payment_status,booking_id,hosted_checkout_url,amount,currency,transaction_code,raw_checkout,created_at,updated_at"
         )
         .order("created_at", { ascending: false }),
       supabaseAdmin
@@ -126,13 +146,32 @@ export async function GET(request: NextRequest) {
     const bookingPayments = paymentsResult.data ?? [];
     const walletTransactions = walletTransactionsResult.data ?? [];
     const profileById = new Map((profiles as Profile[]).map((profile) => [profile.id, profile]));
+    const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
+    const bookingById = new Map((bookings as Booking[]).map((booking) => [booking.id, booking]));
+    const paymentById = new Map((bookingPayments as Payment[]).map((payment) => [payment.id, payment]));
     const refundRequests = ((refundRequestsResult.data ?? []) as RefundRequest[]).map((request) => {
       const profile = request.user_id ? profileById.get(request.user_id) : null;
+      const sourceWalletTransactionId = getMetadataNumber(request.metadata, "source_wallet_transaction_id");
+      const originalPaymentId = getMetadataNumber(request.metadata, "original_payment_id");
+      const originalGameId = getMetadataNumber(request.metadata, "original_game_id");
+      const originalBookingId = getMetadataNumber(request.metadata, "original_booking_id");
+      const originalPayment = originalPaymentId ? paymentById.get(originalPaymentId) : null;
+      const originalGame = originalGameId ? gameById.get(originalGameId) : null;
+      const originalBooking = originalBookingId ? bookingById.get(originalBookingId) : null;
 
       return {
         ...request,
         player_name: profile?.username ?? null,
         player_email: profile?.email ?? null,
+        source_wallet_transaction_id: sourceWalletTransactionId,
+        original_payment_id: originalPaymentId,
+        original_game_id: originalGameId,
+        original_booking_id: originalBookingId,
+        source_game_title: originalGame?.title ?? null,
+        source_booking_player_name: originalBooking?.player_name ?? null,
+        source_payment_status: originalPayment?.payment_status ?? null,
+        source_payment_checkout_reference: originalPayment?.checkout_reference ?? null,
+        source_payment_transaction_code: originalPayment?.transaction_code ?? null,
       };
     });
     const waitingList = waitingListResult.data ?? [];

@@ -19,24 +19,34 @@ import { POST } from "@/app/api/wallet/refund-requests/route";
 
 const state: {
   balance: number;
+  sourceCredit: Record<string, unknown> | null;
   existingPendingRequest: { id: number } | null;
   insertedRows: Array<Record<string, unknown>>;
   insertError: { code?: string; message: string } | null;
 } = {
   balance: 0,
+  sourceCredit: null,
   existingPendingRequest: null,
   insertedRows: [],
   insertError: null,
 };
 
 class MockSupabaseQuery {
+  private filters: Array<{ field: string; value: unknown }> = [];
+  private inFilters: Array<{ field: string; values: unknown[] }> = [];
   private insertPayload: Record<string, unknown> | null = null;
 
   select() {
     return this;
   }
 
-  eq() {
+  eq(field: string, value: unknown) {
+    this.filters.push({ field, value });
+    return this;
+  }
+
+  in(field: string, values: unknown[]) {
+    this.inFilters.push({ field, values });
     return this;
   }
 
@@ -46,6 +56,18 @@ class MockSupabaseQuery {
   }
 
   async maybeSingle<T>() {
+    const idFilter = this.filters.find((filter) => filter.field === "id");
+    const transactionTypeFilter = this.filters.find((filter) => filter.field === "transaction_type");
+
+    if (idFilter && transactionTypeFilter?.value !== "refund_requested") {
+      const matchesSourceCredit = state.sourceCredit?.id === idFilter.value;
+
+      return {
+        data: (matchesSourceCredit ? state.sourceCredit : null) as T | null,
+        error: null,
+      };
+    }
+
     return {
       data: (state.existingPendingRequest ?? null) as T | null,
       error: null,
@@ -74,20 +96,34 @@ class MockSupabaseQuery {
   }
 }
 
-function refundRequest(amount: number) {
+function refundRequest(sourceWalletTransactionId: number | null = 900) {
   return new Request("http://localhost/api/wallet/refund-requests", {
     method: "POST",
     headers: {
       Authorization: "Bearer token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ amount }),
+    body: JSON.stringify({ source_wallet_transaction_id: sourceWalletTransactionId }),
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.balance = 12;
+  state.sourceCredit = {
+    id: 900,
+    user_id: "user-1",
+    amount: 8,
+    currency: "GBP",
+    transaction_type: "game_cancelled_credit",
+    status: "completed",
+    game_id: 10,
+    booking_id: 100,
+    payment_id: 200,
+    metadata: {
+      original_payment_method: "sumup",
+    },
+  };
   state.existingPendingRequest = null;
   state.insertedRows = [];
   state.insertError = null;
@@ -103,17 +139,17 @@ describe("wallet refund request route", () => {
   it("returns 401 when the user is signed out", async () => {
     getAuthenticatedUserMock.mockResolvedValue(null);
 
-    const response = await POST(refundRequest(8) as Parameters<typeof POST>[0]);
+    const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
 
     expect(response.status).toBe(401);
     expect(state.insertedRows).toHaveLength(0);
   });
 
   it("rejects a refund request over the completed wallet balance", async () => {
-    state.balance = 8;
+    state.balance = 7;
     supabaseRpcMock.mockResolvedValue({ data: state.balance, error: null });
 
-    const response = await POST(refundRequest(9) as Parameters<typeof POST>[0]);
+    const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
     const body = await response.json();
 
     expect(response.status).toBe(400);
@@ -124,19 +160,64 @@ describe("wallet refund request route", () => {
   it("rejects a duplicate pending refund request", async () => {
     state.existingPendingRequest = { id: 55 };
 
-    const response = await POST(refundRequest(8) as Parameters<typeof POST>[0]);
+    const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
     const body = await response.json();
 
     expect(response.status).toBe(409);
     expect(body).toMatchObject({
-      error: "You already have a pending refund request.",
+      error: "A refund has already been requested for this wallet credit.",
       refund_request_id: 55,
     });
     expect(state.insertedRows).toHaveLength(0);
   });
 
-  it("creates a pending refund_requested transaction without reducing completed balance", async () => {
-    const response = await POST(refundRequest(8) as Parameters<typeof POST>[0]);
+  it("rejects a wallet-origin cancellation credit", async () => {
+    state.sourceCredit = {
+      ...(state.sourceCredit ?? {}),
+      payment_id: null,
+      metadata: {
+        original_payment_method: "wallet",
+      },
+    };
+
+    const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Only SumUp cancellation credits can be requested for card refund.");
+    expect(state.insertedRows).toHaveLength(0);
+  });
+
+  it("rejects non-cancellation credits", async () => {
+    state.sourceCredit = {
+      ...(state.sourceCredit ?? {}),
+      transaction_type: "admin_credit",
+    };
+
+    const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Only SumUp cancellation credits can be requested for card refund.");
+    expect(state.insertedRows).toHaveLength(0);
+  });
+
+  it("rejects credits not owned by the signed-in user", async () => {
+    state.sourceCredit = {
+      ...(state.sourceCredit ?? {}),
+      user_id: "other-user",
+    };
+
+    const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toBe("Refundable wallet credit not found.");
+    expect(state.insertedRows).toHaveLength(0);
+  });
+
+  it("creates a source-linked pending refund_requested transaction without reducing completed balance", async () => {
+    const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -158,8 +239,14 @@ describe("wallet refund request route", () => {
       status: "pending",
       description: "Refund requested",
       metadata: {
-        source: "wallet_refund_request_api",
-        requested_balance: 12,
+        source_wallet_transaction_id: 900,
+        source_transaction_type: "game_cancelled_credit",
+        original_payment_method: "sumup",
+        original_payment_id: 200,
+        original_game_id: 10,
+        original_booking_id: 100,
+        refund_mode: "source_credit",
+        automatic_refund_eligible: true,
       },
     });
     expect(supabaseRpcMock).toHaveBeenCalledWith("get_wallet_balance", {

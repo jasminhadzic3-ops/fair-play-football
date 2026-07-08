@@ -55,6 +55,15 @@ interface RefundRequest {
   currency?: string | null;
   status?: string | null;
   description?: string | null;
+  source_wallet_transaction_id?: number | null;
+  original_payment_id?: number | null;
+  original_game_id?: number | null;
+  original_booking_id?: number | null;
+  source_game_title?: string | null;
+  source_booking_player_name?: string | null;
+  source_payment_status?: string | null;
+  source_payment_checkout_reference?: string | null;
+  source_payment_transaction_code?: string | null;
   created_at?: string | null;
 }
 
@@ -622,6 +631,16 @@ export default function AdminPage() {
     return `${request.currency === "GBP" || !request.currency ? "£" : `${request.currency} `}${amount.toFixed(2)}`;
   };
 
+  const formatRefundRequestSource = (request: RefundRequest) => {
+    const sourceParts = [
+      request.source_game_title || (request.original_game_id ? `Game ${request.original_game_id}` : null),
+      request.original_payment_id ? `Payment ${request.original_payment_id}` : null,
+      request.source_wallet_transaction_id ? `Credit ${request.source_wallet_transaction_id}` : null,
+    ].filter(Boolean);
+
+    return sourceParts.length > 0 ? sourceParts.join(" • ") : "Source not linked";
+  };
+
   const summaryCards = [
     { label: "Total games", value: summary.games_count },
     { label: "Total bookings", value: summary.bookings_count },
@@ -987,6 +1006,14 @@ export default function AdminPage() {
                       <p className="mt-1 text-sm text-zinc-400">
                         {formatJoinedDate(request.created_at)}
                       </p>
+                      <p className="mt-1 text-sm text-zinc-400">
+                        {formatRefundRequestSource(request)}
+                      </p>
+                      {request.source_payment_transaction_code ? (
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          SumUp {request.source_payment_transaction_code}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div>

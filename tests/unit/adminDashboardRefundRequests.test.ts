@@ -89,7 +89,18 @@ beforeEach(() => {
   supabaseFromMock.mockImplementation((table: TableName) => new MockSupabaseQuery(table));
 
   state.games = [];
-  state.bookings = [];
+  state.games = [
+    {
+      id: 10,
+      title: "Friday Football",
+    },
+  ];
+  state.bookings = [
+    {
+      id: 100,
+      player_name: "Booked Player",
+    },
+  ];
   state.profiles = [
     {
       id: "user-1",
@@ -97,7 +108,15 @@ beforeEach(() => {
       username: "Refund Player",
     },
   ];
-  state.booking_payments = [];
+  state.booking_payments = [
+    {
+      id: 200,
+      payment_status: "paid",
+      amount: 8,
+      checkout_reference: "checkout-reference-1",
+      transaction_code: "TXN-1",
+    },
+  ];
   state.wallet_transactions = [
     {
       id: 501,
@@ -108,8 +127,14 @@ beforeEach(() => {
       status: "pending",
       description: "Refund requested",
       metadata: {
-        source: "wallet_refund_request_api",
-        requested_balance: 8,
+        source_wallet_transaction_id: 900,
+        source_transaction_type: "game_cancelled_credit",
+        original_payment_method: "sumup",
+        original_payment_id: 200,
+        original_game_id: 10,
+        original_booking_id: 100,
+        refund_mode: "source_credit",
+        automatic_refund_eligible: true,
       },
       created_at: "2026-07-01T10:00:00.000Z",
     },
@@ -148,6 +173,15 @@ describe("admin dashboard refund requests", () => {
         status: "pending",
         player_name: "Refund Player",
         player_email: "player@example.com",
+        source_wallet_transaction_id: 900,
+        original_payment_id: 200,
+        original_game_id: 10,
+        original_booking_id: 100,
+        source_game_title: "Friday Football",
+        source_booking_player_name: "Booked Player",
+        source_payment_status: "paid",
+        source_payment_checkout_reference: "checkout-reference-1",
+        source_payment_transaction_code: "TXN-1",
       }),
     ]);
     expect(body.wallet_transactions).toEqual([

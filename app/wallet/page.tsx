@@ -10,7 +10,11 @@ type WalletTransaction = {
   currency: string | null;
   transaction_type: string | null;
   status: string | null;
+  game_id: number | null;
+  booking_id: number | null;
+  payment_id: number | null;
   description: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string | null;
 };
 
@@ -72,10 +76,9 @@ function formatTransactionType(transactionType: string | null) {
 
 export default function WalletPage() {
   const [balance, setBalance] = useState(0);
-  const [refundAmount, setRefundAmount] = useState("");
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefundSubmitting, setIsRefundSubmitting] = useState(false);
+  const [submittingRefundSourceId, setSubmittingRefundSourceId] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refundMessage, setRefundMessage] = useState<string | null>(null);
@@ -94,7 +97,6 @@ export default function WalletPage() {
       setUserId(null);
       setTransactions([]);
       setBalance(0);
-      setRefundAmount("");
       setIsLoading(false);
       return;
     }
@@ -104,7 +106,6 @@ export default function WalletPage() {
     if (!user) {
       setTransactions([]);
       setBalance(0);
-      setRefundAmount("");
       setIsLoading(false);
       return;
     }
@@ -114,7 +115,7 @@ export default function WalletPage() {
         supabase.rpc("get_my_wallet_balance", { p_currency: "GBP" }),
         supabase
           .from("wallet_transactions")
-          .select("id,amount,currency,transaction_type,status,description,created_at")
+          .select("id,amount,currency,transaction_type,status,game_id,booking_id,payment_id,description,metadata,created_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -124,7 +125,6 @@ export default function WalletPage() {
       setErrorMessage(balanceError?.message || transactionError?.message || "Unable to load wallet.");
       setTransactions([]);
       setBalance(0);
-      setRefundAmount("");
       setIsLoading(false);
       return;
     }
@@ -132,7 +132,6 @@ export default function WalletPage() {
     const nextBalance = Number(balanceData ?? 0);
 
     setBalance(nextBalance);
-    setRefundAmount(nextBalance > 0 ? nextBalance.toFixed(2) : "");
     setTransactions((transactionData ?? []) as WalletTransaction[]);
     setIsLoading(false);
   }, []);
@@ -141,22 +140,48 @@ export default function WalletPage() {
     void loadWallet();
   }, [loadWallet]);
 
-  const requestRefund = async () => {
-    if (isRefundSubmitting) return;
+  const hasRefundRequestForSourceCredit = (sourceWalletTransactionId: number) =>
+    transactions.some(
+      (transaction) =>
+        transaction.transaction_type === "refund_requested" &&
+        (transaction.status === "pending" || transaction.status === "completed") &&
+        String(transaction.metadata?.source_wallet_transaction_id) === String(sourceWalletTransactionId)
+    );
 
-    const amount = Number(refundAmount);
+  const isRefundableSourceCredit = (transaction: WalletTransaction) =>
+    transaction.transaction_type === "game_cancelled_credit" &&
+    transaction.status === "completed" &&
+    Number(transaction.amount) > 0 &&
+    Boolean(transaction.payment_id) &&
+    transaction.metadata?.original_payment_method === "sumup" &&
+    !hasRefundRequestForSourceCredit(transaction.id);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setRefundMessage("Enter a refund amount greater than zero.");
+  const getRefundRequestStatusForSourceCredit = (sourceWalletTransactionId: number) => {
+    const refundRequest = transactions.find(
+      (transaction) =>
+        transaction.transaction_type === "refund_requested" &&
+        String(transaction.metadata?.source_wallet_transaction_id) === String(sourceWalletTransactionId)
+    );
+
+    return refundRequest?.status ?? null;
+  };
+
+  const requestRefund = async (sourceWalletTransactionId: number) => {
+    if (submittingRefundSourceId) return;
+
+    const sourceCredit = transactions.find((transaction) => transaction.id === sourceWalletTransactionId);
+
+    if (!sourceCredit || !isRefundableSourceCredit(sourceCredit)) {
+      setRefundMessage("This wallet credit is not available for refund request.");
       return;
     }
 
-    if (amount > balance) {
+    if (Number(sourceCredit.amount) > balance) {
       setRefundMessage("Refund amount cannot be greater than your wallet balance.");
       return;
     }
 
-    setIsRefundSubmitting(true);
+    setSubmittingRefundSourceId(sourceWalletTransactionId);
     setRefundMessage(null);
 
     try {
@@ -175,7 +200,7 @@ export default function WalletPage() {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ source_wallet_transaction_id: sourceWalletTransactionId }),
       });
       const result = await response.json().catch(() => null);
 
@@ -189,8 +214,43 @@ export default function WalletPage() {
     } catch (error) {
       setRefundMessage(error instanceof Error ? error.message : "Unable to request refund.");
     } finally {
-      setIsRefundSubmitting(false);
+      setSubmittingRefundSourceId(null);
     }
+  };
+
+  const renderRefundAction = (transaction: WalletTransaction) => {
+    const refundRequestStatus = getRefundRequestStatusForSourceCredit(transaction.id);
+
+    if (refundRequestStatus === "pending") {
+      return (
+        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-amber-100">
+          Refund requested
+        </span>
+      );
+    }
+
+    if (refundRequestStatus === "completed") {
+      return (
+        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-emerald-100">
+          Refund completed
+        </span>
+      );
+    }
+
+    if (!isRefundableSourceCredit(transaction)) {
+      return null;
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => void requestRefund(transaction.id)}
+        disabled={submittingRefundSourceId === transaction.id}
+        className="rounded-full border border-stone-300/20 bg-stone-200 px-4 py-2 text-xs font-bold text-zinc-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {submittingRefundSourceId === transaction.id ? "Requesting..." : "Request refund"}
+      </button>
+    );
   };
 
   return (
@@ -240,34 +300,8 @@ export default function WalletPage() {
               </p>
               <div className="mt-6 border-t border-zinc-800 pt-5">
                 <p className="text-sm font-semibold text-zinc-300">
-                  Request a manual refund to your card.
+                  Eligible cancelled-game credits can be requested back to your card.
                 </p>
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <label className="flex-1">
-                    <span className="text-xs uppercase tracking-[0.24em] text-zinc-500">
-                      Refund amount
-                    </span>
-                    <input
-                      type="number"
-                      min="0.01"
-                      max={balance > 0 ? balance : undefined}
-                      step="0.01"
-                      inputMode="decimal"
-                      value={refundAmount}
-                      onChange={(event) => setRefundAmount(event.target.value)}
-                      disabled={balance <= 0 || isRefundSubmitting}
-                      className="mt-2 w-full rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-stone-200/40 disabled:cursor-not-allowed disabled:opacity-60"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void requestRefund()}
-                    disabled={balance <= 0 || isRefundSubmitting}
-                    className="rounded-2xl border border-stone-300/20 bg-stone-200 px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isRefundSubmitting ? "Requesting..." : "Request refund"}
-                  </button>
-                </div>
                 {refundMessage ? (
                   <p className="mt-3 text-sm font-semibold text-zinc-300">{refundMessage}</p>
                 ) : null}
@@ -317,6 +351,7 @@ export default function WalletPage() {
                         >
                           {formatMoney(amount, transaction.currency || "GBP")}
                         </p>
+                        {renderRefundAction(transaction)}
                       </div>
                     );
                   })}

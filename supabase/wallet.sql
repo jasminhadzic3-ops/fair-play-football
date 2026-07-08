@@ -55,10 +55,13 @@ create unique index if not exists wallet_transactions_idempotency_key_uidx
 on public.wallet_transactions(idempotency_key)
 where idempotency_key is not null;
 
-create unique index if not exists wallet_refund_requests_one_pending_per_user_currency_uidx
-on public.wallet_transactions(user_id, currency)
+drop index if exists public.wallet_refund_requests_one_pending_per_user_currency_uidx;
+
+create unique index if not exists wallet_refund_requests_one_active_per_source_credit_uidx
+on public.wallet_transactions((metadata->>'source_wallet_transaction_id'))
 where transaction_type = 'refund_requested'
-  and status = 'pending';
+  and status in ('pending', 'completed')
+  and metadata ? 'source_wallet_transaction_id';
 
 create or replace function public.set_wallet_transactions_updated_at()
 returns trigger
