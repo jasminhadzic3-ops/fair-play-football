@@ -136,6 +136,8 @@ create or replace function public.get_my_wallet_balance(
 returns numeric(10, 2)
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select public.get_wallet_balance(auth.uid(), coalesce(p_currency, 'GBP'));
 $$;
@@ -195,6 +197,8 @@ returns table (
 )
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select *
   from public.get_wallet_balance_breakdown(auth.uid(), coalesce(p_currency, 'GBP'));
