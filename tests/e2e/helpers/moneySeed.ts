@@ -30,6 +30,12 @@ type SeededWalletCredit = {
   amount: number;
 };
 
+type SeededTargetGame = {
+  id: number;
+  title: string;
+  price: number;
+};
+
 type BalanceBreakdown = {
   completed_balance: number | string | null;
   reserved_refund_amount: number | string | null;
@@ -47,9 +53,18 @@ export type AdminSeed = {
   admin: SeededAdmin;
 };
 
+export type TargetGameSeed = {
+  runId: string;
+  game: SeededTargetGame;
+};
+
 export type MoneyFlowSeedOptions = {
   creditAmount?: number;
   seedPendingRefundRequest?: boolean;
+};
+
+export type TargetGameSeedOptions = {
+  price?: number;
 };
 
 export function createE2ESupabaseClient(
@@ -469,6 +484,60 @@ export async function seedWalletRefundFlow(
   }
 }
 
+export async function seedActiveWalletBookingTargetGame(
+  supabase: SupabaseClient,
+  options: TargetGameSeedOptions = {}
+): Promise<TargetGameSeed> {
+  const runId = uniqueRunId();
+  const price = options.price ?? 10;
+  let createdGameId: number | undefined;
+  const title = `E2E Wallet Booking Target ${runId}`;
+
+  try {
+    const game = await insertSingle<{ id: number }>(
+      supabase
+        .from("games")
+        .insert({
+          title,
+          location: "E2E Target Pitch",
+          time: "2099-01-02 20:00",
+          price,
+          max_players: 12,
+          status: "active",
+        })
+        .select("id")
+        .single(),
+      "insert target wallet booking game"
+    );
+
+    createdGameId = game.id;
+
+    return {
+      runId,
+      game: {
+        id: game.id,
+        title,
+        price,
+      },
+    };
+  } catch (error) {
+    if (createdGameId) {
+      const { error: cleanupError } = await supabase
+        .from("games")
+        .delete()
+        .eq("id", createdGameId);
+
+      if (cleanupError) {
+        throw new Error(
+          `${error instanceof Error ? error.message : "Unable to seed target wallet booking game."} Partial target game cleanup failed for run ${runId}. delete target game: ${cleanupError.message}`
+        );
+      }
+    }
+
+    throw error;
+  }
+}
+
 export async function getWalletBalanceBreakdown(
   supabase: SupabaseClient,
   userId: string
@@ -514,6 +583,43 @@ export async function getRefundRequestsForSourceCredit(
     const metadata = transaction.metadata as Record<string, unknown> | null;
     return String(metadata?.source_wallet_transaction_id) === String(sourceWalletTransactionId);
   });
+}
+
+export async function getBookingsForUserAndGame(
+  supabase: SupabaseClient,
+  userId: string,
+  gameId: number
+) {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("id,user_id,game_id,player_name")
+    .eq("user_id", userId)
+    .eq("game_id", gameId);
+
+  if (error) {
+    throw new Error(`load game bookings: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+export async function getWalletBookingDebitsForGame(
+  supabase: SupabaseClient,
+  userId: string,
+  gameId: number
+) {
+  const { data, error } = await supabase
+    .from("wallet_transactions")
+    .select("id,amount,status,metadata,game_id")
+    .eq("user_id", userId)
+    .eq("game_id", gameId)
+    .eq("transaction_type", "wallet_booking_payment");
+
+  if (error) {
+    throw new Error(`load wallet booking debits: ${error.message}`);
+  }
+
+  return data ?? [];
 }
 
 export async function getRefundCompletedDebitsForRequest(
@@ -603,6 +709,51 @@ export async function cleanupMoneyFlowSeed(
   if (failures.length > 0) {
     throw new Error(
       `E2E cleanup failed for run ${seed.runId}. ${failures.join(" | ")}`
+    );
+  }
+}
+
+export async function cleanupTargetGameSeed(
+  supabase: SupabaseClient,
+  seed: TargetGameSeed,
+  playerId: string
+) {
+  const failures: string[] = [];
+
+  const runCleanup = async (
+    label: string,
+    cleanup: () => PromiseLike<{ error: { message: string } | null }>
+  ) => {
+    const { error } = await cleanup();
+
+    if (error) {
+      failures.push(`${label}: ${error.message}`);
+    }
+  };
+
+  await runCleanup("delete target game wallet booking debits", () => {
+    return supabase
+      .from("wallet_transactions")
+      .delete()
+      .eq("game_id", seed.game.id)
+      .eq("user_id", playerId)
+      .eq("transaction_type", "wallet_booking_payment")
+      .like("idempotency_key", `wallet_booking_payment:game:${seed.game.id}:user:${playerId}:%`);
+  });
+  await runCleanup("delete target game bookings", () =>
+    supabase
+      .from("bookings")
+      .delete()
+      .eq("game_id", seed.game.id)
+      .eq("user_id", playerId)
+  );
+  await runCleanup("delete target game", () =>
+    supabase.from("games").delete().eq("id", seed.game.id)
+  );
+
+  if (failures.length > 0) {
+    throw new Error(
+      `Target game E2E cleanup failed for run ${seed.runId}. ${failures.join(" | ")}`
     );
   }
 }
