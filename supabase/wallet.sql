@@ -22,7 +22,7 @@ create table if not exists public.wallet_transactions (
       )
     ),
   status text not null default 'pending'
-    check (status in ('pending', 'completed', 'failed', 'cancelled')),
+    check (status in ('pending', 'processing', 'completed', 'failed', 'cancelled')),
   game_id bigint references public.games(id) on delete set null,
   booking_id bigint references public.bookings(id) on delete set null,
   payment_id bigint references public.booking_payments(id) on delete set null,
@@ -35,6 +35,13 @@ create table if not exists public.wallet_transactions (
 
 alter table public.wallet_transactions
 add column if not exists idempotency_key text;
+
+alter table public.wallet_transactions
+drop constraint if exists wallet_transactions_status_check;
+
+alter table public.wallet_transactions
+add constraint wallet_transactions_status_check
+check (status in ('pending', 'processing', 'completed', 'failed', 'cancelled'));
 
 create index if not exists wallet_transactions_user_created_at_idx
 on public.wallet_transactions(user_id, created_at desc);
@@ -56,11 +63,12 @@ on public.wallet_transactions(idempotency_key)
 where idempotency_key is not null;
 
 drop index if exists public.wallet_refund_requests_one_pending_per_user_currency_uidx;
+drop index if exists public.wallet_refund_requests_one_active_per_source_credit_uidx;
 
 create unique index if not exists wallet_refund_requests_one_active_per_source_credit_uidx
 on public.wallet_transactions((metadata->>'source_wallet_transaction_id'))
 where transaction_type = 'refund_requested'
-  and status in ('pending', 'completed')
+  and status in ('pending', 'processing', 'completed')
   and metadata ? 'source_wallet_transaction_id';
 
 create or replace function public.set_wallet_transactions_updated_at()
@@ -119,7 +127,7 @@ as $$
 $$;
 
 revoke all on function public.get_wallet_balance(uuid, text) from public;
-grant execute on function public.get_wallet_balance(uuid, text) to authenticated;
+revoke all on function public.get_wallet_balance(uuid, text) from authenticated;
 grant execute on function public.get_wallet_balance(uuid, text) to service_role;
 
 create or replace function public.get_my_wallet_balance(
@@ -135,6 +143,66 @@ $$;
 revoke all on function public.get_my_wallet_balance(text) from public;
 grant execute on function public.get_my_wallet_balance(text) to authenticated;
 grant execute on function public.get_my_wallet_balance(text) to service_role;
+
+create or replace function public.get_wallet_balance_breakdown(
+  p_user_id uuid,
+  p_currency text default 'GBP'
+)
+returns table (
+  completed_balance numeric(10, 2),
+  reserved_refund_amount numeric(10, 2),
+  available_balance numeric(10, 2)
+)
+language sql
+stable
+as $$
+  with normalized_currency as (
+    select coalesce(nullif(trim(p_currency), ''), 'GBP') as currency
+  ),
+  completed as (
+    select coalesce(sum(wallet_transactions.amount), 0)::numeric(10, 2) as amount
+    from public.wallet_transactions, normalized_currency
+    where wallet_transactions.user_id = p_user_id
+      and wallet_transactions.status = 'completed'
+      and wallet_transactions.currency = normalized_currency.currency
+  ),
+  reserved as (
+    select coalesce(sum(abs(wallet_transactions.amount)), 0)::numeric(10, 2) as amount
+    from public.wallet_transactions, normalized_currency
+    where wallet_transactions.user_id = p_user_id
+      and wallet_transactions.transaction_type = 'refund_requested'
+      and wallet_transactions.status in ('pending', 'processing')
+      and wallet_transactions.currency = normalized_currency.currency
+  )
+  select
+    completed.amount as completed_balance,
+    reserved.amount as reserved_refund_amount,
+    (completed.amount - reserved.amount)::numeric(10, 2) as available_balance
+  from completed, reserved;
+$$;
+
+revoke all on function public.get_wallet_balance_breakdown(uuid, text) from public;
+revoke all on function public.get_wallet_balance_breakdown(uuid, text) from authenticated;
+grant execute on function public.get_wallet_balance_breakdown(uuid, text) to service_role;
+
+create or replace function public.get_my_wallet_balance_breakdown(
+  p_currency text default 'GBP'
+)
+returns table (
+  completed_balance numeric(10, 2),
+  reserved_refund_amount numeric(10, 2),
+  available_balance numeric(10, 2)
+)
+language sql
+stable
+as $$
+  select *
+  from public.get_wallet_balance_breakdown(auth.uid(), coalesce(p_currency, 'GBP'));
+$$;
+
+revoke all on function public.get_my_wallet_balance_breakdown(text) from public;
+grant execute on function public.get_my_wallet_balance_breakdown(text) to authenticated;
+grant execute on function public.get_my_wallet_balance_breakdown(text) to service_role;
 
 create or replace function public.create_wallet_debit_if_balance(
   p_user_id uuid,
@@ -161,13 +229,17 @@ set search_path = public
 as $$
 declare
   v_balance numeric(10, 2);
+  v_completed_balance numeric(10, 2);
   v_currency text;
   v_existing_transaction public.wallet_transactions%rowtype;
+  v_excluded_refund_request_id bigint;
   v_idempotency_key text;
+  v_reserved_refund_amount numeric(10, 2);
   v_transaction_id bigint;
 begin
   v_currency := coalesce(nullif(trim(p_currency), ''), 'GBP');
   v_idempotency_key := nullif(trim(p_idempotency_key), '');
+  v_excluded_refund_request_id := null;
 
   if p_user_id is null then
     return query select false, null::bigint, 'invalid_user'::text, 0::numeric(10, 2);
@@ -195,13 +267,34 @@ begin
 
   perform pg_advisory_xact_lock(hashtext(p_user_id::text), hashtext(v_currency));
 
+  if p_transaction_type = 'refund_completed'
+    and p_metadata ? 'refund_request_id'
+    and (p_metadata->>'refund_request_id') ~ '^[0-9]+$'
+  then
+    v_excluded_refund_request_id := (p_metadata->>'refund_request_id')::bigint;
+  end if;
+
   select *
   into v_existing_transaction
   from public.wallet_transactions
   where idempotency_key = v_idempotency_key;
 
-  select public.get_wallet_balance(p_user_id, v_currency)
-  into v_balance;
+  select completed_balance, reserved_refund_amount, available_balance
+  into v_completed_balance, v_reserved_refund_amount, v_balance
+  from public.get_wallet_balance_breakdown(p_user_id, v_currency);
+
+  if v_excluded_refund_request_id is not null then
+    select coalesce(sum(abs(wallet_transactions.amount)), 0)::numeric(10, 2)
+    into v_reserved_refund_amount
+    from public.wallet_transactions
+    where wallet_transactions.user_id = p_user_id
+      and wallet_transactions.transaction_type = 'refund_requested'
+      and wallet_transactions.status in ('pending', 'processing')
+      and wallet_transactions.currency = v_currency
+      and wallet_transactions.id <> v_excluded_refund_request_id;
+
+    v_balance := (v_completed_balance - v_reserved_refund_amount)::numeric(10, 2);
+  end if;
 
   if v_existing_transaction.id is not null then
     if v_existing_transaction.user_id = p_user_id
@@ -253,8 +346,9 @@ begin
   )
   returning id into v_transaction_id;
 
-  select public.get_wallet_balance(p_user_id, v_currency)
-  into v_balance;
+  select available_balance
+  into v_balance
+  from public.get_wallet_balance_breakdown(p_user_id, v_currency);
 
   return query select true, v_transaction_id, null::text, v_balance;
 end;
@@ -308,6 +402,220 @@ grant execute on function public.create_wallet_debit_if_balance(
   bigint,
   bigint,
   bigint,
+  text,
+  text,
+  jsonb
+) to service_role;
+
+create or replace function public.complete_wallet_refund_request(
+  p_refund_request_id bigint,
+  p_admin_user_id uuid,
+  p_idempotency_key text default null,
+  p_description text default 'Refund completed',
+  p_admin_note text default null,
+  p_metadata jsonb default '{}'::jsonb
+)
+returns table (
+  success boolean,
+  refund_request_id bigint,
+  refund_transaction_id bigint,
+  reason text,
+  completed_balance numeric(10, 2),
+  reserved_refund_amount numeric(10, 2),
+  available_balance numeric(10, 2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_available_balance numeric(10, 2);
+  v_amount numeric(10, 2);
+  v_available_excluding_request numeric(10, 2);
+  v_completed_balance numeric(10, 2);
+  v_currency text;
+  v_existing_transaction public.wallet_transactions%rowtype;
+  v_idempotency_key text;
+  v_metadata jsonb;
+  v_refund_request public.wallet_transactions%rowtype;
+  v_reserved_excluding_request numeric(10, 2);
+  v_reserved_refund_amount numeric(10, 2);
+  v_transaction_id bigint;
+begin
+  if p_refund_request_id is null then
+    return query select false, null::bigint, null::bigint, 'invalid_refund_request'::text, 0::numeric(10, 2), 0::numeric(10, 2), 0::numeric(10, 2);
+    return;
+  end if;
+
+  if p_admin_user_id is null then
+    return query select false, p_refund_request_id, null::bigint, 'invalid_admin_user'::text, 0::numeric(10, 2), 0::numeric(10, 2), 0::numeric(10, 2);
+    return;
+  end if;
+
+  select *
+  into v_refund_request
+  from public.wallet_transactions
+  where id = p_refund_request_id
+    and transaction_type = 'refund_requested'
+  for update;
+
+  if v_refund_request.id is null then
+    return query select false, p_refund_request_id, null::bigint, 'refund_request_not_found'::text, 0::numeric(10, 2), 0::numeric(10, 2), 0::numeric(10, 2);
+    return;
+  end if;
+
+  v_currency := coalesce(nullif(trim(v_refund_request.currency), ''), 'GBP');
+  v_amount := abs(v_refund_request.amount);
+  v_idempotency_key := coalesce(nullif(trim(p_idempotency_key), ''), 'refund_completed:request:' || v_refund_request.id::text);
+
+  perform pg_advisory_xact_lock(hashtext(v_refund_request.user_id::text), hashtext(v_currency));
+
+  select balance_breakdown.completed_balance, balance_breakdown.reserved_refund_amount, balance_breakdown.available_balance
+  into v_completed_balance, v_reserved_refund_amount, v_available_balance
+  from public.get_wallet_balance_breakdown(v_refund_request.user_id, v_currency) as balance_breakdown;
+
+  if v_refund_request.status = 'completed' then
+    if (v_refund_request.metadata->>'refund_completed_transaction_id') ~ '^[0-9]+$' then
+      v_transaction_id := (v_refund_request.metadata->>'refund_completed_transaction_id')::bigint;
+    else
+      v_transaction_id := null;
+    end if;
+
+    return query select true, v_refund_request.id, v_transaction_id, null::text, v_completed_balance, v_reserved_refund_amount, v_available_balance;
+    return;
+  end if;
+
+  if v_refund_request.status not in ('pending', 'processing') then
+    return query select false, v_refund_request.id, null::bigint, 'invalid_refund_request_status'::text, v_completed_balance, v_reserved_refund_amount, v_available_balance;
+    return;
+  end if;
+
+  if v_amount is null or v_amount <= 0 then
+    return query select false, v_refund_request.id, null::bigint, 'invalid_refund_amount'::text, v_completed_balance, v_reserved_refund_amount, v_available_balance;
+    return;
+  end if;
+
+  select coalesce(sum(abs(wallet_transactions.amount)), 0)::numeric(10, 2)
+  into v_reserved_excluding_request
+  from public.wallet_transactions
+  where wallet_transactions.user_id = v_refund_request.user_id
+    and wallet_transactions.transaction_type = 'refund_requested'
+    and wallet_transactions.status in ('pending', 'processing')
+    and wallet_transactions.currency = v_currency
+    and wallet_transactions.id <> v_refund_request.id;
+
+  v_available_excluding_request := (v_completed_balance - v_reserved_excluding_request)::numeric(10, 2);
+
+  if v_available_excluding_request < v_amount then
+    return query select false, v_refund_request.id, null::bigint, 'insufficient_balance'::text, v_completed_balance, v_reserved_refund_amount, v_available_balance;
+    return;
+  end if;
+
+  select *
+  into v_existing_transaction
+  from public.wallet_transactions
+  where idempotency_key = v_idempotency_key;
+
+  if v_existing_transaction.id is not null then
+    if v_existing_transaction.user_id = v_refund_request.user_id
+      and v_existing_transaction.amount = -v_amount
+      and v_existing_transaction.currency = v_currency
+      and v_existing_transaction.transaction_type = 'refund_completed'
+      and v_existing_transaction.status = 'completed'
+    then
+      v_transaction_id := v_existing_transaction.id;
+    else
+      return query select false, v_refund_request.id, v_existing_transaction.id, 'idempotency_key_conflict'::text, v_completed_balance, v_reserved_refund_amount, v_available_balance;
+      return;
+    end if;
+  else
+    insert into public.wallet_transactions (
+      user_id,
+      amount,
+      idempotency_key,
+      currency,
+      transaction_type,
+      status,
+      game_id,
+      booking_id,
+      payment_id,
+      description,
+      admin_note,
+      metadata
+    )
+    values (
+      v_refund_request.user_id,
+      -v_amount,
+      v_idempotency_key,
+      v_currency,
+      'refund_completed',
+      'completed',
+      v_refund_request.game_id,
+      v_refund_request.booking_id,
+      v_refund_request.payment_id,
+      coalesce(p_description, 'Refund completed'),
+      p_admin_note,
+      coalesce(p_metadata, '{}'::jsonb) ||
+        jsonb_build_object(
+          'refund_request_id', v_refund_request.id,
+          'processed_by', p_admin_user_id,
+          'manual', true
+        )
+    )
+    returning id into v_transaction_id;
+  end if;
+
+  v_metadata := coalesce(v_refund_request.metadata, '{}'::jsonb) ||
+    coalesce(p_metadata, '{}'::jsonb) ||
+    jsonb_build_object(
+      'refund_completed_transaction_id', v_transaction_id,
+      'processed_by', p_admin_user_id,
+      'processed_at', now()
+    );
+
+  update public.wallet_transactions
+  set
+    status = 'completed',
+    admin_note = p_admin_note,
+    metadata = v_metadata
+  where id = v_refund_request.id;
+
+  select balance_breakdown.completed_balance, balance_breakdown.reserved_refund_amount, balance_breakdown.available_balance
+  into v_completed_balance, v_reserved_refund_amount, v_available_balance
+  from public.get_wallet_balance_breakdown(v_refund_request.user_id, v_currency) as balance_breakdown;
+
+  return query select true, v_refund_request.id, v_transaction_id, null::text, v_completed_balance, v_reserved_refund_amount, v_available_balance;
+end;
+$$;
+
+revoke all on function public.complete_wallet_refund_request(
+  bigint,
+  uuid,
+  text,
+  text,
+  text,
+  jsonb
+) from public;
+revoke all on function public.complete_wallet_refund_request(
+  bigint,
+  uuid,
+  text,
+  text,
+  text,
+  jsonb
+) from anon;
+revoke all on function public.complete_wallet_refund_request(
+  bigint,
+  uuid,
+  text,
+  text,
+  text,
+  jsonb
+) from authenticated;
+grant execute on function public.complete_wallet_refund_request(
+  bigint,
+  uuid,
+  text,
   text,
   text,
   jsonb
@@ -378,10 +686,11 @@ begin
   from public.wallet_transactions
   where idempotency_key = v_idempotency_key;
 
-  if v_existing_transaction.id is not null then
-    select public.get_wallet_balance(p_user_id, v_currency)
-    into v_balance;
+  select available_balance
+  into v_balance
+  from public.get_wallet_balance_breakdown(p_user_id, v_currency);
 
+  if v_existing_transaction.id is not null then
     if v_existing_transaction.user_id = p_user_id
       and v_existing_transaction.amount = p_amount
       and v_existing_transaction.currency = v_currency
@@ -426,8 +735,9 @@ begin
   )
   returning id into v_transaction_id;
 
-  select public.get_wallet_balance(p_user_id, v_currency)
-  into v_balance;
+  select available_balance
+  into v_balance
+  from public.get_wallet_balance_breakdown(p_user_id, v_currency);
 
   return query select true, v_transaction_id, null::text, v_balance;
 end;
@@ -570,8 +880,9 @@ begin
   from public.wallet_transactions
   where idempotency_key = v_idempotency_key;
 
-  select public.get_wallet_balance(p_user_id, v_currency)
-  into v_balance;
+  select available_balance
+  into v_balance
+  from public.get_wallet_balance_breakdown(p_user_id, v_currency);
 
   if v_existing_transaction.id is not null then
     if v_existing_transaction.user_id = p_user_id
@@ -647,8 +958,9 @@ begin
   )
   returning id into v_wallet_transaction_id;
 
-  select public.get_wallet_balance(p_user_id, v_currency)
-  into v_balance;
+  select available_balance
+  into v_balance
+  from public.get_wallet_balance_breakdown(p_user_id, v_currency);
 
   return query select true, v_booking_id, v_wallet_transaction_id, null::text, v_balance;
 end;
