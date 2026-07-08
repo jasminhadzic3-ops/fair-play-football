@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthenticatedUserMock = vi.hoisted(() => vi.fn());
-const supabaseRpcMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
+const getWalletBalanceBreakdownMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sumupPayments", () => ({
   getAuthenticatedUser: getAuthenticatedUserMock,
@@ -10,21 +10,32 @@ vi.mock("@/lib/sumupPayments", () => ({
 
 vi.mock("@/lib/supabaseAdmin", () => ({
   supabaseAdmin: {
-    rpc: supabaseRpcMock,
     from: supabaseFromMock,
   },
+}));
+
+vi.mock("@/lib/wallet", () => ({
+  getWalletBalanceBreakdown: getWalletBalanceBreakdownMock,
 }));
 
 import { POST } from "@/app/api/wallet/refund-requests/route";
 
 const state: {
-  balance: number;
+  balanceBreakdown: {
+    completedBalance: number;
+    reservedRefundAmount: number;
+    availableBalance: number;
+  };
   sourceCredit: Record<string, unknown> | null;
   existingPendingRequest: { id: number } | null;
   insertedRows: Array<Record<string, unknown>>;
   insertError: { code?: string; message: string } | null;
 } = {
-  balance: 0,
+  balanceBreakdown: {
+    completedBalance: 0,
+    reservedRefundAmount: 0,
+    availableBalance: 0,
+  },
   sourceCredit: null,
   existingPendingRequest: null,
   insertedRows: [],
@@ -109,7 +120,11 @@ function refundRequest(sourceWalletTransactionId: number | null = 900) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  state.balance = 12;
+  state.balanceBreakdown = {
+    completedBalance: 12,
+    reservedRefundAmount: 0,
+    availableBalance: 12,
+  };
   state.sourceCredit = {
     id: 900,
     user_id: "user-1",
@@ -131,7 +146,7 @@ beforeEach(() => {
     id: "user-1",
     email: "player@example.com",
   });
-  supabaseRpcMock.mockResolvedValue({ data: state.balance, error: null });
+  getWalletBalanceBreakdownMock.mockImplementation(() => Promise.resolve(state.balanceBreakdown));
   supabaseFromMock.mockImplementation(() => new MockSupabaseQuery());
 });
 
@@ -145,9 +160,12 @@ describe("wallet refund request route", () => {
     expect(state.insertedRows).toHaveLength(0);
   });
 
-  it("rejects a refund request over the completed wallet balance", async () => {
-    state.balance = 7;
-    supabaseRpcMock.mockResolvedValue({ data: state.balance, error: null });
+  it("rejects a refund request over the available wallet balance", async () => {
+    state.balanceBreakdown = {
+      completedBalance: 12,
+      reservedRefundAmount: 5,
+      availableBalance: 7,
+    };
 
     const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
     const body = await response.json();
@@ -216,12 +234,17 @@ describe("wallet refund request route", () => {
     expect(state.insertedRows).toHaveLength(0);
   });
 
-  it("creates a source-linked pending refund_requested transaction without reducing completed balance", async () => {
+  it("creates a source-linked pending refund_requested transaction using available balance", async () => {
     const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body.balance).toBe(12);
+    expect(body.balance_breakdown).toEqual({
+      completedBalance: 12,
+      reservedRefundAmount: 0,
+      availableBalance: 12,
+    });
     expect(body.refund_request).toMatchObject({
       id: 123,
       amount: -8,
@@ -249,9 +272,9 @@ describe("wallet refund request route", () => {
         automatic_refund_eligible: true,
       },
     });
-    expect(supabaseRpcMock).toHaveBeenCalledWith("get_wallet_balance", {
-      p_user_id: "user-1",
-      p_currency: "GBP",
+    expect(getWalletBalanceBreakdownMock).toHaveBeenCalledWith({
+      userId: "user-1",
+      currency: "GBP",
     });
   });
 });

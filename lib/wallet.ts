@@ -11,7 +11,7 @@ export type WalletTransactionType =
   | "admin_credit"
   | "promotion_bonus";
 
-export type WalletTransactionStatus = "pending" | "completed" | "failed" | "cancelled";
+export type WalletTransactionStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
 export type WalletTransaction = {
   id: number;
@@ -51,6 +51,12 @@ type GetWalletBalanceParams = {
   currency?: string;
 };
 
+export type WalletBalanceBreakdown = {
+  completedBalance: number;
+  reservedRefundAmount: number;
+  availableBalance: number;
+};
+
 type GetWalletTransactionsParams = {
   userId: string;
   currency?: string;
@@ -73,6 +79,41 @@ type WalletDebitRpcResult = {
 };
 
 type WalletCreditRpcResult = WalletDebitRpcResult;
+
+type WalletBalanceBreakdownRpcResult = {
+  completed_balance: number | string | null;
+  reserved_refund_amount: number | string | null;
+  available_balance: number | string | null;
+};
+
+type CompleteWalletRefundRequestParams = {
+  refundRequestId: number;
+  adminUserId: string;
+  idempotencyKey?: string | null;
+  description?: string | null;
+  adminNote?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+type CompleteWalletRefundRequestRpcResult = {
+  success: boolean;
+  refund_request_id: number | null;
+  refund_transaction_id: number | null;
+  reason: string | null;
+  completed_balance: number | string | null;
+  reserved_refund_amount: number | string | null;
+  available_balance: number | string | null;
+};
+
+export type CompleteWalletRefundRequestResult = {
+  success: boolean;
+  refundRequestId: number | null;
+  refundTransactionId: number | null;
+  reason: string | null;
+  completedBalance: number;
+  reservedRefundAmount: number;
+  availableBalance: number;
+};
 
 type BookGameWithWalletParams = {
   userId: string;
@@ -140,6 +181,31 @@ export async function getWalletBalance({ userId, currency }: GetWalletBalancePar
   }
 
   return Number(data ?? 0);
+}
+
+export async function getWalletBalanceBreakdown({
+  userId,
+  currency,
+}: GetWalletBalanceParams): Promise<WalletBalanceBreakdown> {
+  assertSupabaseAdminConfigured();
+  assertUserId(userId);
+
+  const { data, error } = await supabaseAdmin.rpc("get_wallet_balance_breakdown", {
+    p_user_id: userId,
+    p_currency: normalizeCurrency(currency),
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const result = (Array.isArray(data) ? data[0] : data) as WalletBalanceBreakdownRpcResult | null;
+
+  return {
+    completedBalance: Number(result?.completed_balance ?? 0),
+    reservedRefundAmount: Number(result?.reserved_refund_amount ?? 0),
+    availableBalance: Number(result?.available_balance ?? 0),
+  };
 }
 
 export async function getWalletTransactions({
@@ -329,6 +395,51 @@ export async function debitWallet(params: WalletDebitInput): Promise<WalletTrans
     currency,
     status,
   });
+}
+
+export async function completeWalletRefundRequest({
+  refundRequestId,
+  adminUserId,
+  idempotencyKey,
+  description,
+  adminNote,
+  metadata,
+}: CompleteWalletRefundRequestParams): Promise<CompleteWalletRefundRequestResult> {
+  assertSupabaseAdminConfigured();
+  assertUserId(adminUserId);
+
+  if (!Number.isInteger(refundRequestId) || refundRequestId <= 0) {
+    throw new Error("Refund request id is required.");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("complete_wallet_refund_request", {
+    p_refund_request_id: refundRequestId,
+    p_admin_user_id: adminUserId,
+    p_idempotency_key: normalizeIdempotencyKey(idempotencyKey),
+    p_description: description ?? "Refund completed",
+    p_admin_note: adminNote ?? null,
+    p_metadata: metadata ?? {},
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const result = (Array.isArray(data) ? data[0] : data) as CompleteWalletRefundRequestRpcResult | null;
+
+  if (!result) {
+    throw new Error("Refund completion did not return a result.");
+  }
+
+  return {
+    success: result.success,
+    refundRequestId: result.refund_request_id,
+    refundTransactionId: result.refund_transaction_id,
+    reason: result.reason,
+    completedBalance: Number(result.completed_balance ?? 0),
+    reservedRefundAmount: Number(result.reserved_refund_amount ?? 0),
+    availableBalance: Number(result.available_balance ?? 0),
+  };
 }
 
 export async function bookGameWithWallet({

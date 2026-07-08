@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { debitWallet } from "@/lib/wallet";
+import { completeWalletRefundRequest } from "@/lib/wallet";
 
 type RefundRequestPayload = {
   action?: unknown;
@@ -13,6 +13,13 @@ type RefundRequestRow = {
   user_id: string;
   amount: number | string;
   currency: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+type UpdatedRefundRequestRow = {
+  id: number;
+  status: string;
+  admin_note: string | null;
   metadata: Record<string, unknown> | null;
 };
 
@@ -34,6 +41,40 @@ function mergeRefundRequestMetadata(
     ...(metadata ?? {}),
     ...nextMetadata,
   };
+}
+
+function getStatusForCompletionReason(reason: string | null) {
+  switch (reason) {
+    case "refund_request_not_found":
+      return 404;
+    case "insufficient_balance":
+    case "invalid_refund_request_status":
+    case "idempotency_key_conflict":
+      return 409;
+    case "invalid_refund_request":
+    case "invalid_admin_user":
+    case "invalid_refund_amount":
+      return 400;
+    default:
+      return 500;
+  }
+}
+
+function getMessageForCompletionReason(reason: string | null) {
+  switch (reason) {
+    case "insufficient_balance":
+      return "Insufficient wallet balance for this refund.";
+    case "invalid_refund_request_status":
+      return "Refund request is not pending.";
+    case "refund_request_not_found":
+      return "Pending refund request not found.";
+    case "idempotency_key_conflict":
+      return "This refund completion conflicts with an existing transaction.";
+    case "invalid_refund_amount":
+      return "Invalid refund request amount.";
+    default:
+      return "Unable to complete refund.";
+  }
 }
 
 async function loadPendingRefundRequest(refundRequestId: number) {
@@ -114,20 +155,12 @@ export async function PATCH(
       return Response.json({ refund_request: updatedRequest });
     }
 
-    const amount = Math.abs(Number(refundRequest.amount));
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return Response.json({ error: "Invalid refund request amount." }, { status: 409 });
-    }
-
-    let refundTransaction;
+    let completionResult;
 
     try {
-      refundTransaction = await debitWallet({
-        userId: refundRequest.user_id,
-        amount,
-        currency: refundRequest.currency ?? "GBP",
-        transactionType: "refund_completed",
+      completionResult = await completeWalletRefundRequest({
+        refundRequestId: refundRequest.id,
+        adminUserId: adminUser.id,
         idempotencyKey: `refund_completed:request:${refundRequest.id}`,
         description: "Refund completed",
         adminNote: reason,
@@ -139,38 +172,41 @@ export async function PATCH(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to complete refund.";
-      const status = message.toLowerCase().includes("insufficient wallet balance") ? 409 : 500;
 
-      return Response.json({ error: message }, { status });
+      return Response.json({ error: message }, { status: 500 });
     }
 
-    const { data: updatedRequest, error: updateError } = await supabaseAdmin
-      .from("wallet_transactions")
-      .update({
-        status: "completed",
-        admin_note: reason,
-        metadata: mergeRefundRequestMetadata(refundRequest.metadata, {
-          refund_completed_transaction_id: refundTransaction.id,
-          processed_by: adminUser.id,
-          processed_at: processedAt,
-        }),
-      })
-      .eq("id", refundRequest.id)
-      .eq("status", "pending")
-      .select("id,status,admin_note,metadata")
-      .maybeSingle();
+    if (!completionResult.success) {
+      return Response.json(
+        { error: getMessageForCompletionReason(completionResult.reason), reason: completionResult.reason },
+        { status: getStatusForCompletionReason(completionResult.reason) }
+      );
+    }
 
-    if (updateError) {
-      throw updateError;
+    const { data: updatedRequest, error: updatedRequestError } = await supabaseAdmin
+      .from("wallet_transactions")
+      .select("id,status,admin_note,metadata")
+      .eq("id", refundRequest.id)
+      .maybeSingle<UpdatedRefundRequestRow>();
+
+    if (updatedRequestError) {
+      throw updatedRequestError;
     }
 
     if (!updatedRequest) {
-      return Response.json({ error: "Refund was debited but request status could not be updated." }, { status: 409 });
+      return Response.json({ error: "Refund completed but request status could not be loaded." }, { status: 409 });
     }
 
     return Response.json({
       refund_request: updatedRequest,
-      refund_transaction: refundTransaction,
+      refund_transaction: completionResult.refundTransactionId
+        ? { id: completionResult.refundTransactionId }
+        : null,
+      balance_breakdown: {
+        completed_balance: completionResult.completedBalance,
+        reserved_refund_amount: completionResult.reservedRefundAmount,
+        available_balance: completionResult.availableBalance,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to process refund request.";

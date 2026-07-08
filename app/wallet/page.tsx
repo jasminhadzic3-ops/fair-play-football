@@ -18,6 +18,12 @@ type WalletTransaction = {
   created_at: string | null;
 };
 
+type WalletBalanceBreakdown = {
+  completed_balance?: number | string | null;
+  reserved_refund_amount?: number | string | null;
+  available_balance?: number | string | null;
+};
+
 function formatMoney(amount: number, currency = "GBP") {
   const absoluteAmount = Math.abs(amount);
 
@@ -75,7 +81,9 @@ function formatTransactionType(transactionType: string | null) {
 }
 
 export default function WalletPage() {
-  const [balance, setBalance] = useState(0);
+  const [availableBalance, setAvailableBalance] = useState(0);
+  const [completedBalance, setCompletedBalance] = useState(0);
+  const [reservedRefundAmount, setReservedRefundAmount] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [submittingRefundSourceId, setSubmittingRefundSourceId] = useState<number | null>(null);
@@ -96,7 +104,9 @@ export default function WalletPage() {
       setErrorMessage(userError.message);
       setUserId(null);
       setTransactions([]);
-      setBalance(0);
+      setAvailableBalance(0);
+      setCompletedBalance(0);
+      setReservedRefundAmount(0);
       setIsLoading(false);
       return;
     }
@@ -105,14 +115,16 @@ export default function WalletPage() {
 
     if (!user) {
       setTransactions([]);
-      setBalance(0);
+      setAvailableBalance(0);
+      setCompletedBalance(0);
+      setReservedRefundAmount(0);
       setIsLoading(false);
       return;
     }
 
     const [{ data: balanceData, error: balanceError }, { data: transactionData, error: transactionError }] =
       await Promise.all([
-        supabase.rpc("get_my_wallet_balance", { p_currency: "GBP" }),
+        supabase.rpc("get_my_wallet_balance_breakdown", { p_currency: "GBP" }),
         supabase
           .from("wallet_transactions")
           .select("id,amount,currency,transaction_type,status,game_id,booking_id,payment_id,description,metadata,created_at")
@@ -124,14 +136,21 @@ export default function WalletPage() {
     if (balanceError || transactionError) {
       setErrorMessage(balanceError?.message || transactionError?.message || "Unable to load wallet.");
       setTransactions([]);
-      setBalance(0);
+      setAvailableBalance(0);
+      setCompletedBalance(0);
+      setReservedRefundAmount(0);
       setIsLoading(false);
       return;
     }
 
-    const nextBalance = Number(balanceData ?? 0);
+    const balanceBreakdown = (Array.isArray(balanceData) ? balanceData[0] : balanceData) as
+      | WalletBalanceBreakdown
+      | null
+      | undefined;
 
-    setBalance(nextBalance);
+    setAvailableBalance(Number(balanceBreakdown?.available_balance ?? 0));
+    setCompletedBalance(Number(balanceBreakdown?.completed_balance ?? 0));
+    setReservedRefundAmount(Number(balanceBreakdown?.reserved_refund_amount ?? 0));
     setTransactions((transactionData ?? []) as WalletTransaction[]);
     setIsLoading(false);
   }, []);
@@ -144,7 +163,9 @@ export default function WalletPage() {
     transactions.some(
       (transaction) =>
         transaction.transaction_type === "refund_requested" &&
-        (transaction.status === "pending" || transaction.status === "completed") &&
+        (transaction.status === "pending" ||
+          transaction.status === "processing" ||
+          transaction.status === "completed") &&
         String(transaction.metadata?.source_wallet_transaction_id) === String(sourceWalletTransactionId)
     );
 
@@ -176,7 +197,7 @@ export default function WalletPage() {
       return;
     }
 
-    if (Number(sourceCredit.amount) > balance) {
+    if (Number(sourceCredit.amount) > availableBalance) {
       setRefundMessage("Refund amount cannot be greater than your wallet balance.");
       return;
     }
@@ -209,7 +230,7 @@ export default function WalletPage() {
         return;
       }
 
-      setRefundMessage("Refund request sent. Your wallet balance is unchanged until an admin processes it.");
+      setRefundMessage("Refund request sent. This amount is now reserved until an admin processes it.");
       await loadWallet();
     } catch (error) {
       setRefundMessage(error instanceof Error ? error.message : "Unable to request refund.");
@@ -221,7 +242,7 @@ export default function WalletPage() {
   const renderRefundAction = (transaction: WalletTransaction) => {
     const refundRequestStatus = getRefundRequestStatusForSourceCredit(transaction.id);
 
-    if (refundRequestStatus === "pending") {
+    if (refundRequestStatus === "pending" || refundRequestStatus === "processing") {
       return (
         <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-amber-100">
           Refund requested
@@ -296,8 +317,26 @@ export default function WalletPage() {
                 Available balance
               </p>
               <p className="mt-4 text-5xl font-black tracking-tight text-stone-100 sm:text-6xl">
-                {formatBalance(balance)}
+                {formatBalance(availableBalance)}
               </p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">
+                    Total wallet balance
+                  </p>
+                  <p className="mt-2 text-lg font-black text-stone-100">
+                    {formatBalance(completedBalance)}
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">
+                    Reserved for refunds
+                  </p>
+                  <p className="mt-2 text-lg font-black text-stone-100">
+                    {formatBalance(reservedRefundAmount)}
+                  </p>
+                </div>
+              </div>
               <div className="mt-6 border-t border-zinc-800 pt-5">
                 <p className="text-sm font-semibold text-zinc-300">
                   Eligible cancelled-game credits can be requested back to your card.

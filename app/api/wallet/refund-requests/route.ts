@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedUser } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getWalletBalanceBreakdown } from "@/lib/wallet";
 
 type RefundRequestPayload = {
   source_wallet_transaction_id?: unknown;
@@ -96,16 +97,11 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Refundable wallet credit has an invalid amount." }, { status: 409 });
     }
 
-    const { data: balanceData, error: balanceError } = await supabaseAdmin.rpc("get_wallet_balance", {
-      p_user_id: user.id,
-      p_currency: sourceCredit.currency ?? currency,
+    const balanceBreakdown = await getWalletBalanceBreakdown({
+      userId: user.id,
+      currency: sourceCredit.currency ?? currency,
     });
-
-    if (balanceError) {
-      return Response.json({ error: balanceError.message }, { status: 500 });
-    }
-
-    const balance = Number(balanceData ?? 0);
+    const balance = balanceBreakdown.availableBalance;
 
     if (!Number.isFinite(balance) || balance <= 0) {
       return Response.json({ error: "There is no wallet balance available to refund." }, { status: 400 });
@@ -120,7 +116,7 @@ export async function POST(request: NextRequest) {
       .select("id")
       .eq("user_id", user.id)
       .eq("transaction_type", "refund_requested")
-      .in("status", ["pending", "completed"])
+      .in("status", ["pending", "processing", "completed"])
       .eq("metadata->>source_wallet_transaction_id", String(sourceCredit.id))
       .maybeSingle<PendingRefundRequest>();
 
@@ -175,6 +171,7 @@ export async function POST(request: NextRequest) {
     return Response.json({
       refund_request: refundRequest,
       balance,
+      balance_breakdown: balanceBreakdown,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to request refund.";

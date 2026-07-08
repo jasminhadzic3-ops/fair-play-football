@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthenticatedAdminUserMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
-const debitWalletMock = vi.hoisted(() => vi.fn());
+const completeWalletRefundRequestMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/adminAuth", () => ({
   getAuthenticatedAdminUser: getAuthenticatedAdminUserMock,
@@ -15,7 +15,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 }));
 
 vi.mock("@/lib/wallet", () => ({
-  debitWallet: debitWalletMock,
+  completeWalletRefundRequest: completeWalletRefundRequestMock,
 }));
 
 import { PATCH } from "@/app/api/admin/refund-requests/[id]/route";
@@ -121,7 +121,30 @@ beforeEach(() => {
   vi.clearAllMocks();
   getAuthenticatedAdminUserMock.mockResolvedValue({ id: "admin-1" });
   supabaseFromMock.mockImplementation(() => new MockSupabaseQuery());
-  debitWalletMock.mockResolvedValue({ id: 700 });
+  completeWalletRefundRequestMock.mockImplementation(async () => {
+    if (state.refundRequest) {
+      state.refundRequest = {
+        ...state.refundRequest,
+        status: "completed",
+        admin_note: "Paid manually",
+        metadata: {
+          ...state.refundRequest.metadata,
+          refund_completed_transaction_id: 700,
+          processed_by: "admin-1",
+        },
+      };
+    }
+
+    return {
+      success: true,
+      refundRequestId: 501,
+      refundTransactionId: 700,
+      reason: null,
+      completedBalance: 4,
+      reservedRefundAmount: 0,
+      availableBalance: 4,
+    };
+  });
   state.refundRequest = defaultRefundRequest();
   state.updateCalls = [];
 });
@@ -136,7 +159,7 @@ describe("admin refund request route", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(debitWalletMock).not.toHaveBeenCalled();
+    expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
     expect(state.updateCalls).toHaveLength(0);
   });
 
@@ -148,7 +171,7 @@ describe("admin refund request route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(debitWalletMock).not.toHaveBeenCalled();
+    expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
     expect(state.refundRequest).toMatchObject({
       status: "cancelled",
       admin_note: "Customer asked to cancel",
@@ -159,19 +182,17 @@ describe("admin refund request route", () => {
     });
   });
 
-  it("approves a pending request by creating one refund_completed debit", async () => {
+  it("approves a pending request with the refund completion RPC", async () => {
     const response = await PATCH(
       requestBody("approve", "Paid manually") as Parameters<typeof PATCH>[0],
       routeContext()
     );
 
     expect(response.status).toBe(200);
-    expect(debitWalletMock).toHaveBeenCalledTimes(1);
-    expect(debitWalletMock).toHaveBeenCalledWith({
-      userId: "user-1",
-      amount: 8,
-      currency: "GBP",
-      transactionType: "refund_completed",
+    expect(completeWalletRefundRequestMock).toHaveBeenCalledTimes(1);
+    expect(completeWalletRefundRequestMock).toHaveBeenCalledWith({
+      refundRequestId: 501,
+      adminUserId: "admin-1",
       idempotencyKey: "refund_completed:request:501",
       description: "Refund completed",
       adminNote: "Paid manually",
@@ -199,6 +220,12 @@ describe("admin refund request route", () => {
       refund_completed_transaction_id: 700,
       processed_by: "admin-1",
     });
+    expect(body.refund_transaction).toEqual({ id: 700 });
+    expect(body.balance_breakdown).toEqual({
+      completed_balance: 4,
+      reserved_refund_amount: 0,
+      available_balance: 4,
+    });
   });
 
   it("does not double debit a duplicate approval after the request is completed", async () => {
@@ -215,11 +242,19 @@ describe("admin refund request route", () => {
     expect(firstResponse.status).toBe(200);
     expect(secondResponse.status).toBe(404);
     expect(secondBody.error).toBe("Pending refund request not found.");
-    expect(debitWalletMock).toHaveBeenCalledTimes(1);
+    expect(completeWalletRefundRequestMock).toHaveBeenCalledTimes(1);
   });
 
   it("leaves the request pending when wallet balance is insufficient", async () => {
-    debitWalletMock.mockRejectedValue(new Error("Insufficient wallet balance for this debit."));
+    completeWalletRefundRequestMock.mockResolvedValue({
+      success: false,
+      refundRequestId: 501,
+      refundTransactionId: null,
+      reason: "insufficient_balance",
+      completedBalance: 8,
+      reservedRefundAmount: 8,
+      availableBalance: 0,
+    });
 
     const response = await PATCH(
       requestBody("approve", "Paid manually") as Parameters<typeof PATCH>[0],
@@ -228,7 +263,7 @@ describe("admin refund request route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(409);
-    expect(body.error).toBe("Insufficient wallet balance for this debit.");
+    expect(body.error).toBe("Insufficient wallet balance for this refund.");
     expect(state.refundRequest).toMatchObject({
       status: "pending",
       admin_note: null,
