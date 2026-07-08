@@ -95,6 +95,32 @@ type CompleteWalletRefundRequestParams = {
   metadata?: Record<string, unknown>;
 };
 
+type CreateWalletRefundRequestParams = {
+  userId: string;
+  sourceWalletTransactionId: number;
+  idempotencyKey?: string | null;
+};
+
+type CreateWalletRefundRequestRpcResult = {
+  success: boolean;
+  refund_request_id: number | null;
+  reason: string | null;
+  already_exists: boolean | null;
+  completed_balance: number | string | null;
+  reserved_refund_amount: number | string | null;
+  available_balance: number | string | null;
+};
+
+export type CreateWalletRefundRequestResult = {
+  success: boolean;
+  refundRequestId: number | null;
+  reason: string | null;
+  alreadyExists: boolean;
+  completedBalance: number;
+  reservedRefundAmount: number;
+  availableBalance: number;
+};
+
 type CompleteWalletRefundRequestRpcResult = {
   success: boolean;
   refund_request_id: number | null;
@@ -395,6 +421,49 @@ export async function debitWallet(params: WalletDebitInput): Promise<WalletTrans
     currency,
     status,
   });
+}
+
+export async function createWalletRefundRequest({
+  userId,
+  sourceWalletTransactionId,
+  idempotencyKey,
+}: CreateWalletRefundRequestParams): Promise<CreateWalletRefundRequestResult> {
+  assertSupabaseAdminConfigured();
+  assertUserId(userId);
+
+  if (!Number.isInteger(sourceWalletTransactionId) || sourceWalletTransactionId <= 0) {
+    throw new Error("Source wallet transaction id is required.");
+  }
+
+  const normalizedIdempotencyKey =
+    normalizeIdempotencyKey(idempotencyKey) ||
+    `refund_requested:source_credit:${sourceWalletTransactionId}`;
+
+  const { data, error } = await supabaseAdmin.rpc("create_wallet_refund_request", {
+    p_user_id: userId,
+    p_source_wallet_transaction_id: sourceWalletTransactionId,
+    p_idempotency_key: normalizedIdempotencyKey,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const result = (Array.isArray(data) ? data[0] : data) as CreateWalletRefundRequestRpcResult | null;
+
+  if (!result) {
+    throw new Error("Refund request did not return a result.");
+  }
+
+  return {
+    success: result.success,
+    refundRequestId: result.refund_request_id,
+    reason: result.reason,
+    alreadyExists: Boolean(result.already_exists),
+    completedBalance: Number(result.completed_balance ?? 0),
+    reservedRefundAmount: Number(result.reserved_refund_amount ?? 0),
+    availableBalance: Number(result.available_balance ?? 0),
+  };
 }
 
 export async function completeWalletRefundRequest({
