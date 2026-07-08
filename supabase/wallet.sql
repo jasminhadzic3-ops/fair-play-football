@@ -411,6 +411,292 @@ grant execute on function public.create_wallet_debit_if_balance(
   jsonb
 ) to service_role;
 
+create table if not exists public.sumup_refund_attempts (
+  id bigint generated always as identity primary key,
+  refund_request_id bigint not null references public.wallet_transactions(id) on delete cascade,
+  source_wallet_transaction_id bigint references public.wallet_transactions(id) on delete set null,
+  booking_payment_id bigint references public.booking_payments(id) on delete set null,
+  requested_by uuid references auth.users(id) on delete set null,
+  sumup_transaction_id text,
+  amount numeric(10, 2) not null check (amount > 0),
+  currency text not null default 'GBP',
+  status text not null default 'processing'
+    check (status in ('processing', 'succeeded', 'failed', 'unknown')),
+  idempotency_key text not null,
+  error_message text,
+  sumup_response jsonb not null default '{}'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists sumup_refund_attempts_idempotency_key_uidx
+on public.sumup_refund_attempts(idempotency_key);
+
+create unique index if not exists sumup_refund_attempts_one_succeeded_per_request_uidx
+on public.sumup_refund_attempts(refund_request_id)
+where status = 'succeeded';
+
+create unique index if not exists sumup_refund_attempts_one_active_per_request_uidx
+on public.sumup_refund_attempts(refund_request_id)
+where status in ('processing', 'unknown');
+
+create index if not exists sumup_refund_attempts_refund_request_id_idx
+on public.sumup_refund_attempts(refund_request_id);
+
+create index if not exists sumup_refund_attempts_booking_payment_id_idx
+on public.sumup_refund_attempts(booking_payment_id);
+
+create or replace function public.set_sumup_refund_attempts_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_sumup_refund_attempts_updated_at
+on public.sumup_refund_attempts;
+
+create trigger set_sumup_refund_attempts_updated_at
+before update on public.sumup_refund_attempts
+for each row
+execute function public.set_sumup_refund_attempts_updated_at();
+
+alter table public.sumup_refund_attempts enable row level security;
+
+revoke all on public.sumup_refund_attempts from public;
+revoke all on public.sumup_refund_attempts from anon;
+revoke all on public.sumup_refund_attempts from authenticated;
+
+grant all on public.sumup_refund_attempts to service_role;
+grant usage, select on sequence public.sumup_refund_attempts_id_seq to service_role;
+
+create or replace function public.claim_sumup_refund_attempt(
+  p_refund_request_id bigint,
+  p_admin_user_id uuid,
+  p_sumup_transaction_id text default null
+)
+returns table (
+  success boolean,
+  attempt_id bigint,
+  reason text,
+  refund_request_id bigint,
+  amount numeric(10, 2),
+  currency text,
+  booking_payment_id bigint,
+  source_wallet_transaction_id bigint,
+  sumup_transaction_id text,
+  attempt_status text,
+  already_claimed boolean
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_attempt public.sumup_refund_attempts%rowtype;
+  v_booking_payment public.booking_payments%rowtype;
+  v_currency text;
+  v_idempotency_key text;
+  v_refund_amount numeric(10, 2);
+  v_refund_request public.wallet_transactions%rowtype;
+  v_source_wallet_transaction_id bigint;
+  v_sumup_transaction_id text;
+begin
+  if p_refund_request_id is null or p_refund_request_id <= 0 then
+    return query select false, null::bigint, 'invalid_refund_request'::text, null::bigint, null::numeric(10, 2), null::text, null::bigint, null::bigint, null::text, null::text, false;
+    return;
+  end if;
+
+  if p_admin_user_id is null then
+    return query select false, null::bigint, 'invalid_admin_user'::text, p_refund_request_id, null::numeric(10, 2), null::text, null::bigint, null::bigint, null::text, null::text, false;
+    return;
+  end if;
+
+  select *
+  into v_refund_request
+  from public.wallet_transactions
+  where id = p_refund_request_id
+    and transaction_type = 'refund_requested'
+  for update;
+
+  if v_refund_request.id is null then
+    return query select false, null::bigint, 'refund_request_not_found'::text, p_refund_request_id, null::numeric(10, 2), null::text, null::bigint, null::bigint, null::text, null::text, false;
+    return;
+  end if;
+
+  v_currency := coalesce(nullif(trim(v_refund_request.currency), ''), 'GBP');
+
+  perform pg_advisory_xact_lock(hashtext(v_refund_request.user_id::text), hashtext(v_currency));
+
+  if v_refund_request.status not in ('pending', 'processing') then
+    return query select false, null::bigint, 'invalid_refund_request_status'::text, v_refund_request.id, null::numeric(10, 2), v_currency, null::bigint, null::bigint, null::text, null::text, false;
+    return;
+  end if;
+
+  if coalesce(v_refund_request.metadata->>'automatic_refund_eligible', '') <> 'true' then
+    return query select false, null::bigint, 'automatic_refund_not_allowed'::text, v_refund_request.id, null::numeric(10, 2), v_currency, null::bigint, null::bigint, null::text, null::text, false;
+    return;
+  end if;
+
+  if not (
+    v_refund_request.metadata ? 'source_wallet_transaction_id'
+    and (v_refund_request.metadata->>'source_wallet_transaction_id') ~ '^[0-9]+$'
+  ) then
+    return query select false, null::bigint, 'invalid_source_credit'::text, v_refund_request.id, null::numeric(10, 2), v_currency, null::bigint, null::bigint, null::text, null::text, false;
+    return;
+  end if;
+
+  v_source_wallet_transaction_id := (v_refund_request.metadata->>'source_wallet_transaction_id')::bigint;
+
+  if v_refund_request.payment_id is null then
+    return query select false, null::bigint, 'invalid_booking_payment'::text, v_refund_request.id, null::numeric(10, 2), v_currency, null::bigint, v_source_wallet_transaction_id, null::text, null::text, false;
+    return;
+  end if;
+
+  select *
+  into v_booking_payment
+  from public.booking_payments
+  where id = v_refund_request.payment_id
+  for update;
+
+  if v_booking_payment.id is null then
+    return query select false, null::bigint, 'invalid_booking_payment'::text, v_refund_request.id, null::numeric(10, 2), v_currency, v_refund_request.payment_id, v_source_wallet_transaction_id, null::text, null::text, false;
+    return;
+  end if;
+
+  v_sumup_transaction_id := coalesce(
+    nullif(trim(p_sumup_transaction_id), ''),
+    nullif(trim(v_booking_payment.sumup_transaction_id), '')
+  );
+
+  if v_sumup_transaction_id is null
+    and nullif(trim(v_booking_payment.transaction_code), '') is null
+  then
+    return query select false, null::bigint, 'missing_sumup_transaction_reference'::text, v_refund_request.id, null::numeric(10, 2), v_currency, v_booking_payment.id, v_source_wallet_transaction_id, null::text, null::text, false;
+    return;
+  end if;
+
+  v_refund_amount := abs(v_refund_request.amount)::numeric(10, 2);
+
+  if v_refund_amount is null or v_refund_amount <= 0 then
+    return query select false, null::bigint, 'invalid_refund_amount'::text, v_refund_request.id, null::numeric(10, 2), v_currency, v_booking_payment.id, v_source_wallet_transaction_id, v_sumup_transaction_id, null::text, false;
+    return;
+  end if;
+
+  select *
+  into v_attempt
+  from public.sumup_refund_attempts
+  where refund_request_id = v_refund_request.id
+    and status in ('processing', 'unknown', 'succeeded')
+  order by
+    case status
+      when 'succeeded' then 1
+      when 'unknown' then 2
+      else 3
+    end,
+    created_at asc
+  limit 1;
+
+  if v_attempt.id is not null then
+    if v_refund_request.status = 'pending' then
+      update public.wallet_transactions
+      set
+        status = 'processing',
+        metadata = coalesce(metadata, '{}'::jsonb) ||
+          jsonb_build_object(
+            'sumup_refund_claimed_by', p_admin_user_id,
+            'sumup_refund_claimed_at', now(),
+            'sumup_refund_attempt_id', v_attempt.id
+          )
+      where id = v_refund_request.id;
+    end if;
+
+    return query select true, v_attempt.id, null::text, v_refund_request.id, v_attempt.amount, v_attempt.currency, v_attempt.booking_payment_id, v_attempt.source_wallet_transaction_id, v_attempt.sumup_transaction_id, v_attempt.status, true;
+    return;
+  end if;
+
+  if v_sumup_transaction_id is not null
+    and v_booking_payment.sumup_transaction_id is distinct from v_sumup_transaction_id
+  then
+    update public.booking_payments
+    set sumup_transaction_id = v_sumup_transaction_id
+    where id = v_booking_payment.id;
+  end if;
+
+  v_idempotency_key := 'sumup_refund_attempt:request:' ||
+    v_refund_request.id::text ||
+    ':tx:' ||
+    txid_current()::text;
+
+  insert into public.sumup_refund_attempts (
+    refund_request_id,
+    source_wallet_transaction_id,
+    booking_payment_id,
+    requested_by,
+    sumup_transaction_id,
+    amount,
+    currency,
+    status,
+    idempotency_key,
+    metadata
+  )
+  values (
+    v_refund_request.id,
+    v_source_wallet_transaction_id,
+    v_booking_payment.id,
+    p_admin_user_id,
+    v_sumup_transaction_id,
+    v_refund_amount,
+    v_currency,
+    'processing',
+    v_idempotency_key,
+    jsonb_build_object(
+      'transaction_code', v_booking_payment.transaction_code,
+      'claim_source', 'admin_refund_request'
+    )
+  )
+  returning * into v_attempt;
+
+  update public.wallet_transactions
+  set
+    status = 'processing',
+    metadata = coalesce(metadata, '{}'::jsonb) ||
+      jsonb_build_object(
+        'sumup_refund_claimed_by', p_admin_user_id,
+        'sumup_refund_claimed_at', now(),
+        'sumup_refund_attempt_id', v_attempt.id
+      )
+  where id = v_refund_request.id;
+
+  return query select true, v_attempt.id, null::text, v_refund_request.id, v_attempt.amount, v_attempt.currency, v_attempt.booking_payment_id, v_attempt.source_wallet_transaction_id, v_attempt.sumup_transaction_id, v_attempt.status, false;
+end;
+$$;
+
+revoke all on function public.claim_sumup_refund_attempt(
+  bigint,
+  uuid,
+  text
+) from public;
+revoke all on function public.claim_sumup_refund_attempt(
+  bigint,
+  uuid,
+  text
+) from anon;
+revoke all on function public.claim_sumup_refund_attempt(
+  bigint,
+  uuid,
+  text
+) from authenticated;
+grant execute on function public.claim_sumup_refund_attempt(
+  bigint,
+  uuid,
+  text
+) to service_role;
+
 create or replace function public.create_wallet_refund_request(
   p_user_id uuid,
   p_source_wallet_transaction_id bigint,

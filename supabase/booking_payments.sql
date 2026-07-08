@@ -15,16 +15,24 @@ create table if not exists public.booking_payments (
   amount numeric(10, 2) not null,
   currency text not null default 'GBP',
   transaction_code text,
+  sumup_transaction_id text,
   raw_checkout jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.booking_payments
+add column if not exists sumup_transaction_id text;
 
 create index if not exists booking_payments_user_id_idx
 on public.booking_payments(user_id);
 
 create index if not exists booking_payments_game_id_idx
 on public.booking_payments(game_id);
+
+create index if not exists booking_payments_sumup_transaction_id_idx
+on public.booking_payments(sumup_transaction_id)
+where sumup_transaction_id is not null;
 
 alter table public.booking_payments enable row level security;
 
