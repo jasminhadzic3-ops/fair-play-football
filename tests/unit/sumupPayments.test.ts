@@ -18,6 +18,7 @@ vi.mock("@/lib/postBookingActions", () => ({
 
 import {
   finalizeCheckoutPayment,
+  refundSumUpTransaction,
   resolveAndStoreSumUpTransactionIdForPayment,
   retrieveSumUpTransactionByCode,
 } from "@/lib/sumupPayments";
@@ -258,5 +259,157 @@ describe("SumUp payment helpers", () => {
     expect(warnSpy).toHaveBeenCalled();
 
     warnSpy.mockRestore();
+  });
+
+  it("refunds a SumUp transaction with the exact positive amount payload", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "refund-1",
+        status: "SUCCESSFUL",
+        amount: 10,
+        transaction_id: "transaction-id-1",
+      })
+    );
+
+    const result = await refundSumUpTransaction({
+      transactionId: "transaction-id-1",
+      amount: 10,
+    });
+
+    expect(result).toEqual({
+      transactionId: "transaction-id-1",
+      amount: 10,
+      response: {
+        id: "refund-1",
+        status: "SUCCESSFUL",
+        amount: 10,
+        transaction_id: "transaction-id-1",
+      },
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.sumup.com/v1.0/merchants/MERCHANT-1/payments/transaction-id-1/refunds",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/problem+json, application/json",
+          Authorization: "Bearer sumup-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount: 10 }),
+      }
+    );
+  });
+
+  it("URL-encodes merchant code and transaction id for refunds", async () => {
+    process.env.SUMUP_MERCHANT_CODE = "MERCHANT / 1";
+    vi.mocked(fetch).mockResolvedValueOnce(okJson({ id: "refund-1" }));
+
+    await refundSumUpTransaction({
+      transactionId: "txn/id 1",
+      amount: 1,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.sumup.com/v1.0/merchants/MERCHANT%20%2F%201/payments/txn%2Fid%201/refunds",
+      expect.any(Object)
+    );
+  });
+
+  it("normalizes SumUp refund amounts to two decimal places", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(okJson({ id: "refund-1" }));
+
+    const result = await refundSumUpTransaction({
+      transactionId: "transaction-id-1",
+      amount: 10.555,
+    });
+
+    expect(result.amount).toBe(10.56);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: JSON.stringify({ amount: 10.56 }),
+      })
+    );
+  });
+
+  it("rejects invalid SumUp refund inputs before calling SumUp", async () => {
+    await expect(refundSumUpTransaction({ transactionId: " ", amount: 10 })).rejects.toThrow(
+      "SumUp transaction id is required."
+    );
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 0 })).rejects.toThrow(
+      "SumUp refund amount must be greater than 0."
+    );
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: -1 })).rejects.toThrow(
+      "SumUp refund amount must be greater than 0."
+    );
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: Number.NaN })).rejects.toThrow(
+      "SumUp refund amount must be greater than 0."
+    );
+    await expect(
+      refundSumUpTransaction({ transactionId: "transaction-id-1", amount: Number.POSITIVE_INFINITY })
+    ).rejects.toThrow("SumUp refund amount must be greater than 0.");
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("requires SumUp refund env vars", async () => {
+    delete process.env.SUMUP_MERCHANT_CODE;
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 10 })).rejects.toThrow(
+      "SUMUP_MERCHANT_CODE is required."
+    );
+
+    process.env.SUMUP_MERCHANT_CODE = "MERCHANT-1";
+    delete process.env.SUMUP_API_KEY;
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 10 })).rejects.toThrow(
+      "SUMUP_API_KEY is required."
+    );
+  });
+
+  it("surfaces non-OK SumUp refund responses", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(errorJson({ detail: "Refund amount is too high." }, 422));
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 })).rejects.toThrow(
+      "Refund amount is too high."
+    );
+  });
+
+  it("handles an empty successful SumUp refund response", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 5 })).resolves.toEqual({
+      transactionId: "transaction-id-1",
+      amount: 5,
+      response: null,
+    });
+  });
+
+  it("does not call the SumUp refund endpoint during checkout finalisation", async () => {
+    paymentRow = defaultPayment();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        okJson({
+          id: "checkout-1",
+          status: "PAID",
+          transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        okJson({
+          id: "transaction-id-1",
+          transaction_code: "TXN-1",
+          amount: 10,
+          currency: "GBP",
+          status: "SUCCESSFUL",
+        })
+      );
+
+    await finalizeCheckoutPayment("checkout-1");
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetch).mock.calls.some(([url, init]) => {
+      return String(url).includes("/refunds") || init?.method === "POST";
+    })).toBe(false);
   });
 });

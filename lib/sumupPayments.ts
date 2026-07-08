@@ -24,6 +24,21 @@ export type SumUpTransaction = {
   merchant_code?: string;
 };
 
+export type SumUpRefundResponse = {
+  id?: string;
+  amount?: number;
+  currency?: string;
+  status?: string;
+  transaction_id?: string;
+  [key: string]: unknown;
+};
+
+export type SumUpRefundResult = {
+  transactionId: string;
+  amount: number;
+  response: SumUpRefundResponse | null;
+};
+
 const sumupApiBase = "https://api.sumup.com/v0.1";
 const sumupApiRoot = "https://api.sumup.com";
 const noSpacePaymentMessage = "This spot has already been taken. You are still on the waiting list.";
@@ -83,6 +98,14 @@ function getSumUpErrorMessage(responseBody: any, fallback: string) {
 
 function normalizeMoneyAmount(amount: number | string | null | undefined) {
   return Math.round(Number(amount ?? 0) * 100);
+}
+
+function normalizeRefundAmount(amount: number) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("SumUp refund amount must be greater than 0.");
+  }
+
+  return Number((Math.round(amount * 100) / 100).toFixed(2));
 }
 
 function isPaidCompatibleTransactionStatus(transaction: Pick<SumUpTransaction, "status" | "simple_status">) {
@@ -239,6 +262,45 @@ export async function retrieveSumUpTransactionByCode(transactionCode: string) {
   }
 
   return transaction as SumUpTransaction;
+}
+
+export async function refundSumUpTransaction(params: {
+  transactionId: string;
+  amount: number;
+}) {
+  const transactionId = params.transactionId.trim();
+
+  if (!transactionId) {
+    throw new Error("SumUp transaction id is required.");
+  }
+
+  const refundAmount = normalizeRefundAmount(params.amount);
+  const merchantCode = getSumUpMerchantCode();
+  const url = `${sumupApiRoot}/v1.0/merchants/${encodeURIComponent(merchantCode)}/payments/${encodeURIComponent(transactionId)}/refunds`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/problem+json, application/json",
+      Authorization: `Bearer ${getSumUpApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      amount: refundAmount,
+    }),
+  });
+
+  const refundResponse = await readJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getSumUpErrorMessage(refundResponse, "Unable to refund SumUp transaction."));
+  }
+
+  return {
+    transactionId,
+    amount: refundAmount,
+    response: refundResponse as SumUpRefundResponse | null,
+  } satisfies SumUpRefundResult;
 }
 
 export async function resolveAndStoreSumUpTransactionIdForPayment(
