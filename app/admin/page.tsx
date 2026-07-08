@@ -117,6 +117,7 @@ export default function AdminPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingGameId, setEditingGameId] = useState<number | null>(null);
   const [cancellingGameId, setCancellingGameId] = useState<number | null>(null);
+  const [processingRefundRequestId, setProcessingRefundRequestId] = useState<number | null>(null);
   const [summary, setSummary] = useState<AdminSummary>({
     games_count: 0,
     bookings_count: 0,
@@ -459,6 +460,55 @@ export default function AdminPage() {
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to export bookings.");
+    }
+  };
+
+  const processRefundRequest = async (request: RefundRequest, action: "approve" | "reject") => {
+    if (processingRefundRequestId) {
+      return;
+    }
+
+    const amount = formatRefundRequestAmount(request);
+    const confirmed = window.confirm(
+      action === "approve"
+        ? `Mark refund request ${request.id} for ${amount} as manually refunded? This will deduct the amount from the wallet balance.`
+        : `Reject refund request ${request.id} for ${amount}? This will not change the wallet balance.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const reason = window.prompt(
+      action === "approve"
+        ? "Optional admin note for this manual refund:"
+        : "Optional rejection reason:"
+    );
+
+    setProcessingRefundRequestId(request.id);
+
+    try {
+      const response = await fetch(`/api/admin/refund-requests/${request.id}`, {
+        method: "PATCH",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({
+          action,
+          reason: reason?.trim() || null,
+        }),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        alert(result?.error || "Unable to process refund request.");
+        return;
+      }
+
+      alert(action === "approve" ? "Refund marked as completed." : "Refund request rejected.");
+      await fetchAdminData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to process refund request.");
+    } finally {
+      setProcessingRefundRequestId(null);
     }
   };
 
@@ -914,7 +964,7 @@ export default function AdminPage() {
                   key={request.id}
                   className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
                 >
-                  <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.7fr_0.9fr] md:items-center">
+                  <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.7fr_0.9fr_auto] md:items-center">
                     <div>
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                         Player
@@ -955,6 +1005,25 @@ export default function AdminPage() {
                       <span className="mt-2 inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100">
                         {request.status || "pending"}
                       </span>
+                    </div>
+
+                    <div className="flex flex-col gap-2 md:items-end">
+                      <button
+                        type="button"
+                        onClick={() => void processRefundRequest(request, "approve")}
+                        disabled={processingRefundRequestId === request.id}
+                        className="w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                      >
+                        {processingRefundRequestId === request.id ? "Processing..." : "Mark Refunded"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void processRefundRequest(request, "reject")}
+                        disabled={processingRefundRequestId === request.id}
+                        className="w-full rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                      >
+                        Reject
+                      </button>
                     </div>
                   </div>
                 </div>
