@@ -11,6 +11,13 @@ type SeededPlayer = {
   username: string;
 };
 
+type SeededAdmin = {
+  id: string;
+  email: string;
+  password: string;
+  runId: string;
+};
+
 type SeededPayment = {
   id: number;
   bookingId: number;
@@ -34,6 +41,10 @@ export type MoneyFlowSeed = {
   player: SeededPlayer;
   sourceCredit: SeededWalletCredit;
   payment: SeededPayment;
+};
+
+export type AdminSeed = {
+  admin: SeededAdmin;
 };
 
 export type MoneyFlowSeedOptions = {
@@ -168,6 +179,80 @@ async function insertSingle<T>(
   }
 
   return data;
+}
+
+export async function seedAdminUser(supabase: SupabaseClient): Promise<AdminSeed> {
+  const runId = uniqueRunId();
+  let createdUserId: string | undefined;
+  const admin = {
+    email: `${runId}_admin@example.test`,
+    password: `Password-${runId}`,
+  };
+
+  try {
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: admin.email,
+      password: admin.password,
+      email_confirm: true,
+      user_metadata: {
+        e2e_run_id: runId,
+        role: "admin",
+      },
+    });
+
+    if (authError || !authData.user) {
+      throw new Error(`create test admin user: ${authError?.message || "no user returned"}`);
+    }
+
+    createdUserId = authData.user.id;
+
+    await insertSingle(
+      supabase
+        .from("admin_users")
+        .insert({
+          user_id: authData.user.id,
+        })
+        .select("user_id")
+        .single(),
+      "insert test admin allowlist row"
+    );
+
+    return {
+      admin: {
+        id: authData.user.id,
+        email: admin.email,
+        password: admin.password,
+        runId,
+      },
+    };
+  } catch (error) {
+    if (createdUserId) {
+      const failures: string[] = [];
+
+      const { error: allowlistError } = await supabase
+        .from("admin_users")
+        .delete()
+        .eq("user_id", createdUserId);
+
+      if (allowlistError) {
+        failures.push(`delete partial admin allowlist row: ${allowlistError.message}`);
+      }
+
+      const { error: deleteUserError } = await supabase.auth.admin.deleteUser(createdUserId);
+
+      if (deleteUserError) {
+        failures.push(`delete partial admin auth user: ${deleteUserError.message}`);
+      }
+
+      if (failures.length > 0) {
+        throw new Error(
+          `${error instanceof Error ? error.message : "Unable to seed admin user."} Partial admin cleanup failed for run ${runId}. ${failures.join(" | ")}`
+        );
+      }
+    }
+
+    throw error;
+  }
 }
 
 export async function seedWalletRefundFlow(
@@ -431,6 +516,27 @@ export async function getRefundRequestsForSourceCredit(
   });
 }
 
+export async function getRefundCompletedDebitsForRequest(
+  supabase: SupabaseClient,
+  userId: string,
+  refundRequestId: number
+) {
+  const { data, error } = await supabase
+    .from("wallet_transactions")
+    .select("id,amount,status,metadata")
+    .eq("user_id", userId)
+    .eq("transaction_type", "refund_completed");
+
+  if (error) {
+    throw new Error(`load refund completed debits: ${error.message}`);
+  }
+
+  return (data ?? []).filter((transaction) => {
+    const metadata = transaction.metadata as Record<string, unknown> | null;
+    return String(metadata?.refund_request_id) === String(refundRequestId);
+  });
+}
+
 export async function cleanupMoneyFlowSeed(
   supabase: SupabaseClient,
   seed: MoneyFlowSeed
@@ -497,6 +603,34 @@ export async function cleanupMoneyFlowSeed(
   if (failures.length > 0) {
     throw new Error(
       `E2E cleanup failed for run ${seed.runId}. ${failures.join(" | ")}`
+    );
+  }
+}
+
+export async function cleanupAdminSeed(
+  supabase: SupabaseClient,
+  seed: AdminSeed
+) {
+  const failures: string[] = [];
+
+  const { error: allowlistError } = await supabase
+    .from("admin_users")
+    .delete()
+    .eq("user_id", seed.admin.id);
+
+  if (allowlistError) {
+    failures.push(`delete test admin allowlist row: ${allowlistError.message}`);
+  }
+
+  const { error: deleteUserError } = await supabase.auth.admin.deleteUser(seed.admin.id);
+
+  if (deleteUserError) {
+    failures.push(`delete test admin auth user: ${deleteUserError.message}`);
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      `Admin E2E cleanup failed for run ${seed.admin.runId}. ${failures.join(" | ")}`
     );
   }
 }
