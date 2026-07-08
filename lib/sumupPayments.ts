@@ -14,13 +14,33 @@ type SumUpCheckout = {
   }>;
 };
 
+export type SumUpTransaction = {
+  id: string;
+  transaction_code: string;
+  amount: number;
+  currency: string;
+  status: string;
+  simple_status?: string;
+  merchant_code?: string;
+};
+
 const sumupApiBase = "https://api.sumup.com/v0.1";
+const sumupApiRoot = "https://api.sumup.com";
 const noSpacePaymentMessage = "This spot has already been taken. You are still on the waiting list.";
 
 type CreateBookingIfSpaceResult = {
   success: boolean;
   booking_id: number | null;
   reason: string | null;
+};
+
+type BookingPaymentForSumUpResolution = {
+  id: number;
+  amount: number | string;
+  currency: string | null;
+  payment_status: string | null;
+  transaction_code?: string | null;
+  sumup_transaction_id?: string | null;
 };
 
 async function readJsonResponse(response: Response) {
@@ -45,6 +65,91 @@ function getSumUpApiKey() {
   }
 
   return apiKey;
+}
+
+function getSumUpMerchantCode() {
+  const merchantCode = process.env.SUMUP_MERCHANT_CODE;
+
+  if (!merchantCode) {
+    throw new Error("SUMUP_MERCHANT_CODE is required.");
+  }
+
+  return merchantCode;
+}
+
+function getSumUpErrorMessage(responseBody: any, fallback: string) {
+  return responseBody?.message || responseBody?.error_message || responseBody?.detail || responseBody?.title || fallback;
+}
+
+function normalizeMoneyAmount(amount: number | string | null | undefined) {
+  return Math.round(Number(amount ?? 0) * 100);
+}
+
+function isPaidCompatibleTransactionStatus(transaction: Pick<SumUpTransaction, "status" | "simple_status">) {
+  const status = transaction.status?.toUpperCase();
+  const simpleStatus = transaction.simple_status?.toUpperCase();
+
+  return (
+    status === "SUCCESSFUL" ||
+    status === "REFUNDED" ||
+    simpleStatus === "SUCCESSFUL" ||
+    simpleStatus === "PAID_OUT" ||
+    simpleStatus === "REFUNDED"
+  );
+}
+
+function validateResolvedTransactionForPayment(
+  payment: BookingPaymentForSumUpResolution,
+  transaction: SumUpTransaction
+) {
+  const transactionCode = payment.transaction_code?.trim();
+
+  if (!transaction.id) {
+    throw new Error("SumUp transaction response did not include a transaction id.");
+  }
+
+  if (!transactionCode || transaction.transaction_code !== transactionCode) {
+    throw new Error("SumUp transaction code did not match the booking payment.");
+  }
+
+  if (normalizeMoneyAmount(transaction.amount) !== normalizeMoneyAmount(payment.amount)) {
+    throw new Error("SumUp transaction amount did not match the booking payment.");
+  }
+
+  if (transaction.currency?.toUpperCase() !== (payment.currency || "GBP").toUpperCase()) {
+    throw new Error("SumUp transaction currency did not match the booking payment.");
+  }
+
+  if (!isPaidCompatibleTransactionStatus(transaction)) {
+    throw new Error("SumUp transaction is not in a paid-compatible status.");
+  }
+}
+
+function withOptionalSumUpTransactionId<T extends Record<string, unknown>>(
+  payload: T,
+  sumupTransactionId: string | null
+) {
+  return sumupTransactionId ? { ...payload, sumup_transaction_id: sumupTransactionId } : payload;
+}
+
+async function resolveSumUpTransactionIdForFinalizedPayment(
+  payment: BookingPaymentForSumUpResolution,
+  transactionCode: string | undefined
+) {
+  try {
+    const transaction = await resolveAndStoreSumUpTransactionIdForPayment({
+      ...payment,
+      transaction_code: transactionCode || payment.transaction_code,
+    });
+
+    return transaction?.id ?? payment.sumup_transaction_id ?? null;
+  } catch (error) {
+    console.warn(
+      "Unable to resolve SumUp transaction id for booking payment:",
+      error instanceof Error ? error.message : error
+    );
+    return payment.sumup_transaction_id ?? null;
+  }
 }
 
 export async function getAuthenticatedUser(authHeader: string | null) {
@@ -72,11 +177,7 @@ export async function createSumUpCheckout(params: {
   redirectUrl: string;
   webhookUrl: string;
 }) {
-  const merchantCode = process.env.SUMUP_MERCHANT_CODE;
-
-  if (!merchantCode) {
-    throw new Error("SUMUP_MERCHANT_CODE is required.");
-  }
+  const merchantCode = getSumUpMerchantCode();
 
   const response = await fetch(`${sumupApiBase}/checkouts`, {
     method: "POST",
@@ -107,6 +208,75 @@ export async function createSumUpCheckout(params: {
   }
 
   return checkout as SumUpCheckout;
+}
+
+export async function retrieveSumUpTransactionByCode(transactionCode: string) {
+  const normalizedTransactionCode = transactionCode.trim();
+
+  if (!normalizedTransactionCode) {
+    throw new Error("SumUp transaction code is required.");
+  }
+
+  const merchantCode = getSumUpMerchantCode();
+  const url = new URL(`${sumupApiRoot}/v2.1/merchants/${encodeURIComponent(merchantCode)}/transactions`);
+  url.searchParams.set("transaction_code", normalizedTransactionCode);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/problem+json, application/json",
+      Authorization: `Bearer ${getSumUpApiKey()}`,
+    },
+  });
+
+  const transaction = await readJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(getSumUpErrorMessage(transaction, "Unable to retrieve SumUp transaction."));
+  }
+
+  if (!transaction || !transaction.id || !transaction.transaction_code) {
+    throw new Error("SumUp returned an invalid transaction response.");
+  }
+
+  return transaction as SumUpTransaction;
+}
+
+export async function resolveAndStoreSumUpTransactionIdForPayment(
+  payment: BookingPaymentForSumUpResolution
+) {
+  if (payment.sumup_transaction_id?.trim()) {
+    return null;
+  }
+
+  const paymentStatus = payment.payment_status?.toLowerCase();
+
+  if (paymentStatus !== "paid" && paymentStatus !== "paid_no_space") {
+    return null;
+  }
+
+  const transactionCode = payment.transaction_code?.trim();
+
+  if (!transactionCode) {
+    return null;
+  }
+
+  const transaction = await retrieveSumUpTransactionByCode(transactionCode);
+
+  validateResolvedTransactionForPayment(payment, transaction);
+
+  const { error } = await supabaseAdmin
+    .from("booking_payments")
+    .update({
+      sumup_transaction_id: transaction.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", payment.id);
+
+  if (error) {
+    throw error;
+  }
+
+  return transaction;
 }
 
 export async function retrieveSumUpCheckout(checkoutId: string) {
@@ -178,15 +348,22 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     return { paymentStatus: status, bookingId: payment.booking_id ?? null };
   }
 
+  const sumupTransactionId = await resolveSumUpTransactionIdForFinalizedPayment(payment, transactionCode);
+
   if (payment.booking_id) {
     const { error: updateError } = await supabaseAdmin
       .from("booking_payments")
-      .update({
-        payment_status: "paid",
-        raw_checkout: checkout,
-        transaction_code: transactionCode,
-        updated_at: new Date().toISOString(),
-      })
+      .update(
+        withOptionalSumUpTransactionId(
+          {
+            payment_status: "paid",
+            raw_checkout: checkout,
+            transaction_code: transactionCode,
+            updated_at: new Date().toISOString(),
+          },
+          sumupTransactionId
+        )
+      )
       .eq("id", payment.id);
 
     if (updateError) {
@@ -214,13 +391,18 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     if (bookingResult?.reason === "game_full") {
       const { data: updatedPayment, error: noSpaceUpdateError } = await supabaseAdmin
         .from("booking_payments")
-        .update({
-          booking_id: null,
-          payment_status: "paid_no_space",
-          raw_checkout: checkout,
-          transaction_code: transactionCode,
-          updated_at: new Date().toISOString(),
-        })
+        .update(
+          withOptionalSumUpTransactionId(
+            {
+              booking_id: null,
+              payment_status: "paid_no_space",
+              raw_checkout: checkout,
+              transaction_code: transactionCode,
+              updated_at: new Date().toISOString(),
+            },
+            sumupTransactionId
+          )
+        )
         .eq("id", payment.id)
         .select("booking_id,payment_status")
         .single();
@@ -252,13 +434,18 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
 
   const { data: updatedPayment, error: paymentUpdateError } = await supabaseAdmin
     .from("booking_payments")
-    .update({
-      booking_id: bookingId,
-      payment_status: "paid",
-      raw_checkout: checkout,
-      transaction_code: transactionCode,
-      updated_at: new Date().toISOString(),
-    })
+    .update(
+      withOptionalSumUpTransactionId(
+        {
+          booking_id: bookingId,
+          payment_status: "paid",
+          raw_checkout: checkout,
+          transaction_code: transactionCode,
+          updated_at: new Date().toISOString(),
+        },
+        sumupTransactionId
+      )
+    )
     .eq("id", payment.id)
     .is("booking_id", null)
     .select("booking_id,payment_status")
