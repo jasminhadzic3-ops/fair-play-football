@@ -39,6 +39,9 @@ alter table public.bookings enable row level security;
 drop policy if exists "Bookings are publicly readable" on public.bookings;
 drop policy if exists "Bookings are insertable by owner" on public.bookings;
 drop policy if exists "Bookings are deletable by owner" on public.bookings;
+drop policy if exists "Allow public deletes" on public.bookings;
+drop policy if exists "Allow public inserts" on public.bookings;
+drop policy if exists "Allow public read" on public.bookings;
 
 create policy "Bookings are publicly readable"
 on public.bookings
@@ -65,6 +68,9 @@ using (auth.uid() = user_id);
 alter table public.games enable row level security;
 
 drop policy if exists "Games are publicly readable" on public.games;
+drop policy if exists "Allow public inserts" on public.games;
+drop policy if exists "Allow public read access" on public.games;
+drop policy if exists "Allow public updates" on public.games;
 
 create policy "Games are publicly readable"
 on public.games
