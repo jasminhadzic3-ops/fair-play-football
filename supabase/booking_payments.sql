@@ -44,6 +44,9 @@ for select
 to authenticated
 using (auth.uid() = user_id);
 
+grant select, insert, update, delete on table public.booking_payments to service_role;
+grant usage, select on sequence public.booking_payments_id_seq to service_role;
+
 -- Client-side inserts/updates/deletes are intentionally not allowed.
 -- Trusted Next.js API routes use the Supabase service role to create and update
 -- pending payment records and confirmed bookings.

@@ -19,6 +19,8 @@ for select
 to authenticated
 using (auth.uid() = user_id);
 
+grant select, insert, delete on table public.admin_users to service_role;
+
 -- Client-side inserts/updates/deletes are intentionally not allowed.
 -- Add or remove admins from the Supabase SQL editor or a trusted server-only
 -- maintenance process.

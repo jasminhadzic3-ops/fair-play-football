@@ -4,7 +4,12 @@ export async function signInWithEmail(page: Page, email: string, password: strin
   await page.goto("/");
 
   const navbar = page.getByRole("navigation");
-  await navbar.getByRole("button", { name: "Sign in" }).click();
+  const signInButton = navbar.getByRole("button", { name: "Sign in" });
+
+  await expect(page.getByText("Discover upcoming games")).toBeVisible();
+  await expect(signInButton).toBeVisible();
+
+  await signInButton.click();
 
   await expect(page.getByRole("heading", { name: "Sign in or create account" })).toBeVisible();
 

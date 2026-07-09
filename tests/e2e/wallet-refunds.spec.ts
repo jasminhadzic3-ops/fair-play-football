@@ -70,7 +70,7 @@ test.describe("wallet refund flow", () => {
     await expect(
       page.getByText("Refund request sent. This amount is now reserved until an admin processes it.")
     ).toBeVisible();
-    await expect(page.getByText("Refund requested")).toBeVisible();
+    await expect(page.locator("span").filter({ hasText: /^Refund requested$/ })).toBeVisible();
 
     const refundRequests = await getRefundRequestsForSourceCredit(
       supabase,

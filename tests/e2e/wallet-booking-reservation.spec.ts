@@ -99,7 +99,7 @@ test.describe("reserved refund wallet booking protection", () => {
 
     await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
     await page.getByRole("button", { name: "Join Game" }).click();
-    await expect(page.getByText("Secure checkout")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
     await page.getByRole("button", { name: "Pay £10 with Wallet" }).click();
 
     await expect(page.getByText("Insufficient wallet balance.")).toBeVisible();

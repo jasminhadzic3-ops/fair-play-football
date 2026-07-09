@@ -123,6 +123,7 @@ as $$
   from public.wallet_transactions
   where user_id = p_user_id
     and status = 'completed'
+    and transaction_type <> 'refund_requested'
     and currency = coalesce(p_currency, 'GBP');
 $$;
 
@@ -166,6 +167,7 @@ as $$
     from public.wallet_transactions, normalized_currency
     where wallet_transactions.user_id = p_user_id
       and wallet_transactions.status = 'completed'
+      and wallet_transactions.transaction_type <> 'refund_requested'
       and wallet_transactions.currency = normalized_currency.currency
   ),
   reserved as (

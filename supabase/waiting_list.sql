@@ -24,6 +24,7 @@ on public.waiting_list(user_id);
 alter table public.waiting_list enable row level security;
 
 grant delete on public.waiting_list to authenticated;
+grant select on table public.waiting_list to service_role;
 
 drop policy if exists "Waiting list rows are readable by owner" on public.waiting_list;
 drop policy if exists "Waiting list rows are insertable by owner" on public.waiting_list;

@@ -35,11 +35,10 @@ function acceptAdminRefundDialogs(page: Page, promptText: string) {
 
 function refundRequestCard(page: Page, seed: MoneyFlowSeed) {
   return page
-    .locator("div")
-    .filter({ hasText: seed.player.email })
-    .filter({ hasText: "Mark Refunded" })
-    .filter({ hasText: "Reject" })
-    .first();
+    .getByText(seed.player.email, { exact: true })
+    .locator(
+      "xpath=ancestor::div[.//button[normalize-space()='Mark Refunded'] and .//button[normalize-space()='Reject']][1]"
+    );
 }
 
 async function seedPendingAdminRefund(
