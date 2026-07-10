@@ -95,6 +95,12 @@ type CompleteWalletRefundRequestParams = {
   metadata?: Record<string, unknown>;
 };
 
+type ClaimSumUpRefundAttemptParams = {
+  refundRequestId: number;
+  adminUserId: string;
+  sumUpTransactionId?: string | null;
+};
+
 type CreateWalletRefundRequestParams = {
   userId: string;
   sourceWalletTransactionId: number;
@@ -139,6 +145,34 @@ export type CompleteWalletRefundRequestResult = {
   completedBalance: number;
   reservedRefundAmount: number;
   availableBalance: number;
+};
+
+type ClaimSumUpRefundAttemptRpcResult = {
+  success: boolean;
+  attempt_id: number | null;
+  reason: string | null;
+  refund_request_id: number | null;
+  amount: number | string | null;
+  currency: string | null;
+  booking_payment_id: number | null;
+  source_wallet_transaction_id: number | null;
+  sumup_transaction_id: string | null;
+  attempt_status: string | null;
+  already_claimed: boolean | null;
+};
+
+export type ClaimSumUpRefundAttemptResult = {
+  success: boolean;
+  attemptId: number | null;
+  reason: string | null;
+  refundRequestId: number | null;
+  amount: number;
+  currency: string | null;
+  bookingPaymentId: number | null;
+  sourceWalletTransactionId: number | null;
+  sumUpTransactionId: string | null;
+  attemptStatus: string | null;
+  alreadyClaimed: boolean;
 };
 
 type BookGameWithWalletParams = {
@@ -508,6 +542,49 @@ export async function completeWalletRefundRequest({
     completedBalance: Number(result.completed_balance ?? 0),
     reservedRefundAmount: Number(result.reserved_refund_amount ?? 0),
     availableBalance: Number(result.available_balance ?? 0),
+  };
+}
+
+export async function claimSumUpRefundAttempt({
+  refundRequestId,
+  adminUserId,
+  sumUpTransactionId,
+}: ClaimSumUpRefundAttemptParams): Promise<ClaimSumUpRefundAttemptResult> {
+  assertSupabaseAdminConfigured();
+  assertUserId(adminUserId);
+
+  if (!Number.isInteger(refundRequestId) || refundRequestId <= 0) {
+    throw new Error("Refund request id is required.");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("claim_sumup_refund_attempt", {
+    p_refund_request_id: refundRequestId,
+    p_admin_user_id: adminUserId,
+    p_sumup_transaction_id: normalizeIdempotencyKey(sumUpTransactionId),
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const result = (Array.isArray(data) ? data[0] : data) as ClaimSumUpRefundAttemptRpcResult | null;
+
+  if (!result) {
+    throw new Error("SumUp refund attempt claim did not return a result.");
+  }
+
+  return {
+    success: result.success,
+    attemptId: result.attempt_id,
+    reason: result.reason,
+    refundRequestId: result.refund_request_id,
+    amount: Number(result.amount ?? 0),
+    currency: result.currency,
+    bookingPaymentId: result.booking_payment_id,
+    sourceWalletTransactionId: result.source_wallet_transaction_id,
+    sumUpTransactionId: result.sumup_transaction_id,
+    attemptStatus: result.attempt_status,
+    alreadyClaimed: Boolean(result.already_claimed),
   };
 }
 

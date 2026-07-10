@@ -472,14 +472,20 @@ export default function AdminPage() {
     }
   };
 
-  const processRefundRequest = async (request: RefundRequest, action: "approve" | "reject") => {
+  const processRefundRequest = async (
+    request: RefundRequest,
+    action: "approve" | "reject" | "claim_sumup_refund"
+  ) => {
     if (processingRefundRequestId) {
       return;
     }
 
     const amount = formatRefundRequestAmount(request);
+    const isClaimOnly = action === "claim_sumup_refund";
     const confirmed = window.confirm(
-      action === "approve"
+      isClaimOnly
+        ? `Test claim SumUp refund request ${request.id} for ${amount}? This only creates a processing claim. It does NOT refund the customer or call SumUp.`
+        : action === "approve"
         ? `Mark refund request ${request.id} for ${amount} as manually refunded? This will deduct the amount from the wallet balance.`
         : `Reject refund request ${request.id} for ${amount}? This will not change the wallet balance.`
     );
@@ -488,11 +494,13 @@ export default function AdminPage() {
       return;
     }
 
-    const reason = window.prompt(
-      action === "approve"
-        ? "Optional admin note for this manual refund:"
-        : "Optional rejection reason:"
-    );
+    const reason = isClaimOnly
+      ? null
+      : window.prompt(
+          action === "approve"
+            ? "Optional admin note for this manual refund:"
+            : "Optional rejection reason:"
+        );
 
     setProcessingRefundRequestId(request.id);
 
@@ -512,7 +520,13 @@ export default function AdminPage() {
         return;
       }
 
-      alert(action === "approve" ? "Refund marked as completed." : "Refund request rejected.");
+      alert(
+        isClaimOnly
+          ? "SumUp refund attempt claimed for testing. The customer has not been refunded."
+          : action === "approve"
+            ? "Refund marked as completed."
+            : "Refund request rejected."
+      );
       await fetchAdminData();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to process refund request.");
@@ -968,7 +982,7 @@ export default function AdminPage() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <h2 className="text-2xl font-bold">Refund Requests</h2>
             <span className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-400">
-              {refundRequests.length} pending
+              {refundRequests.length} active
             </span>
           </div>
 
@@ -1032,25 +1046,46 @@ export default function AdminPage() {
                       <span className="mt-2 inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100">
                         {request.status || "pending"}
                       </span>
+                      {request.status === "processing" ? (
+                        <p className="mt-2 text-xs font-semibold text-amber-100">
+                          Test claim created. The customer has not been refunded.
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-col gap-2 md:items-end">
-                      <button
-                        type="button"
-                        onClick={() => void processRefundRequest(request, "approve")}
-                        disabled={processingRefundRequestId === request.id}
-                        className="w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
-                      >
-                        {processingRefundRequestId === request.id ? "Processing..." : "Mark Refunded"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void processRefundRequest(request, "reject")}
-                        disabled={processingRefundRequestId === request.id}
-                        className="w-full rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
-                      >
-                        Reject
-                      </button>
+                      {request.status === "processing" ? (
+                        <p className="max-w-44 text-right text-xs text-zinc-400">
+                          Processing claim only. No SumUp refund has been sent.
+                        </p>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void processRefundRequest(request, "claim_sumup_refund")}
+                            disabled={processingRefundRequestId === request.id}
+                            className="w-full rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                          >
+                            {processingRefundRequestId === request.id ? "Processing..." : "Test Claim SumUp Refund"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void processRefundRequest(request, "approve")}
+                            disabled={processingRefundRequestId === request.id}
+                            className="w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                          >
+                            {processingRefundRequestId === request.id ? "Processing..." : "Mark Refunded"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void processRefundRequest(request, "reject")}
+                            disabled={processingRefundRequestId === request.id}
+                            className="w-full rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -592,15 +592,15 @@ begin
   select *
   into v_attempt
   from public.sumup_refund_attempts
-  where refund_request_id = v_refund_request.id
-    and status in ('processing', 'unknown', 'succeeded')
+  where sumup_refund_attempts.refund_request_id = v_refund_request.id
+    and sumup_refund_attempts.status in ('processing', 'unknown', 'succeeded')
   order by
-    case status
+    case sumup_refund_attempts.status
       when 'succeeded' then 1
       when 'unknown' then 2
       else 3
     end,
-    created_at asc
+    sumup_refund_attempts.created_at asc
   limit 1;
 
   if v_attempt.id is not null then

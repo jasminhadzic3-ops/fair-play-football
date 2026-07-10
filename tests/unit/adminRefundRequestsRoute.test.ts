@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthenticatedAdminUserMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
+const claimSumUpRefundAttemptMock = vi.hoisted(() => vi.fn());
 const completeWalletRefundRequestMock = vi.hoisted(() => vi.fn());
+const refundSumUpTransactionMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/adminAuth", () => ({
   getAuthenticatedAdminUser: getAuthenticatedAdminUserMock,
@@ -15,7 +17,12 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 }));
 
 vi.mock("@/lib/wallet", () => ({
+  claimSumUpRefundAttempt: claimSumUpRefundAttemptMock,
   completeWalletRefundRequest: completeWalletRefundRequestMock,
+}));
+
+vi.mock("@/lib/sumupPayments", () => ({
+  refundSumUpTransaction: refundSumUpTransactionMock,
 }));
 
 import { PATCH } from "@/app/api/admin/refund-requests/[id]/route";
@@ -83,7 +90,7 @@ class MockSupabaseQuery {
   }
 }
 
-function requestBody(action: "approve" | "reject", reason = "Admin note") {
+function requestBody(action: "approve" | "reject" | "claim_sumup_refund", reason = "Admin note") {
   return new Request("http://localhost/api/admin/refund-requests/501", {
     method: "PATCH",
     headers: {
@@ -121,6 +128,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   getAuthenticatedAdminUserMock.mockResolvedValue({ id: "admin-1" });
   supabaseFromMock.mockImplementation(() => new MockSupabaseQuery());
+  claimSumUpRefundAttemptMock.mockResolvedValue({
+    success: true,
+    attemptId: 900,
+    reason: null,
+    refundRequestId: 501,
+    amount: 8,
+    currency: "GBP",
+    bookingPaymentId: 300,
+    sourceWalletTransactionId: 200,
+    sumUpTransactionId: "sumup-txn-1",
+    attemptStatus: "processing",
+    alreadyClaimed: false,
+  });
   completeWalletRefundRequestMock.mockImplementation(async () => {
     if (state.refundRequest) {
       state.refundRequest = {
@@ -159,7 +179,9 @@ describe("admin refund request route", () => {
     );
 
     expect(response.status).toBe(401);
+    expect(claimSumUpRefundAttemptMock).not.toHaveBeenCalled();
     expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
     expect(state.updateCalls).toHaveLength(0);
   });
 
@@ -171,7 +193,9 @@ describe("admin refund request route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(claimSumUpRefundAttemptMock).not.toHaveBeenCalled();
     expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
     expect(state.refundRequest).toMatchObject({
       status: "cancelled",
       admin_note: "Customer asked to cancel",
@@ -189,7 +213,9 @@ describe("admin refund request route", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(claimSumUpRefundAttemptMock).not.toHaveBeenCalled();
     expect(completeWalletRefundRequestMock).toHaveBeenCalledTimes(1);
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
     expect(completeWalletRefundRequestMock).toHaveBeenCalledWith({
       refundRequestId: 501,
       adminUserId: "admin-1",
@@ -226,6 +252,97 @@ describe("admin refund request route", () => {
       reserved_refund_amount: 0,
       available_balance: 4,
     });
+  });
+
+  it("test-claims a SumUp refund attempt without calling SumUp or completing the wallet refund", async () => {
+    const response = await PATCH(
+      requestBody("claim_sumup_refund") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(claimSumUpRefundAttemptMock).toHaveBeenCalledTimes(1);
+    expect(claimSumUpRefundAttemptMock).toHaveBeenCalledWith({
+      refundRequestId: 501,
+      adminUserId: "admin-1",
+    });
+    expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+    expect(body).toMatchObject({
+      message: "SumUp refund attempt claimed for testing. The customer has not been refunded.",
+      refund_request: {
+        id: 501,
+        status: "processing",
+      },
+      sumup_refund_attempt: {
+        id: 900,
+        status: "processing",
+        already_claimed: false,
+        amount: 8,
+        currency: "GBP",
+        booking_payment_id: 300,
+        source_wallet_transaction_id: 200,
+        sumup_transaction_id: "sumup-txn-1",
+      },
+    });
+  });
+
+  it("does not call SumUp when the refund attempt has already been claimed", async () => {
+    claimSumUpRefundAttemptMock.mockResolvedValue({
+      success: true,
+      attemptId: 900,
+      reason: null,
+      refundRequestId: 501,
+      amount: 8,
+      currency: "GBP",
+      bookingPaymentId: 300,
+      sourceWalletTransactionId: 200,
+      sumUpTransactionId: "sumup-txn-1",
+      attemptStatus: "processing",
+      alreadyClaimed: true,
+    });
+
+    const response = await PATCH(
+      requestBody("claim_sumup_refund") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.sumup_refund_attempt.already_claimed).toBe(true);
+    expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe error when SumUp refund attempt claim fails without calling SumUp", async () => {
+    claimSumUpRefundAttemptMock.mockResolvedValue({
+      success: false,
+      attemptId: null,
+      reason: "missing_sumup_transaction_reference",
+      refundRequestId: 501,
+      amount: 0,
+      currency: "GBP",
+      bookingPaymentId: 300,
+      sourceWalletTransactionId: 200,
+      sumUpTransactionId: null,
+      attemptStatus: null,
+      alreadyClaimed: false,
+    });
+
+    const response = await PATCH(
+      requestBody("claim_sumup_refund") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({
+      error: "Refund request is missing a SumUp transaction reference.",
+      reason: "missing_sumup_transaction_reference",
+    });
+    expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
   });
 
   it("does not double debit a duplicate approval after the request is completed", async () => {

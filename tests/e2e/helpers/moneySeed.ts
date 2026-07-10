@@ -643,6 +643,22 @@ export async function getRefundCompletedDebitsForRequest(
   });
 }
 
+export async function getSumUpRefundAttemptsForRequest(
+  supabase: SupabaseClient,
+  refundRequestId: number
+) {
+  const { data, error } = await supabase
+    .from("sumup_refund_attempts")
+    .select("id,refund_request_id,booking_payment_id,source_wallet_transaction_id,amount,currency,status,sumup_transaction_id")
+    .eq("refund_request_id", refundRequestId);
+
+  if (error) {
+    throw new Error(`load SumUp refund attempts: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
 export async function cleanupMoneyFlowSeed(
   supabase: SupabaseClient,
   seed: MoneyFlowSeed

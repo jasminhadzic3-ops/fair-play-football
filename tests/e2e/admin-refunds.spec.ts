@@ -6,6 +6,7 @@ import {
   createE2ESupabaseClient,
   getRefundCompletedDebitsForRequest,
   getRefundRequestsForSourceCredit,
+  getSumUpRefundAttemptsForRequest,
   getWalletBalanceBreakdown,
   seedAdminUser,
   seedWalletRefundFlow,
@@ -36,9 +37,7 @@ function acceptAdminRefundDialogs(page: Page, promptText: string) {
 function refundRequestCard(page: Page, seed: MoneyFlowSeed) {
   return page
     .getByText(seed.player.email, { exact: true })
-    .locator(
-      "xpath=ancestor::div[.//button[normalize-space()='Mark Refunded'] and .//button[normalize-space()='Reject']][1]"
-    );
+    .locator("xpath=ancestor::div[contains(@class, 'rounded-3xl')][1]");
 }
 
 async function seedPendingAdminRefund(
@@ -220,5 +219,81 @@ test.describe("admin refund processing", () => {
       reservedRefundAmount: 0,
       availableBalance: 0,
     });
+  });
+
+  test("admin can test-claim a SumUp refund without refunding the customer", async ({ page }) => {
+    const sumupRefundUrls: string[] = [];
+    page.on("request", (request) => {
+      const url = request.url();
+
+      if (url.includes("/refunds")) {
+        sumupRefundUrls.push(url);
+      }
+    });
+
+    const { adminSeed, moneySeed, refundRequestId } = await seedPendingAdminRefund(
+      supabase,
+      adminSeeds,
+      moneySeeds,
+      12
+    );
+
+    await openAdminRefundQueue(page, adminSeed);
+
+    const removeDialogs = acceptAdminRefundDialogs(page, "");
+
+    const claimResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/admin/refund-requests/${refundRequestId}`) &&
+        response.request().method() === "PATCH"
+    );
+
+    await refundRequestCard(page, moneySeed)
+      .getByRole("button", { name: "Test Claim SumUp Refund" })
+      .click();
+    const claimResponse = await claimResponsePromise;
+    const claimResponseBody = await claimResponse.json();
+
+    expect(claimResponse.ok(), JSON.stringify(claimResponseBody)).toBe(true);
+
+    removeDialogs();
+
+    const card = refundRequestCard(page, moneySeed);
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("processing");
+    await expect(card).toContainText("Test claim created. The customer has not been refunded.");
+    await expect(card).toContainText("Processing claim only. No SumUp refund has been sent.");
+    await expect(card.getByRole("button", { name: "Mark Refunded" })).toHaveCount(0);
+
+    const refundRequests = await getRefundRequestsForSourceCredit(
+      supabase,
+      moneySeed.player.id,
+      moneySeed.sourceCredit.id
+    );
+    const completedDebits = await getRefundCompletedDebitsForRequest(
+      supabase,
+      moneySeed.player.id,
+      refundRequestId
+    );
+    const refundAttempts = await getSumUpRefundAttemptsForRequest(supabase, refundRequestId);
+    const balanceBreakdown = await getWalletBalanceBreakdown(supabase, moneySeed.player.id);
+
+    expect(refundRequests).toHaveLength(1);
+    expect(refundRequests[0].status).toBe("processing");
+    expect(refundAttempts).toHaveLength(1);
+    expect(refundAttempts[0]).toMatchObject({
+      refund_request_id: refundRequestId,
+      booking_payment_id: moneySeed.payment.id,
+      source_wallet_transaction_id: moneySeed.sourceCredit.id,
+      status: "processing",
+    });
+    expect(Number(refundAttempts[0].amount)).toBe(12);
+    expect(completedDebits).toHaveLength(0);
+    expect(balanceBreakdown).toEqual({
+      completedBalance: 12,
+      reservedRefundAmount: 12,
+      availableBalance: 0,
+    });
+    expect(sumupRefundUrls).toHaveLength(0);
   });
 });

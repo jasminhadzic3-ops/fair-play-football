@@ -118,7 +118,6 @@ export async function GET(request: NextRequest) {
         .from("wallet_transactions")
         .select("id,user_id,amount,currency,transaction_type,status,description,metadata,created_at")
         .eq("transaction_type", "refund_requested")
-        .eq("status", "pending")
         .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("waiting_list")
@@ -149,7 +148,9 @@ export async function GET(request: NextRequest) {
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
     const bookingById = new Map((bookings as Booking[]).map((booking) => [booking.id, booking]));
     const paymentById = new Map((bookingPayments as Payment[]).map((payment) => [payment.id, payment]));
-    const refundRequests = ((refundRequestsResult.data ?? []) as RefundRequest[]).map((request) => {
+    const refundRequests = ((refundRequestsResult.data ?? []) as RefundRequest[])
+      .filter((request) => request.status === "pending" || request.status === "processing")
+      .map((request) => {
       const profile = request.user_id ? profileById.get(request.user_id) : null;
       const sourceWalletTransactionId = getMetadataNumber(request.metadata, "source_wallet_transaction_id");
       const originalPaymentId = getMetadataNumber(request.metadata, "original_payment_id");
