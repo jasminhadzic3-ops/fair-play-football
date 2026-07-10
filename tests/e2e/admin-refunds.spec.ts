@@ -19,6 +19,16 @@ import {
 } from "./helpers/supabaseEnv";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const testSupabaseRef = "gtrpegnxhawmkbhyqedh";
+
+function canRunMockSumUpRefundE2E() {
+  return (
+    canRunDatabaseMutationE2E() &&
+    process.env.E2E_MOCK_SUMUP_REFUNDS === "true" &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.includes(`${testSupabaseRef}.supabase.co`) === true
+  );
+}
+
 function acceptAdminRefundDialogs(page: Page, promptText: string) {
   const handler = async (dialog: Dialog) => {
     if (dialog.type() === "prompt") {
@@ -125,6 +135,11 @@ test.describe("admin refund processing", () => {
     await expect(card).toContainText(`Payment ${moneySeed.payment.id}`);
     await expect(card).toContainText(`Credit ${moneySeed.sourceCredit.id}`);
     await expect(card).toContainText(`SumUp ${moneySeed.runId}_txn_code`);
+    if (canRunMockSumUpRefundE2E()) {
+      await expect(card.getByRole("button", { name: "Refund via SumUp" })).toBeVisible();
+    } else {
+      await expect(card.getByRole("button", { name: "Refund via SumUp" })).toHaveCount(0);
+    }
     await expect(card.getByRole("button", { name: "Mark Refunded" })).toBeVisible();
     await expect(card.getByRole("button", { name: "Reject" })).toBeVisible();
   });
@@ -221,7 +236,12 @@ test.describe("admin refund processing", () => {
     });
   });
 
-  test("admin can test-claim a SumUp refund without refunding the customer", async ({ page }) => {
+  test("admin can refund via mocked SumUp without calling the real refunds endpoint", async ({ page }) => {
+    test.skip(
+      !canRunMockSumUpRefundE2E(),
+      "Mocked SumUp refund E2E requires TEST Supabase ref, E2E_ALLOW_DB_MUTATION=true, and E2E_MOCK_SUMUP_REFUNDS=true."
+    );
+
     const sumupRefundUrls: string[] = [];
     page.on("request", (request) => {
       const url = request.url();
@@ -242,28 +262,23 @@ test.describe("admin refund processing", () => {
 
     const removeDialogs = acceptAdminRefundDialogs(page, "");
 
-    const claimResponsePromise = page.waitForResponse(
+    const refundResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/admin/refund-requests/${refundRequestId}`) &&
         response.request().method() === "PATCH"
     );
 
     await refundRequestCard(page, moneySeed)
-      .getByRole("button", { name: "Test Claim SumUp Refund" })
+      .getByRole("button", { name: "Refund via SumUp" })
       .click();
-    const claimResponse = await claimResponsePromise;
-    const claimResponseBody = await claimResponse.json();
+    const refundResponse = await refundResponsePromise;
+    const refundResponseBody = await refundResponse.json();
 
-    expect(claimResponse.ok(), JSON.stringify(claimResponseBody)).toBe(true);
+    expect(refundResponse.ok(), JSON.stringify(refundResponseBody)).toBe(true);
 
     removeDialogs();
 
-    const card = refundRequestCard(page, moneySeed);
-    await expect(card).toBeVisible();
-    await expect(card).toContainText("processing");
-    await expect(card).toContainText("Test claim created. The customer has not been refunded.");
-    await expect(card).toContainText("Processing claim only. No SumUp refund has been sent.");
-    await expect(card.getByRole("button", { name: "Mark Refunded" })).toHaveCount(0);
+    await expect(page.getByText(moneySeed.player.email)).toHaveCount(0);
 
     const refundRequests = await getRefundRequestsForSourceCredit(
       supabase,
@@ -279,19 +294,20 @@ test.describe("admin refund processing", () => {
     const balanceBreakdown = await getWalletBalanceBreakdown(supabase, moneySeed.player.id);
 
     expect(refundRequests).toHaveLength(1);
-    expect(refundRequests[0].status).toBe("processing");
+    expect(refundRequests[0].status).toBe("completed");
     expect(refundAttempts).toHaveLength(1);
     expect(refundAttempts[0]).toMatchObject({
       refund_request_id: refundRequestId,
       booking_payment_id: moneySeed.payment.id,
       source_wallet_transaction_id: moneySeed.sourceCredit.id,
-      status: "processing",
+      status: "succeeded",
     });
     expect(Number(refundAttempts[0].amount)).toBe(12);
-    expect(completedDebits).toHaveLength(0);
+    expect(completedDebits).toHaveLength(1);
+    expect(Number(completedDebits[0].amount)).toBe(-12);
     expect(balanceBreakdown).toEqual({
-      completedBalance: 12,
-      reservedRefundAmount: 12,
+      completedBalance: 0,
+      reservedRefundAmount: 0,
       availableBalance: 0,
     });
     expect(sumupRefundUrls).toHaveLength(0);

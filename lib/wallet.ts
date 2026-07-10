@@ -101,6 +101,20 @@ type ClaimSumUpRefundAttemptParams = {
   sumUpTransactionId?: string | null;
 };
 
+type UpdateSumUpRefundAttemptStatusParams = {
+  attemptId: number;
+  refundRequestId: number;
+  status: "succeeded" | "failed" | "unknown";
+  errorMessage?: string | null;
+  sumUpResponse?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
+};
+
+type RestoreRefundRequestToPendingParams = {
+  refundRequestId: number;
+  attemptId: number;
+};
+
 type CreateWalletRefundRequestParams = {
   userId: string;
   sourceWalletTransactionId: number;
@@ -173,6 +187,26 @@ export type ClaimSumUpRefundAttemptResult = {
   sumUpTransactionId: string | null;
   attemptStatus: string | null;
   alreadyClaimed: boolean;
+};
+
+export type SumUpRefundAttemptStatus = "processing" | "succeeded" | "failed" | "unknown";
+
+export type SumUpRefundAttempt = {
+  id: number;
+  refund_request_id: number;
+  source_wallet_transaction_id: number | null;
+  booking_payment_id: number | null;
+  requested_by: string | null;
+  sumup_transaction_id: string | null;
+  amount: number | string;
+  currency: string;
+  status: SumUpRefundAttemptStatus;
+  idempotency_key: string;
+  error_message: string | null;
+  sumup_response: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 };
 
 type BookGameWithWalletParams = {
@@ -586,6 +620,97 @@ export async function claimSumUpRefundAttempt({
     attemptStatus: result.attempt_status,
     alreadyClaimed: Boolean(result.already_claimed),
   };
+}
+
+export async function updateSumUpRefundAttemptStatus({
+  attemptId,
+  refundRequestId,
+  status,
+  errorMessage,
+  sumUpResponse,
+  metadata,
+}: UpdateSumUpRefundAttemptStatusParams): Promise<SumUpRefundAttempt | null> {
+  assertSupabaseAdminConfigured();
+
+  if (!Number.isInteger(attemptId) || attemptId <= 0) {
+    throw new Error("SumUp refund attempt id is required.");
+  }
+
+  if (!Number.isInteger(refundRequestId) || refundRequestId <= 0) {
+    throw new Error("Refund request id is required.");
+  }
+
+  const { data: existingAttempt, error: existingAttemptError } = await supabaseAdmin
+    .from("sumup_refund_attempts")
+    .select("metadata")
+    .eq("id", attemptId)
+    .eq("refund_request_id", refundRequestId)
+    .eq("status", "processing")
+    .maybeSingle<{ metadata: Record<string, unknown> | null }>();
+
+  if (existingAttemptError) {
+    throw existingAttemptError;
+  }
+
+  if (!existingAttempt) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("sumup_refund_attempts")
+    .update({
+      status,
+      error_message: errorMessage ?? null,
+      sumup_response: sumUpResponse ?? {},
+      metadata: {
+        ...(existingAttempt.metadata ?? {}),
+        ...(metadata ?? {}),
+      },
+    })
+    .eq("id", attemptId)
+    .eq("refund_request_id", refundRequestId)
+    .eq("status", "processing")
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as SumUpRefundAttempt | null;
+}
+
+export async function restoreRefundRequestToPendingAfterFailedSumUpAttempt({
+  refundRequestId,
+  attemptId,
+}: RestoreRefundRequestToPendingParams) {
+  assertSupabaseAdminConfigured();
+
+  if (!Number.isInteger(refundRequestId) || refundRequestId <= 0) {
+    throw new Error("Refund request id is required.");
+  }
+
+  if (!Number.isInteger(attemptId) || attemptId <= 0) {
+    throw new Error("SumUp refund attempt id is required.");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("wallet_transactions")
+    .update({
+      status: "pending",
+    })
+    .eq("id", refundRequestId)
+    .eq("transaction_type", "refund_requested")
+    .eq("status", "processing")
+    .eq("metadata->>sumup_refund_attempt_id", String(attemptId))
+    .select("id,status")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 export async function bookGameWithWallet({

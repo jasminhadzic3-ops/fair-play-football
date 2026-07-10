@@ -38,6 +38,15 @@ type RefundRequest = {
   created_at: string | null;
 };
 
+type SumUpRefundAttempt = {
+  id: number;
+  refund_request_id: number;
+  status: string | null;
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 function countPaymentsByStatus(payments: Payment[]) {
   return payments.reduce<Record<string, number>>((counts, payment) => {
     const status = payment.payment_status || "unknown";
@@ -73,6 +82,14 @@ function getMetadataNumber(metadata: Record<string, unknown> | null | undefined,
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
+function isAutomaticSumUpRefundMockEnabled() {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("gtrpegnxhawmkbhyqedh.supabase.co") === true &&
+    process.env.E2E_ALLOW_DB_MUTATION === "true" &&
+    process.env.E2E_MOCK_SUMUP_REFUNDS === "true"
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const adminUser = await getAuthenticatedAdminUser(request.headers.get("authorization"));
@@ -88,6 +105,7 @@ export async function GET(request: NextRequest) {
       paymentsResult,
       walletTransactionsResult,
       refundRequestsResult,
+      sumUpRefundAttemptsResult,
       waitingListResult,
     ] = await Promise.all([
       supabaseAdmin
@@ -120,6 +138,10 @@ export async function GET(request: NextRequest) {
         .eq("transaction_type", "refund_requested")
         .order("created_at", { ascending: true }),
       supabaseAdmin
+        .from("sumup_refund_attempts")
+        .select("id,refund_request_id,status,error_message,created_at,updated_at")
+        .order("created_at", { ascending: false }),
+      supabaseAdmin
         .from("waiting_list")
         .select("id,game_id,user_id,player_name,status,created_at")
         .eq("status", "waiting")
@@ -133,6 +155,7 @@ export async function GET(request: NextRequest) {
       paymentsResult.error ||
       walletTransactionsResult.error ||
       refundRequestsResult.error ||
+      sumUpRefundAttemptsResult.error ||
       waitingListResult.error;
 
     if (firstError) {
@@ -148,6 +171,14 @@ export async function GET(request: NextRequest) {
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
     const bookingById = new Map((bookings as Booking[]).map((booking) => [booking.id, booking]));
     const paymentById = new Map((bookingPayments as Payment[]).map((payment) => [payment.id, payment]));
+    const latestAttemptByRequestId = new Map<number, SumUpRefundAttempt>();
+
+    ((sumUpRefundAttemptsResult.data ?? []) as SumUpRefundAttempt[]).forEach((attempt) => {
+      if (!latestAttemptByRequestId.has(attempt.refund_request_id)) {
+        latestAttemptByRequestId.set(attempt.refund_request_id, attempt);
+      }
+    });
+
     const refundRequests = ((refundRequestsResult.data ?? []) as RefundRequest[])
       .filter((request) => request.status === "pending" || request.status === "processing")
       .map((request) => {
@@ -159,6 +190,7 @@ export async function GET(request: NextRequest) {
       const originalPayment = originalPaymentId ? paymentById.get(originalPaymentId) : null;
       const originalGame = originalGameId ? gameById.get(originalGameId) : null;
       const originalBooking = originalBookingId ? bookingById.get(originalBookingId) : null;
+      const sumUpRefundAttempt = latestAttemptByRequestId.get(request.id) ?? null;
 
       return {
         ...request,
@@ -173,6 +205,9 @@ export async function GET(request: NextRequest) {
         source_payment_status: originalPayment?.payment_status ?? null,
         source_payment_checkout_reference: originalPayment?.checkout_reference ?? null,
         source_payment_transaction_code: originalPayment?.transaction_code ?? null,
+        sumup_refund_attempt_id: sumUpRefundAttempt?.id ?? null,
+        sumup_refund_attempt_status: sumUpRefundAttempt?.status ?? null,
+        sumup_refund_attempt_error: sumUpRefundAttempt?.error_message ?? null,
       };
     });
     const waitingList = waitingListResult.data ?? [];
@@ -185,6 +220,7 @@ export async function GET(request: NextRequest) {
       wallet_transactions: walletTransactions,
       refund_requests: refundRequests,
       waiting_list: waitingList,
+      automaticSumUpRefundMockEnabled: isAutomaticSumUpRefundMockEnabled(),
       summary: {
         games_count: games.length,
         bookings_count: bookings.length,

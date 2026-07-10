@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
+import {
+  processAutomaticSumUpRefund,
+  type SumUpRefundDependency,
+} from "@/lib/sumupRefundProcessing";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { claimSumUpRefundAttempt, completeWalletRefundRequest } from "@/lib/wallet";
+import { completeWalletRefundRequest } from "@/lib/wallet";
 
 type RefundRequestPayload = {
   action?: unknown;
@@ -77,46 +81,6 @@ function getMessageForCompletionReason(reason: string | null) {
   }
 }
 
-function getStatusForClaimReason(reason: string | null) {
-  switch (reason) {
-    case "refund_request_not_found":
-      return 404;
-    case "invalid_refund_request_status":
-      return 409;
-    case "invalid_refund_request":
-    case "invalid_admin_user":
-    case "automatic_refund_not_allowed":
-    case "invalid_source_credit":
-    case "invalid_booking_payment":
-    case "missing_sumup_transaction_reference":
-    case "invalid_refund_amount":
-      return 400;
-    default:
-      return 500;
-  }
-}
-
-function getMessageForClaimReason(reason: string | null) {
-  switch (reason) {
-    case "invalid_refund_request_status":
-      return "Refund request is not pending or processing.";
-    case "refund_request_not_found":
-      return "Refund request not found.";
-    case "automatic_refund_not_allowed":
-      return "This refund request is not eligible for SumUp automatic refund.";
-    case "invalid_booking_payment":
-      return "Refund request is not linked to a valid SumUp payment.";
-    case "missing_sumup_transaction_reference":
-      return "Refund request is missing a SumUp transaction reference.";
-    case "invalid_source_credit":
-      return "Refund request is not linked to a valid source credit.";
-    case "invalid_refund_amount":
-      return "Invalid refund request amount.";
-    default:
-      return "Unable to claim SumUp refund attempt.";
-  }
-}
-
 async function loadPendingRefundRequest(refundRequestId: number) {
   const { data: refundRequest, error } = await supabaseAdmin
     .from("wallet_transactions")
@@ -131,6 +95,55 @@ async function loadPendingRefundRequest(refundRequestId: number) {
   }
 
   return refundRequest;
+}
+
+function getTestOnlyMockRefundDependency(): SumUpRefundDependency | null {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const isTestProject = supabaseUrl.includes("gtrpegnxhawmkbhyqedh.supabase.co");
+  const isMutationE2E = process.env.E2E_ALLOW_DB_MUTATION === "true";
+  const isMockEnabled = process.env.E2E_MOCK_SUMUP_REFUNDS === "true";
+
+  if (!isTestProject || !isMutationE2E || !isMockEnabled) {
+    return null;
+  }
+
+  return async ({ transactionId, amount }) => {
+    const outcome = process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME || "succeeded";
+
+    if (outcome === "failed") {
+      return {
+        outcome: "failed",
+        errorMessage: "Mocked SumUp refund failure.",
+        response: {
+          error_message: "Mocked SumUp refund failure.",
+          transaction_id: transactionId,
+          amount,
+        },
+      };
+    }
+
+    if (outcome === "unknown") {
+      return {
+        outcome: "unknown",
+        errorMessage: "Mocked ambiguous SumUp refund outcome.",
+        response: {
+          transaction_id: transactionId,
+          amount,
+          status: "UNKNOWN",
+        },
+      };
+    }
+
+    return {
+      outcome: "succeeded",
+      response: {
+        id: `mock-refund-${transactionId}`,
+        status: "SUCCESSFUL",
+        transaction_id: transactionId,
+        amount,
+      },
+    };
+  };
 }
 
 export async function PATCH(
@@ -154,49 +167,63 @@ export async function PATCH(
     const body = (await request.json().catch(() => null)) as RefundRequestPayload | null;
     const action = body?.action;
 
-    if (action !== "approve" && action !== "reject" && action !== "claim_sumup_refund") {
+    if (action !== "approve" && action !== "reject" && action !== "refund_via_sumup") {
       return Response.json({ error: "Invalid refund request action." }, { status: 400 });
     }
 
-    if (action === "claim_sumup_refund") {
-      let claimResult;
+    if (action === "refund_via_sumup") {
+      const refundDependency = getTestOnlyMockRefundDependency();
 
-      try {
-        claimResult = await claimSumUpRefundAttempt({
-          refundRequestId,
-          adminUserId: adminUser.id,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unable to claim SumUp refund attempt.";
-
-        return Response.json({ error: message }, { status: 500 });
-      }
-
-      if (!claimResult.success) {
+      if (!refundDependency) {
         return Response.json(
-          { error: getMessageForClaimReason(claimResult.reason), reason: claimResult.reason },
-          { status: getStatusForClaimReason(claimResult.reason) }
+          { error: "Automatic SumUp refunds are not enabled in this environment." },
+          { status: 403 }
         );
       }
 
-      return Response.json({
-        sumup_refund_attempt: {
-          id: claimResult.attemptId,
-          status: claimResult.attemptStatus,
-          already_claimed: claimResult.alreadyClaimed,
-          amount: claimResult.amount,
-          currency: claimResult.currency,
-          booking_payment_id: claimResult.bookingPaymentId,
-          source_wallet_transaction_id: claimResult.sourceWalletTransactionId,
-          sumup_transaction_id: claimResult.sumUpTransactionId,
-        },
-        refund_request: {
-          id: claimResult.refundRequestId,
-          status: "processing",
-        },
-        message:
-          "SumUp refund attempt claimed for testing. The customer has not been refunded.",
+      const result = await processAutomaticSumUpRefund({
+        refundRequestId,
+        adminUserId: adminUser.id,
+        refundDependency,
       });
+
+      if (result.outcome === "completed") {
+        return Response.json({
+          message: result.message,
+          refund_request: {
+            id: result.refundRequestId,
+            status: "completed",
+          },
+          refund_transaction: result.refundTransactionId
+            ? { id: result.refundTransactionId }
+            : null,
+          sumup_refund_attempt: {
+            id: result.attemptId,
+            status: "succeeded",
+            skipped_sumup_refund_call: result.skippedSumUpRefundCall,
+          },
+          balance_breakdown: {
+            completed_balance: result.balanceBreakdown.completedBalance,
+            reserved_refund_amount: result.balanceBreakdown.reservedRefundAmount,
+            available_balance: result.balanceBreakdown.availableBalance,
+          },
+        });
+      }
+
+      return Response.json(
+        {
+          error: result.error,
+          outcome: result.outcome,
+          sumup_refund_attempt:
+            "attemptId" in result
+              ? {
+                  id: result.attemptId,
+                  status: "attemptStatus" in result ? result.attemptStatus : null,
+                }
+              : null,
+        },
+        { status: result.status }
+      );
     }
 
     const refundRequest = await loadPendingRefundRequest(refundRequestId);

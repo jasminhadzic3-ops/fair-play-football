@@ -64,6 +64,9 @@ interface RefundRequest {
   source_payment_status?: string | null;
   source_payment_checkout_reference?: string | null;
   source_payment_transaction_code?: string | null;
+  sumup_refund_attempt_id?: number | null;
+  sumup_refund_attempt_status?: string | null;
+  sumup_refund_attempt_error?: string | null;
   created_at?: string | null;
 }
 
@@ -97,6 +100,7 @@ interface AdminDashboardData {
   wallet_transactions?: WalletTransaction[];
   refund_requests?: RefundRequest[];
   waiting_list: WaitingListEntry[];
+  automaticSumUpRefundMockEnabled?: boolean;
   summary: AdminSummary;
 }
 
@@ -118,6 +122,7 @@ export default function AdminPage() {
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
+  const [automaticSumUpRefundMockEnabled, setAutomaticSumUpRefundMockEnabled] = useState(false);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [time, setTime] = useState("");
@@ -170,6 +175,7 @@ export default function AdminPage() {
         setWalletTransactions(result.wallet_transactions ?? []);
         setRefundRequests(result.refund_requests ?? []);
         setWaitingList(result.waiting_list ?? []);
+        setAutomaticSumUpRefundMockEnabled(result.automaticSumUpRefundMockEnabled === true);
         setSummary(result.summary);
       }
     } catch (error) {
@@ -474,17 +480,17 @@ export default function AdminPage() {
 
   const processRefundRequest = async (
     request: RefundRequest,
-    action: "approve" | "reject" | "claim_sumup_refund"
+    action: "approve" | "reject" | "refund_via_sumup"
   ) => {
     if (processingRefundRequestId) {
       return;
     }
 
     const amount = formatRefundRequestAmount(request);
-    const isClaimOnly = action === "claim_sumup_refund";
+    const isSumUpRefund = action === "refund_via_sumup";
     const confirmed = window.confirm(
-      isClaimOnly
-        ? `Test claim SumUp refund request ${request.id} for ${amount}? This only creates a processing claim. It does NOT refund the customer or call SumUp.`
+      isSumUpRefund
+        ? `Refund request ${request.id} for ${amount} via SumUp? This will attempt a card refund before completing the wallet refund.`
         : action === "approve"
         ? `Mark refund request ${request.id} for ${amount} as manually refunded? This will deduct the amount from the wallet balance.`
         : `Reject refund request ${request.id} for ${amount}? This will not change the wallet balance.`
@@ -494,7 +500,7 @@ export default function AdminPage() {
       return;
     }
 
-    const reason = isClaimOnly
+    const reason = isSumUpRefund
       ? null
       : window.prompt(
           action === "approve"
@@ -521,8 +527,8 @@ export default function AdminPage() {
       }
 
       alert(
-        isClaimOnly
-          ? "SumUp refund attempt claimed for testing. The customer has not been refunded."
+        isSumUpRefund
+          ? result?.message || "SumUp refund action completed."
           : action === "approve"
             ? "Refund marked as completed."
             : "Refund request rejected."
@@ -654,6 +660,34 @@ export default function AdminPage() {
 
     return sourceParts.length > 0 ? sourceParts.join(" • ") : "Source not linked";
   };
+
+  const getRefundRequestStatusMessage = (request: RefundRequest) => {
+    if (request.sumup_refund_attempt_status === "unknown") {
+      return "SumUp outcome is unknown. Reconcile manually before retrying.";
+    }
+
+    if (request.sumup_refund_attempt_status === "succeeded" && request.status === "processing") {
+      return "SumUp refund succeeded. Wallet completion is pending.";
+    }
+
+    if (request.sumup_refund_attempt_status === "processing") {
+      return "SumUp refund attempt is processing. No duplicate refund will be sent.";
+    }
+
+    if (request.sumup_refund_attempt_status === "failed") {
+      return "Previous SumUp refund attempt failed. The request can be retried or handled manually.";
+    }
+
+    return null;
+  };
+
+  const canRefundViaSumUp = (request: RefundRequest) =>
+    automaticSumUpRefundMockEnabled &&
+    (request.status === "pending" ||
+      (request.status === "processing" && request.sumup_refund_attempt_status === "succeeded"));
+
+  const canManuallyProcessRefund = (request: RefundRequest) =>
+    request.status === "pending";
 
   const summaryCards = [
     { label: "Total games", value: summary.games_count },
@@ -1048,26 +1082,29 @@ export default function AdminPage() {
                       </span>
                       {request.status === "processing" ? (
                         <p className="mt-2 text-xs font-semibold text-amber-100">
-                          Test claim created. The customer has not been refunded.
+                          {getRefundRequestStatusMessage(request)}
+                        </p>
+                      ) : null}
+                      {request.status === "pending" && getRefundRequestStatusMessage(request) ? (
+                        <p className="mt-2 text-xs font-semibold text-amber-100">
+                          {getRefundRequestStatusMessage(request)}
                         </p>
                       ) : null}
                     </div>
 
                     <div className="flex flex-col gap-2 md:items-end">
-                      {request.status === "processing" ? (
-                        <p className="max-w-44 text-right text-xs text-zinc-400">
-                          Processing claim only. No SumUp refund has been sent.
-                        </p>
-                      ) : (
+                      {canRefundViaSumUp(request) ? (
+                        <button
+                          type="button"
+                          onClick={() => void processRefundRequest(request, "refund_via_sumup")}
+                          disabled={processingRefundRequestId === request.id}
+                          className="w-full rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                        >
+                          {processingRefundRequestId === request.id ? "Processing..." : "Refund via SumUp"}
+                        </button>
+                      ) : null}
+                      {canManuallyProcessRefund(request) ? (
                         <>
-                          <button
-                            type="button"
-                            onClick={() => void processRefundRequest(request, "claim_sumup_refund")}
-                            disabled={processingRefundRequestId === request.id}
-                            className="w-full rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
-                          >
-                            {processingRefundRequestId === request.id ? "Processing..." : "Test Claim SumUp Refund"}
-                          </button>
                           <button
                             type="button"
                             onClick={() => void processRefundRequest(request, "approve")}
@@ -1085,7 +1122,12 @@ export default function AdminPage() {
                             Reject
                           </button>
                         </>
-                      )}
+                      ) : null}
+                      {!canRefundViaSumUp(request) && !canManuallyProcessRefund(request) ? (
+                        <p className="max-w-48 text-right text-xs text-zinc-400">
+                          {getRefundRequestStatusMessage(request) || "No automatic action is available."}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </div>

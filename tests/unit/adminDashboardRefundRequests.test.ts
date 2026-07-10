@@ -21,6 +21,7 @@ type TableName =
   | "profiles"
   | "booking_payments"
   | "wallet_transactions"
+  | "sumup_refund_attempts"
   | "waiting_list";
 
 type TableRow = Record<string, unknown>;
@@ -35,6 +36,7 @@ const state: Record<TableName, TableRow[]> = {
   profiles: [],
   booking_payments: [],
   wallet_transactions: [],
+  sumup_refund_attempts: [],
   waiting_list: [],
 };
 
@@ -85,6 +87,7 @@ class MockSupabaseQuery {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   getAuthenticatedAdminUserMock.mockResolvedValue({ id: "admin-1" });
   supabaseFromMock.mockImplementation((table: TableName) => new MockSupabaseQuery(table));
 
@@ -149,6 +152,7 @@ beforeEach(() => {
     },
   ];
   state.waiting_list = [];
+  state.sumup_refund_attempts = [];
 });
 
 describe("admin dashboard refund requests", () => {
@@ -190,5 +194,42 @@ describe("admin dashboard refund requests", () => {
         transaction_type: "wallet_booking_payment",
       }),
     ]);
+    expect(body.automaticSumUpRefundMockEnabled).toBe(false);
+  });
+
+  it("does not enable mocked automatic SumUp refunds without the complete TEST mock gate", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://gtrpegnxhawmkbhyqedh.supabase.co";
+    process.env.E2E_ALLOW_DB_MUTATION = "true";
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.automaticSumUpRefundMockEnabled).toBe(false);
+  });
+
+  it("enables mocked automatic SumUp refunds only with the complete TEST mock gate", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://gtrpegnxhawmkbhyqedh.supabase.co";
+    process.env.E2E_ALLOW_DB_MUTATION = "true";
+    process.env.E2E_MOCK_SUMUP_REFUNDS = "true";
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.automaticSumUpRefundMockEnabled).toBe(true);
   });
 });
