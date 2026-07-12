@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseFromMock = vi.hoisted(() => vi.fn());
+const supabaseRpcMock = vi.hoisted(() => vi.fn());
 const removeWaitingListEntryForBookedUserMock = vi.hoisted(() => vi.fn());
 const runPostBookingActionsMock = vi.hoisted(() => vi.fn());
 
@@ -8,6 +9,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({
   assertSupabaseAdminConfigured: vi.fn(),
   supabaseAdmin: {
     from: supabaseFromMock,
+    rpc: supabaseRpcMock,
   },
 }));
 
@@ -39,8 +41,19 @@ type PaymentRow = {
   sumup_transaction_id?: string | null;
 };
 
+type RpcResult = {
+  success: boolean;
+  payment_status: string | null;
+  booking_id: number | null;
+  reason: string | null;
+  already_finalized: boolean | null;
+};
+
 const updateCalls: Array<Record<string, unknown>> = [];
+const rpcCalls: Array<{ name: string; params: Record<string, unknown> }> = [];
 let paymentRow: PaymentRow | null = null;
+let rpcResult: RpcResult | null = null;
+let rpcError: Error | null = null;
 
 class MockBookingPaymentsQuery {
   private updatePayload: Record<string, unknown> | null = null;
@@ -95,6 +108,15 @@ class MockBookingPaymentsQuery {
   }
 }
 
+class MockRpcQuery {
+  async single<T>() {
+    return {
+      data: rpcResult as T | null,
+      error: rpcError,
+    };
+  }
+}
+
 function okJson(body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status: 200 });
 }
@@ -125,7 +147,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
   updateCalls.length = 0;
+  rpcCalls.length = 0;
   paymentRow = null;
+  rpcResult = {
+    success: true,
+    payment_status: "paid",
+    booking_id: 123,
+    reason: null,
+    already_finalized: false,
+  };
+  rpcError = null;
   process.env.SUMUP_API_KEY = "sumup-key";
   process.env.SUMUP_MERCHANT_CODE = "MERCHANT-1";
   global.fetch = vi.fn();
@@ -135,6 +166,10 @@ beforeEach(() => {
     }
 
     return new MockBookingPaymentsQuery();
+  });
+  supabaseRpcMock.mockImplementation((name: string, params: Record<string, unknown>) => {
+    rpcCalls.push({ name, params });
+    return new MockRpcQuery();
   });
 });
 
@@ -236,6 +271,13 @@ describe("SumUp payment helpers", () => {
 
   it("does not break paid checkout finalisation when transaction id lookup fails", async () => {
     paymentRow = defaultPayment();
+    rpcResult = {
+      success: true,
+      payment_status: "paid",
+      booking_id: 123,
+      reason: null,
+      already_finalized: true,
+    };
     vi.mocked(fetch)
       .mockResolvedValueOnce(
         okJson({
@@ -250,16 +292,259 @@ describe("SumUp payment helpers", () => {
     const result = await finalizeCheckoutPayment("checkout-1");
 
     expect(result).toEqual({ paymentStatus: "paid", bookingId: 123 });
-    expect(updateCalls).toHaveLength(1);
-    expect(updateCalls[0]).toMatchObject({
-      payment_status: "paid",
-      transaction_code: "TXN-1",
+    expect(updateCalls).toHaveLength(0);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({
+      name: "finalize_paid_sumup_checkout",
+      params: expect.objectContaining({
+        p_checkout_id: "checkout-1",
+        p_expected_user_id: "user-1",
+        p_expected_game_id: 10,
+        p_expected_player_name: "Player One",
+        p_transaction_code: "TXN-1",
+        p_sumup_transaction_id: null,
+      }),
     });
-    expect(updateCalls[0]).not.toHaveProperty("sumup_transaction_id");
     expect(removeWaitingListEntryForBookedUserMock).toHaveBeenCalledWith("user-1", 10);
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalled();
 
     warnSpy.mockRestore();
+  });
+
+  it("finalizes a verified paid checkout through the atomic database RPC", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    rpcResult = {
+      success: true,
+      payment_status: "paid",
+      booking_id: 456,
+      reason: null,
+      already_finalized: false,
+    };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        okJson({
+          id: "checkout-1",
+          status: "PAID",
+          transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        okJson({
+          id: "transaction-id-1",
+          transaction_code: "TXN-1",
+          amount: 10,
+          currency: "GBP",
+          status: "SUCCESSFUL",
+        })
+      );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({ paymentStatus: "paid", bookingId: 456 });
+    expect(updateCalls).toHaveLength(0);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({
+      name: "finalize_paid_sumup_checkout",
+      params: expect.objectContaining({
+        p_checkout_id: "checkout-1",
+        p_expected_user_id: "user-1",
+        p_expected_game_id: 10,
+        p_expected_player_name: "Player One",
+        p_transaction_code: "TXN-1",
+        p_sumup_transaction_id: "transaction-id-1",
+      }),
+    });
+    expect(runPostBookingActionsMock).toHaveBeenCalledWith({
+      bookingId: 456,
+      userId: "user-1",
+      gameId: 10,
+      playerName: "Player One",
+      bookingConfirmation: {
+        paymentId: 44,
+        amount: 10,
+        currency: "GBP",
+        checkoutId: "checkout-1",
+        checkoutReference: "reference-1",
+      },
+    });
+  });
+
+  it("is idempotent when the atomic RPC reports an already finalized paid booking", async () => {
+    paymentRow = defaultPayment({ payment_status: "paid", booking_id: 123 });
+    rpcResult = {
+      success: true,
+      payment_status: "paid",
+      booking_id: 123,
+      reason: null,
+      already_finalized: true,
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({ paymentStatus: "paid", bookingId: 123 });
+    expect(rpcCalls).toHaveLength(1);
+    expect(removeWaitingListEntryForBookedUserMock).toHaveBeenCalledWith("user-1", 10);
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+  });
+
+  it("returns one booking when duplicate finalisation requests run through the atomic RPC", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    rpcResult = {
+      success: true,
+      payment_status: "paid",
+      booking_id: 789,
+      reason: null,
+      already_finalized: false,
+    };
+    vi.mocked(fetch).mockImplementation(async () =>
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    const [firstResult, secondResult] = await Promise.all([
+      finalizeCheckoutPayment("checkout-1"),
+      finalizeCheckoutPayment("checkout-1"),
+    ]);
+
+    expect(firstResult).toEqual({ paymentStatus: "paid", bookingId: 789 });
+    expect(secondResult).toEqual({ paymentStatus: "paid", bookingId: 789 });
+    expect(rpcCalls).toHaveLength(2);
+    expect(new Set(rpcCalls.map((call) => call.params.p_checkout_id))).toEqual(new Set(["checkout-1"]));
+  });
+
+  it("returns paid_no_space with no booking when the atomic RPC reports a full game", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    rpcResult = {
+      success: true,
+      payment_status: "paid_no_space",
+      booking_id: null,
+      reason: "game_full",
+      already_finalized: false,
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({
+      paymentStatus: "paid_no_space",
+      bookingId: null,
+      reason: "game_full",
+      message: "This spot has already been taken. You are still on the waiting list.",
+    });
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+  });
+
+  it("returns paid_no_space with a cancelled-game reason when the atomic RPC reports a cancelled game", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    rpcResult = {
+      success: true,
+      payment_status: "paid_no_space",
+      booking_id: null,
+      reason: "game_cancelled",
+      already_finalized: false,
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({
+      paymentStatus: "paid_no_space",
+      bookingId: null,
+      reason: "game_cancelled",
+      message: "This spot has already been taken. You are still on the waiting list.",
+    });
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+  });
+
+  it("links an existing matching booking returned by the atomic RPC", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    rpcResult = {
+      success: true,
+      payment_status: "paid",
+      booking_id: 321,
+      reason: null,
+      already_finalized: false,
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({ paymentStatus: "paid", bookingId: 321 });
+    expect(runPostBookingActionsMock).toHaveBeenCalledWith(expect.objectContaining({
+      bookingId: 321,
+      userId: "user-1",
+      gameId: 10,
+    }));
+  });
+
+  it("returns a reconciliation error when the local payment row is missing", async () => {
+    paymentRow = null;
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    await expect(finalizeCheckoutPayment("checkout-1")).rejects.toThrow("Payment record not found.");
+
+    expect(rpcCalls).toHaveLength(0);
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it("leaves database finalisation to the RPC if post-RPC side effects fail", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    rpcResult = {
+      success: true,
+      payment_status: "paid",
+      booking_id: 654,
+      reason: null,
+      already_finalized: false,
+    };
+    runPostBookingActionsMock.mockRejectedValueOnce(new Error("email service unavailable"));
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    await expect(finalizeCheckoutPayment("checkout-1")).rejects.toThrow("email service unavailable");
+
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].name).toBe("finalize_paid_sumup_checkout");
+    expect(updateCalls).toHaveLength(0);
   });
 
   it("refunds a SumUp transaction with the exact positive amount payload", async () => {

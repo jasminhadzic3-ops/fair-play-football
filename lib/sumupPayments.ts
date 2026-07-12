@@ -55,10 +55,12 @@ const sumupApiBase = "https://api.sumup.com/v0.1";
 const sumupApiRoot = "https://api.sumup.com";
 const noSpacePaymentMessage = "This spot has already been taken. You are still on the waiting list.";
 
-type CreateBookingIfSpaceResult = {
+type FinalizePaidCheckoutResult = {
   success: boolean;
+  payment_status: string | null;
   booking_id: number | null;
   reason: string | null;
+  already_finalized: boolean | null;
 };
 
 type BookingPaymentForSumUpResolution = {
@@ -226,24 +228,33 @@ function validateResolvedTransactionForPayment(
   }
 }
 
-function withOptionalSumUpTransactionId<T extends Record<string, unknown>>(
-  payload: T,
-  sumupTransactionId: string | null
-) {
-  return sumupTransactionId ? { ...payload, sumup_transaction_id: sumupTransactionId } : payload;
-}
-
 async function resolveSumUpTransactionIdForFinalizedPayment(
   payment: BookingPaymentForSumUpResolution,
   transactionCode: string | undefined
 ) {
   try {
-    const transaction = await resolveAndStoreSumUpTransactionIdForPayment({
-      ...payment,
-      transaction_code: transactionCode || payment.transaction_code,
-    });
+    if (payment.sumup_transaction_id?.trim()) {
+      return payment.sumup_transaction_id;
+    }
 
-    return transaction?.id ?? payment.sumup_transaction_id ?? null;
+    const transactionCodeForLookup = transactionCode || payment.transaction_code?.trim();
+
+    if (!transactionCodeForLookup) {
+      return null;
+    }
+
+    const transaction = await retrieveSumUpTransactionByCode(transactionCodeForLookup);
+
+    validateResolvedTransactionForPayment(
+      {
+        ...payment,
+        payment_status: "paid",
+        transaction_code: transactionCodeForLookup,
+      },
+      transaction
+    );
+
+    return transaction.id;
   } catch (error) {
     console.warn(
       "Unable to resolve SumUp transaction id for booking payment:",
@@ -524,146 +535,58 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
 
   const sumupTransactionId = await resolveSumUpTransactionIdForFinalizedPayment(payment, transactionCode);
 
-  if (payment.booking_id) {
-    const { error: updateError } = await supabaseAdmin
-      .from("booking_payments")
-      .update(
-        withOptionalSumUpTransactionId(
-          {
-            payment_status: "paid",
-            raw_checkout: checkout,
-            transaction_code: transactionCode,
-            updated_at: new Date().toISOString(),
-          },
-          sumupTransactionId
-        )
-      )
-      .eq("id", payment.id);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    await removeWaitingListEntryForBookedUser(payment.user_id, payment.game_id);
-
-    return { paymentStatus: "paid", bookingId: payment.booking_id };
-  }
-
-  const { data: bookingResult, error: bookingRpcError } = await supabaseAdmin
-    .rpc("create_booking_if_space", {
-      p_game_id: payment.game_id,
-      p_user_id: payment.user_id,
-      p_player_name: payment.player_name,
+  const { data: finalizationResult, error: finalizationError } = await supabaseAdmin
+    .rpc("finalize_paid_sumup_checkout", {
+      p_checkout_id: payment.checkout_id,
+      p_expected_user_id: payment.user_id,
+      p_expected_game_id: payment.game_id,
+      p_expected_player_name: payment.player_name,
+      p_raw_checkout: checkout,
+      p_transaction_code: transactionCode ?? null,
+      p_sumup_transaction_id: sumupTransactionId,
     })
-    .single<CreateBookingIfSpaceResult>();
+    .single<FinalizePaidCheckoutResult>();
 
-  if (bookingRpcError) {
-    throw bookingRpcError;
+  if (finalizationError) {
+    throw finalizationError;
   }
 
-  if (!bookingResult?.success) {
-    if (bookingResult?.reason === "game_full") {
-      const { data: updatedPayment, error: noSpaceUpdateError } = await supabaseAdmin
-        .from("booking_payments")
-        .update(
-          withOptionalSumUpTransactionId(
-            {
-              booking_id: null,
-              payment_status: "paid_no_space",
-              raw_checkout: checkout,
-              transaction_code: transactionCode,
-              updated_at: new Date().toISOString(),
-            },
-            sumupTransactionId
-          )
-        )
-        .eq("id", payment.id)
-        .select("booking_id,payment_status")
-        .single();
-
-      if (noSpaceUpdateError) {
-        throw noSpaceUpdateError;
-      }
-
-      if (updatedPayment?.payment_status !== "paid_no_space" || updatedPayment?.booking_id) {
-        throw new Error("Unable to record paid checkout without available game space.");
-      }
-
-      return {
-        paymentStatus: "paid_no_space",
-        bookingId: null,
-        reason: "game_full",
-        message: noSpacePaymentMessage,
-      };
-    }
-
-    throw new Error(`Unable to create booking after paid checkout: ${bookingResult?.reason || "unknown_reason"}.`);
+  if (!finalizationResult?.success) {
+    throw new Error(`Unable to finalize paid checkout: ${finalizationResult?.reason || "unknown_reason"}.`);
   }
 
-  const bookingId = bookingResult.booking_id;
-
-  if (!bookingId) {
-    throw new Error("Unable to create or find booking after paid checkout.");
+  if (finalizationResult.payment_status === "paid_no_space") {
+    return {
+      paymentStatus: "paid_no_space",
+      bookingId: null,
+      reason: finalizationResult.reason || "game_full",
+      message: noSpacePaymentMessage,
+    };
   }
 
-  const { data: updatedPayment, error: paymentUpdateError } = await supabaseAdmin
-    .from("booking_payments")
-    .update(
-      withOptionalSumUpTransactionId(
-        {
-          booking_id: bookingId,
-          payment_status: "paid",
-          raw_checkout: checkout,
-          transaction_code: transactionCode,
-          updated_at: new Date().toISOString(),
-        },
-        sumupTransactionId
-      )
-    )
-    .eq("id", payment.id)
-    .is("booking_id", null)
-    .select("booking_id,payment_status")
-    .maybeSingle();
+  const bookingId = finalizationResult.booking_id;
 
-  if (paymentUpdateError) {
-    throw paymentUpdateError;
+  if (finalizationResult.payment_status !== "paid" || !bookingId) {
+    throw new Error("Unable to finalize paid checkout with a booking.");
   }
 
-  if (!updatedPayment) {
-    const { data: finalizedPayment, error: finalizedPaymentError } = await supabaseAdmin
-      .from("booking_payments")
-      .select("booking_id,payment_status")
-      .eq("id", payment.id)
-      .single();
-
-    if (finalizedPaymentError) {
-      throw finalizedPaymentError;
-    }
-
-    if (finalizedPayment?.payment_status === "paid" && finalizedPayment.booking_id) {
-      return { paymentStatus: "paid", bookingId: finalizedPayment.booking_id };
-    }
-
-    throw new Error("Unable to claim paid payment record for finalized booking.");
+  if (finalizationResult.already_finalized) {
+    await removeWaitingListEntryForBookedUser(payment.user_id, payment.game_id);
+  } else {
+    await runPostBookingActions({
+      bookingId,
+      userId: payment.user_id,
+      gameId: payment.game_id,
+      playerName: payment.player_name,
+      bookingConfirmation: {
+        paymentId: payment.id,
+        amount: payment.amount,
+        currency: payment.currency,
+        checkoutId: payment.checkout_id,
+        checkoutReference: payment.checkout_reference,
+      },
+    });
   }
-
-  if (updatedPayment?.booking_id !== bookingId) {
-    throw new Error("Unable to write booking_id to paid payment record.");
-  }
-
-  await runPostBookingActions({
-    bookingId,
-    userId: payment.user_id,
-    gameId: payment.game_id,
-    playerName: payment.player_name,
-    bookingConfirmation: {
-      paymentId: payment.id,
-      amount: payment.amount,
-      currency: payment.currency,
-      checkoutId: payment.checkout_id,
-      checkoutReference: payment.checkout_reference,
-    },
-  });
 
   return { paymentStatus: "paid", bookingId };
 }
