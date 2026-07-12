@@ -93,6 +93,7 @@ type CompleteWalletRefundRequestParams = {
   description?: string | null;
   adminNote?: string | null;
   metadata?: Record<string, unknown>;
+  completionSource?: "manual" | "automatic_sumup";
 };
 
 type ClaimSumUpRefundAttemptParams = {
@@ -547,6 +548,7 @@ export async function completeWalletRefundRequest({
   description,
   adminNote,
   metadata,
+  completionSource,
 }: CompleteWalletRefundRequestParams): Promise<CompleteWalletRefundRequestResult> {
   assertSupabaseAdminConfigured();
   assertUserId(adminUserId);
@@ -555,14 +557,20 @@ export async function completeWalletRefundRequest({
     throw new Error("Refund request id is required.");
   }
 
-  const { data, error } = await supabaseAdmin.rpc("complete_wallet_refund_request", {
+  const rpcParams: Record<string, unknown> = {
     p_refund_request_id: refundRequestId,
     p_admin_user_id: adminUserId,
     p_idempotency_key: normalizeIdempotencyKey(idempotencyKey),
     p_description: description ?? "Refund completed",
     p_admin_note: adminNote ?? null,
     p_metadata: metadata ?? {},
-  });
+  };
+
+  if (completionSource) {
+    rpcParams.p_completion_source = completionSource;
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("complete_wallet_refund_request", rpcParams);
 
   if (error) {
     throw error;

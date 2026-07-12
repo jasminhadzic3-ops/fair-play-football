@@ -186,6 +186,7 @@ async function completeSucceededAttempt(
     idempotencyKey: `refund_completed:sumup_attempt:${claimResult.attemptId}`,
     description: "SumUp refund completed",
     adminNote: "Completed via SumUp",
+    completionSource: "automatic_sumup",
     metadata: {
       refund_request_id: claimResult.refundRequestId,
       processed_by: adminUserId,

@@ -39,6 +39,7 @@ vi.mock("@/lib/sumupPayments", () => ({
 }));
 
 import { PATCH } from "@/app/api/admin/refund-requests/[id]/route";
+import { SumUpRefundHttpError } from "@/lib/sumupPayments";
 
 type RefundRequestRow = {
   id: number;
@@ -420,6 +421,74 @@ describe("admin refund request route", () => {
       refundDependency: expect.any(Function),
     });
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("classifies real SumUp HTTP rejection as failed through the production dependency", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    refundSumUpTransactionMock.mockRejectedValueOnce(
+      new SumUpRefundHttpError("Refund amount is too high.", 422, {
+        detail: "Refund amount is too high.",
+      })
+    );
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+
+    expect(response.status).toBe(200);
+    const dependency = processAutomaticSumUpRefundMock.mock.calls[0]?.[0]
+      .refundDependency;
+    const result = await dependency({
+      transactionId: "transaction-id-1",
+      amount: 99,
+    });
+
+    expect(result).toEqual({
+      outcome: "failed",
+      errorMessage: "Refund amount is too high.",
+      response: {
+        detail: "Refund amount is too high.",
+      },
+    });
+  });
+
+  it("classifies real SumUp transport errors as unknown through the production dependency", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    refundSumUpTransactionMock.mockRejectedValueOnce(new Error("fetch failed"));
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+
+    expect(response.status).toBe(200);
+    const dependency = processAutomaticSumUpRefundMock.mock.calls[0]?.[0]
+      .refundDependency;
+    const result = await dependency({
+      transactionId: "transaction-id-1",
+      amount: 99,
+    });
+
+    expect(result).toEqual({
+      outcome: "unknown",
+      errorMessage: "fetch failed",
+      response: null,
+    });
   });
 
   it("does not double debit a duplicate approval after the request is completed", async () => {

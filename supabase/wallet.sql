@@ -890,13 +890,23 @@ grant execute on function public.create_wallet_refund_request(
   text
 ) to service_role;
 
+drop function if exists public.complete_wallet_refund_request(
+  bigint,
+  uuid,
+  text,
+  text,
+  text,
+  jsonb
+);
+
 create or replace function public.complete_wallet_refund_request(
   p_refund_request_id bigint,
   p_admin_user_id uuid,
   p_idempotency_key text default null,
   p_description text default 'Refund completed',
   p_admin_note text default null,
-  p_metadata jsonb default '{}'::jsonb
+  p_metadata jsonb default '{}'::jsonb,
+  p_completion_source text default 'manual'
 )
 returns table (
   success boolean,
@@ -920,6 +930,7 @@ declare
   v_existing_transaction public.wallet_transactions%rowtype;
   v_idempotency_key text;
   v_metadata jsonb;
+  v_completion_source text;
   v_refund_request public.wallet_transactions%rowtype;
   v_reserved_excluding_request numeric(10, 2);
   v_reserved_refund_amount numeric(10, 2);
@@ -932,6 +943,13 @@ begin
 
   if p_admin_user_id is null then
     return query select false, p_refund_request_id, null::bigint, 'invalid_admin_user'::text, 0::numeric(10, 2), 0::numeric(10, 2), 0::numeric(10, 2);
+    return;
+  end if;
+
+  v_completion_source := coalesce(nullif(trim(p_completion_source), ''), 'manual');
+
+  if v_completion_source not in ('manual', 'automatic_sumup') then
+    return query select false, p_refund_request_id, null::bigint, 'invalid_completion_source'::text, 0::numeric(10, 2), 0::numeric(10, 2), 0::numeric(10, 2);
     return;
   end if;
 
@@ -1042,7 +1060,8 @@ begin
         jsonb_build_object(
           'refund_request_id', v_refund_request.id,
           'processed_by', p_admin_user_id,
-          'manual', true
+          'manual', v_completion_source = 'manual',
+          'completion_source', v_completion_source
         )
     )
     returning id into v_transaction_id;
@@ -1053,6 +1072,7 @@ begin
     jsonb_build_object(
       'refund_completed_transaction_id', v_transaction_id,
       'processed_by', p_admin_user_id,
+      'completion_source', v_completion_source,
       'processed_at', now()
     );
 
@@ -1077,7 +1097,8 @@ revoke all on function public.complete_wallet_refund_request(
   text,
   text,
   text,
-  jsonb
+  jsonb,
+  text
 ) from public;
 revoke all on function public.complete_wallet_refund_request(
   bigint,
@@ -1085,7 +1106,8 @@ revoke all on function public.complete_wallet_refund_request(
   text,
   text,
   text,
-  jsonb
+  jsonb,
+  text
 ) from anon;
 revoke all on function public.complete_wallet_refund_request(
   bigint,
@@ -1093,7 +1115,8 @@ revoke all on function public.complete_wallet_refund_request(
   text,
   text,
   text,
-  jsonb
+  jsonb,
+  text
 ) from authenticated;
 grant execute on function public.complete_wallet_refund_request(
   bigint,
@@ -1101,7 +1124,8 @@ grant execute on function public.complete_wallet_refund_request(
   text,
   text,
   text,
-  jsonb
+  jsonb,
+  text
 ) to service_role;
 
 create or replace function public.create_wallet_credit_once(

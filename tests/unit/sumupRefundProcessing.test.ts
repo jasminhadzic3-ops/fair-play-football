@@ -186,6 +186,14 @@ describe("processAutomaticSumUpRefund", () => {
       })
     );
     expect(deps.completeRefundRequest).toHaveBeenCalledTimes(1);
+    expect(deps.completeRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        completionSource: "automatic_sumup",
+        metadata: expect.not.objectContaining({
+          manual: true,
+        }),
+      })
+    );
   });
 
   it("resolves and persists a missing SumUp transaction id before refunding", async () => {

@@ -21,6 +21,7 @@ import {
   refundSumUpTransaction,
   resolveAndStoreSumUpTransactionIdForPayment,
   retrieveSumUpTransactionByCode,
+  SumUpRefundHttpError,
 } from "@/lib/sumupPayments";
 
 type PaymentRow = {
@@ -370,9 +371,48 @@ describe("SumUp payment helpers", () => {
   it("surfaces non-OK SumUp refund responses", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(errorJson({ detail: "Refund amount is too high." }, 422));
 
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 })).rejects.toThrow(
-      "Refund amount is too high."
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 })).rejects.toMatchObject({
+      name: "SumUpRefundHttpError",
+      message: "Refund amount is too high.",
+      status: 422,
+      responseBody: expect.objectContaining({
+        detail: "Refund amount is too high.",
+        http_status: 422,
+      }),
+    });
+  });
+
+  it("treats non-JSON SumUp refund rejections as definite HTTP failures", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response("<html>service unavailable</html>", {
+        status: 503,
+        headers: {
+          "Content-Type": "text/html",
+        },
+      })
     );
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 })).rejects.toMatchObject({
+      name: "SumUpRefundHttpError",
+      message: "SumUp returned a non-JSON error response.",
+      status: 503,
+      responseBody: expect.objectContaining({
+        body_excerpt: "<html>service unavailable</html>",
+        http_status: 503,
+      }),
+    });
+  });
+
+  it("keeps transport failures as non-HTTP errors for unknown outcome handling", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("fetch failed"));
+
+    try {
+      await refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 });
+      throw new Error("Expected refundSumUpTransaction to throw.");
+    } catch (error) {
+      expect(error).not.toBeInstanceOf(SumUpRefundHttpError);
+      expect(error).toEqual(new Error("fetch failed"));
+    }
   });
 
   it("handles an empty successful SumUp refund response", async () => {

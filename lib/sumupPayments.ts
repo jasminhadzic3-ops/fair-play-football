@@ -84,6 +84,72 @@ async function readJsonResponse(response: Response) {
   }
 }
 
+function boundedString(value: unknown, maxLength = 500) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+
+  return trimmedValue ? trimmedValue.slice(0, maxLength) : null;
+}
+
+function safeErrorResponseBody(response: Response, bodyText: string, parsedBody: unknown) {
+  if (parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)) {
+    const body = parsedBody as Record<string, unknown>;
+
+    return {
+      message: boundedString(body.message),
+      error_message: boundedString(body.error_message),
+      detail: boundedString(body.detail),
+      title: boundedString(body.title),
+      error_code: boundedString(body.error_code, 100),
+      status: boundedString(body.status, 100),
+      amount: Number.isFinite(Number(body.amount)) ? Number(body.amount) : null,
+      currency: boundedString(body.currency, 20),
+      transaction_id: boundedString(body.transaction_id),
+      http_status: response.status,
+    };
+  }
+
+  return {
+    message: bodyText.trim()
+      ? "SumUp returned a non-JSON error response."
+      : "SumUp returned an empty error response.",
+    body_excerpt: boundedString(bodyText, 500),
+    http_status: response.status,
+  };
+}
+
+async function readSumUpRefundResponse(response: Response) {
+  const text = await response.text();
+
+  if (!text) {
+    return {
+      parsedBody: null,
+      safeErrorBody: response.ok ? null : safeErrorResponseBody(response, text, null),
+    };
+  }
+
+  try {
+    const parsedBody = JSON.parse(text);
+
+    return {
+      parsedBody,
+      safeErrorBody: response.ok ? null : safeErrorResponseBody(response, text, parsedBody),
+    };
+  } catch {
+    if (!response.ok) {
+      return {
+        parsedBody: null,
+        safeErrorBody: safeErrorResponseBody(response, text, null),
+      };
+    }
+
+    throw new Error(text.slice(0, 500));
+  }
+}
+
 function getSumUpApiKey() {
   const apiKey = process.env.SUMUP_API_KEY;
 
@@ -308,13 +374,13 @@ export async function refundSumUpTransaction(params: {
     throw new Error(error instanceof Error ? error.message : "Unable to reach SumUp refund endpoint.");
   }
 
-  const refundResponse = await readJsonResponse(response);
+  const { parsedBody: refundResponse, safeErrorBody } = await readSumUpRefundResponse(response);
 
   if (!response.ok) {
     throw new SumUpRefundHttpError(
-      getSumUpErrorMessage(refundResponse, "Unable to refund SumUp transaction."),
+      getSumUpErrorMessage(safeErrorBody, "Unable to refund SumUp transaction."),
       response.status,
-      refundResponse
+      safeErrorBody
     );
   }
 
