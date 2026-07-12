@@ -100,7 +100,9 @@ interface AdminDashboardData {
   wallet_transactions?: WalletTransaction[];
   refund_requests?: RefundRequest[];
   waiting_list: WaitingListEntry[];
+  automaticSumUpRefundEnabled?: boolean;
   automaticSumUpRefundMockEnabled?: boolean;
+  automaticSumUpRefundMode?: "disabled" | "test_mock" | "production_real";
   summary: AdminSummary;
 }
 
@@ -122,7 +124,7 @@ export default function AdminPage() {
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
-  const [automaticSumUpRefundMockEnabled, setAutomaticSumUpRefundMockEnabled] = useState(false);
+  const [automaticSumUpRefundEnabled, setAutomaticSumUpRefundEnabled] = useState(false);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [time, setTime] = useState("");
@@ -175,7 +177,7 @@ export default function AdminPage() {
         setWalletTransactions(result.wallet_transactions ?? []);
         setRefundRequests(result.refund_requests ?? []);
         setWaitingList(result.waiting_list ?? []);
-        setAutomaticSumUpRefundMockEnabled(result.automaticSumUpRefundMockEnabled === true);
+        setAutomaticSumUpRefundEnabled(result.automaticSumUpRefundEnabled === true);
         setSummary(result.summary);
       }
     } catch (error) {
@@ -682,7 +684,7 @@ export default function AdminPage() {
   };
 
   const canRefundViaSumUp = (request: RefundRequest) =>
-    automaticSumUpRefundMockEnabled &&
+    automaticSumUpRefundEnabled &&
     (request.status === "pending" ||
       (request.status === "processing" && request.sumup_refund_attempt_status === "succeeded"));
 

@@ -25,6 +25,16 @@ vi.mock("@/lib/wallet", () => ({
 }));
 
 vi.mock("@/lib/sumupPayments", () => ({
+  SumUpRefundHttpError: class SumUpRefundHttpError extends Error {
+    status: number;
+    responseBody: unknown;
+
+    constructor(message: string, status: number, responseBody: unknown) {
+      super(message);
+      this.status = status;
+      this.responseBody = responseBody;
+    }
+  },
   refundSumUpTransaction: refundSumUpTransactionMock,
 }));
 
@@ -328,6 +338,87 @@ describe("admin refund request route", () => {
     });
     expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
     expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects real mode on the TEST Supabase project", async () => {
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+
+    expect(response.status).toBe(403);
+    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects real mode when TEST mock flags exist", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    process.env.E2E_MOCK_SUMUP_REFUNDS = "true";
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+
+    expect(response.status).toBe(403);
+    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects real mode without the explicit real refund enable flag", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+    delete process.env.SUMUP_REAL_REFUNDS_ENABLED;
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+
+    expect(response.status).toBe(403);
+    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("selects the real refund dependency only behind the production real gate", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+
+    expect(response.status).toBe(200);
+    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
+      refundRequestId: 501,
+      adminUserId: "admin-1",
+      refundDependency: expect.any(Function),
+    });
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
   });
 

@@ -115,6 +115,12 @@ type RestoreRefundRequestToPendingParams = {
   attemptId: number;
 };
 
+type PersistSumUpTransactionIdForProcessingAttemptParams = {
+  attemptId: number;
+  refundRequestId: number;
+  sumUpTransactionId: string;
+};
+
 type CreateWalletRefundRequestParams = {
   userId: string;
   sourceWalletTransactionId: number;
@@ -711,6 +717,46 @@ export async function restoreRefundRequestToPendingAfterFailedSumUpAttempt({
   }
 
   return data;
+}
+
+export async function persistSumUpTransactionIdForProcessingAttempt({
+  attemptId,
+  refundRequestId,
+  sumUpTransactionId,
+}: PersistSumUpTransactionIdForProcessingAttemptParams): Promise<SumUpRefundAttempt | null> {
+  assertSupabaseAdminConfigured();
+
+  if (!Number.isInteger(attemptId) || attemptId <= 0) {
+    throw new Error("SumUp refund attempt id is required.");
+  }
+
+  if (!Number.isInteger(refundRequestId) || refundRequestId <= 0) {
+    throw new Error("Refund request id is required.");
+  }
+
+  const normalizedTransactionId = normalizeIdempotencyKey(sumUpTransactionId);
+
+  if (!normalizedTransactionId) {
+    throw new Error("SumUp transaction id is required.");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("sumup_refund_attempts")
+    .update({
+      sumup_transaction_id: normalizedTransactionId,
+    })
+    .eq("id", attemptId)
+    .eq("refund_request_id", refundRequestId)
+    .eq("status", "processing")
+    .is("sumup_transaction_id", null)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as SumUpRefundAttempt | null;
 }
 
 export async function bookGameWithWallet({

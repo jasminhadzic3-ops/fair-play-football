@@ -39,6 +39,18 @@ export type SumUpRefundResult = {
   response: SumUpRefundResponse | null;
 };
 
+export class SumUpRefundHttpError extends Error {
+  readonly status: number;
+  readonly responseBody: unknown;
+
+  constructor(message: string, status: number, responseBody: unknown) {
+    super(message);
+    this.name = "SumUpRefundHttpError";
+    this.status = status;
+    this.responseBody = responseBody;
+  }
+}
+
 const sumupApiBase = "https://api.sumup.com/v0.1";
 const sumupApiRoot = "https://api.sumup.com";
 const noSpacePaymentMessage = "This spot has already been taken. You are still on the waiting list.";
@@ -278,22 +290,32 @@ export async function refundSumUpTransaction(params: {
   const merchantCode = getSumUpMerchantCode();
   const url = `${sumupApiRoot}/v1.0/merchants/${encodeURIComponent(merchantCode)}/payments/${encodeURIComponent(transactionId)}/refunds`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/problem+json, application/json",
-      Authorization: `Bearer ${getSumUpApiKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      amount: refundAmount,
-    }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/problem+json, application/json",
+        Authorization: `Bearer ${getSumUpApiKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: refundAmount,
+      }),
+    });
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "Unable to reach SumUp refund endpoint.");
+  }
 
   const refundResponse = await readJsonResponse(response);
 
   if (!response.ok) {
-    throw new Error(getSumUpErrorMessage(refundResponse, "Unable to refund SumUp transaction."));
+    throw new SumUpRefundHttpError(
+      getSumUpErrorMessage(refundResponse, "Unable to refund SumUp transaction."),
+      response.status,
+      refundResponse
+    );
   }
 
   return {
@@ -301,6 +323,30 @@ export async function refundSumUpTransaction(params: {
     amount: refundAmount,
     response: refundResponse as SumUpRefundResponse | null,
   } satisfies SumUpRefundResult;
+}
+
+export async function resolveAndStoreSumUpTransactionIdForPaymentId(bookingPaymentId: number) {
+  if (!Number.isInteger(bookingPaymentId) || bookingPaymentId <= 0) {
+    throw new Error("Booking payment id is required.");
+  }
+
+  const { data: payment, error } = await supabaseAdmin
+    .from("booking_payments")
+    .select("id,amount,currency,payment_status,transaction_code,sumup_transaction_id")
+    .eq("id", bookingPaymentId)
+    .maybeSingle<BookingPaymentForSumUpResolution>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!payment) {
+    throw new Error("Booking payment was not found.");
+  }
+
+  const transaction = await resolveAndStoreSumUpTransactionIdForPayment(payment);
+
+  return transaction?.id ?? payment.sumup_transaction_id?.trim() ?? null;
 }
 
 export async function resolveAndStoreSumUpTransactionIdForPayment(

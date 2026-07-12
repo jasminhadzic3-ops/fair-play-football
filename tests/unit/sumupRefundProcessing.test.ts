@@ -47,6 +47,12 @@ function setup(overrides: {
     ...defaultCompletion,
     ...overrides.completion,
   });
+  const resolveTransactionId = vi.fn().mockResolvedValue("sumup-txn-1");
+  const persistTransactionIdForAttempt = vi.fn().mockResolvedValue({
+    id: 900,
+    status: "processing",
+    sumup_transaction_id: "sumup-txn-1",
+  });
   const updateAttemptStatus = vi.fn().mockResolvedValue({ id: 900, status: "succeeded" });
   const restoreRefundRequestToPending = vi.fn().mockResolvedValue({ id: 501, status: "pending" });
 
@@ -54,6 +60,8 @@ function setup(overrides: {
     claimAttempt,
     refundDependency,
     completeRefundRequest,
+    resolveTransactionId,
+    persistTransactionIdForAttempt,
     updateAttemptStatus,
     restoreRefundRequestToPending,
   };
@@ -66,6 +74,8 @@ async function runWith(deps: ReturnType<typeof setup>) {
     refundDependency: deps.refundDependency,
     claimAttempt: deps.claimAttempt as never,
     completeRefundRequest: deps.completeRefundRequest as never,
+    resolveTransactionId: deps.resolveTransactionId as never,
+    persistTransactionIdForAttempt: deps.persistTransactionIdForAttempt as never,
     updateAttemptStatus: deps.updateAttemptStatus as never,
     restoreRefundRequestToPending: deps.restoreRefundRequestToPending as never,
   });
@@ -176,6 +186,70 @@ describe("processAutomaticSumUpRefund", () => {
       })
     );
     expect(deps.completeRefundRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves and persists a missing SumUp transaction id before refunding", async () => {
+    const deps = setup({
+      claim: {
+        sumUpTransactionId: null,
+      },
+    });
+    deps.resolveTransactionId.mockResolvedValue("resolved-txn-1");
+
+    const result = await runWith(deps);
+
+    expect(result).toMatchObject({
+      outcome: "completed",
+      skippedSumUpRefundCall: false,
+    });
+    expect(deps.resolveTransactionId).toHaveBeenCalledWith(300);
+    expect(deps.persistTransactionIdForAttempt).toHaveBeenCalledWith({
+      attemptId: 900,
+      refundRequestId: 501,
+      sumUpTransactionId: "resolved-txn-1",
+    });
+    expect(deps.refundDependency).toHaveBeenCalledWith({
+      transactionId: "resolved-txn-1",
+      amount: 12,
+    });
+  });
+
+  it("blocks without a refund call when transaction lookup fails", async () => {
+    const deps = setup({
+      claim: {
+        sumUpTransactionId: null,
+      },
+    });
+    deps.resolveTransactionId.mockRejectedValue(new Error("lookup failed"));
+
+    const result = await runWith(deps);
+
+    expect(result).toMatchObject({
+      outcome: "blocked",
+      status: 409,
+      error: "lookup failed",
+    });
+    expect(deps.persistTransactionIdForAttempt).not.toHaveBeenCalled();
+    expect(deps.refundDependency).not.toHaveBeenCalled();
+    expect(deps.completeRefundRequest).not.toHaveBeenCalled();
+  });
+
+  it("blocks without a refund call when transaction id persistence loses the processing race", async () => {
+    const deps = setup({
+      claim: {
+        sumUpTransactionId: null,
+      },
+    });
+    deps.persistTransactionIdForAttempt.mockResolvedValue(null);
+
+    const result = await runWith(deps);
+
+    expect(result).toMatchObject({
+      outcome: "blocked",
+      status: 409,
+    });
+    expect(deps.refundDependency).not.toHaveBeenCalled();
+    expect(deps.completeRefundRequest).not.toHaveBeenCalled();
   });
 
   it("does not create a wallet debit for an explicit mocked failure", async () => {

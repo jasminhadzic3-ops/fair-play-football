@@ -4,6 +4,8 @@ import {
   processAutomaticSumUpRefund,
   type SumUpRefundDependency,
 } from "@/lib/sumupRefundProcessing";
+import { getAutomaticSumUpRefundMode } from "@/lib/sumupRefundCapabilities";
+import { refundSumUpTransaction, SumUpRefundHttpError } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { completeWalletRefundRequest } from "@/lib/wallet";
 
@@ -97,16 +99,7 @@ async function loadPendingRefundRequest(refundRequestId: number) {
   return refundRequest;
 }
 
-function getTestOnlyMockRefundDependency(): SumUpRefundDependency | null {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const isTestProject = supabaseUrl.includes("gtrpegnxhawmkbhyqedh.supabase.co");
-  const isMutationE2E = process.env.E2E_ALLOW_DB_MUTATION === "true";
-  const isMockEnabled = process.env.E2E_MOCK_SUMUP_REFUNDS === "true";
-
-  if (!isTestProject || !isMutationE2E || !isMockEnabled) {
-    return null;
-  }
-
+function getTestOnlyMockRefundDependency(): SumUpRefundDependency {
   return async ({ transactionId, amount }) => {
     const outcome = process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME || "succeeded";
 
@@ -146,6 +139,53 @@ function getTestOnlyMockRefundDependency(): SumUpRefundDependency | null {
   };
 }
 
+function getRealSumUpRefundDependency(): SumUpRefundDependency {
+  return async ({ transactionId, amount }) => {
+    try {
+      const result = await refundSumUpTransaction({ transactionId, amount });
+
+      return {
+        outcome: "succeeded",
+        response: result.response,
+      };
+    } catch (error) {
+      if (error instanceof SumUpRefundHttpError) {
+        return {
+          outcome: "failed",
+          errorMessage: error.message,
+          response:
+            error.responseBody && typeof error.responseBody === "object"
+              ? (error.responseBody as Record<string, unknown>)
+              : {
+                  message: error.message,
+                  status: error.status,
+                },
+        };
+      }
+
+      return {
+        outcome: "unknown",
+        errorMessage: error instanceof Error ? error.message : "Unknown SumUp refund outcome.",
+        response: null,
+      };
+    }
+  };
+}
+
+function getAutomaticRefundDependency(): SumUpRefundDependency | null {
+  const mode = getAutomaticSumUpRefundMode();
+
+  if (mode === "test_mock") {
+    return getTestOnlyMockRefundDependency();
+  }
+
+  if (mode === "production_real") {
+    return getRealSumUpRefundDependency();
+  }
+
+  return null;
+}
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -172,7 +212,7 @@ export async function PATCH(
     }
 
     if (action === "refund_via_sumup") {
-      const refundDependency = getTestOnlyMockRefundDependency();
+      const refundDependency = getAutomaticRefundDependency();
 
       if (!refundDependency) {
         return Response.json(

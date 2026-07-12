@@ -195,6 +195,8 @@ describe("admin dashboard refund requests", () => {
       }),
     ]);
     expect(body.automaticSumUpRefundMockEnabled).toBe(false);
+    expect(body.automaticSumUpRefundEnabled).toBe(false);
+    expect(body.automaticSumUpRefundMode).toBe("disabled");
   });
 
   it("does not enable mocked automatic SumUp refunds without the complete TEST mock gate", async () => {
@@ -213,6 +215,8 @@ describe("admin dashboard refund requests", () => {
 
     expect(response.status).toBe(200);
     expect(body.automaticSumUpRefundMockEnabled).toBe(false);
+    expect(body.automaticSumUpRefundEnabled).toBe(false);
+    expect(body.automaticSumUpRefundMode).toBe("disabled");
   });
 
   it("enables mocked automatic SumUp refunds only with the complete TEST mock gate", async () => {
@@ -231,5 +235,56 @@ describe("admin dashboard refund requests", () => {
 
     expect(response.status).toBe(200);
     expect(body.automaticSumUpRefundMockEnabled).toBe(true);
+    expect(body.automaticSumUpRefundEnabled).toBe(true);
+    expect(body.automaticSumUpRefundMode).toBe("test_mock");
+  });
+
+  it("does not enable real SumUp refunds without the explicit production gate", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    delete process.env.SUMUP_REAL_REFUNDS_ENABLED;
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.automaticSumUpRefundEnabled).toBe(false);
+    expect(body.automaticSumUpRefundMode).toBe("disabled");
+  });
+
+  it("enables real SumUp refunds only with the production real gate", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.automaticSumUpRefundMockEnabled).toBe(false);
+    expect(body.automaticSumUpRefundEnabled).toBe(true);
+    expect(body.automaticSumUpRefundMode).toBe("production_real");
   });
 });

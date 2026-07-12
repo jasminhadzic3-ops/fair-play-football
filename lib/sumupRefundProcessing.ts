@@ -3,11 +3,13 @@ import "server-only";
 import {
   claimSumUpRefundAttempt,
   completeWalletRefundRequest,
+  persistSumUpTransactionIdForProcessingAttempt,
   restoreRefundRequestToPendingAfterFailedSumUpAttempt,
   updateSumUpRefundAttemptStatus,
   type ClaimSumUpRefundAttemptResult,
   type CompleteWalletRefundRequestResult,
 } from "@/lib/wallet";
+import { resolveAndStoreSumUpTransactionIdForPaymentId } from "@/lib/sumupPayments";
 
 type RefundDependencyParams = {
   transactionId: string;
@@ -40,6 +42,8 @@ export type ProcessAutomaticSumUpRefundParams = {
   refundDependency: SumUpRefundDependency;
   claimAttempt?: typeof claimSumUpRefundAttempt;
   completeRefundRequest?: typeof completeWalletRefundRequest;
+  resolveTransactionId?: typeof resolveAndStoreSumUpTransactionIdForPaymentId;
+  persistTransactionIdForAttempt?: typeof persistSumUpTransactionIdForProcessingAttempt;
   updateAttemptStatus?: typeof updateSumUpRefundAttemptStatus;
   restoreRefundRequestToPending?: typeof restoreRefundRequestToPendingAfterFailedSumUpAttempt;
 };
@@ -127,12 +131,15 @@ function getMessageForClaimReason(reason: string | null) {
   }
 }
 
-function assertClaimHasRequiredFields(claimResult: ClaimSumUpRefundAttemptResult) {
+function assertClaimHasRequiredFields(
+  claimResult: ClaimSumUpRefundAttemptResult,
+  sumUpTransactionId: string | null
+) {
   if (!claimResult.attemptId || !claimResult.refundRequestId) {
     return "SumUp refund claim did not return an attempt.";
   }
 
-  if (!claimResult.sumUpTransactionId?.trim()) {
+  if (!sumUpTransactionId?.trim()) {
     return "Refund request is missing a resolved SumUp transaction id.";
   }
 
@@ -170,7 +177,8 @@ async function completeSucceededAttempt(
   claimResult: ClaimSumUpRefundAttemptResult,
   adminUserId: string,
   completeRefundRequest: typeof completeWalletRefundRequest,
-  skippedSumUpRefundCall: boolean
+  skippedSumUpRefundCall: boolean,
+  sumUpTransactionId: string | null
 ) {
   const completionResult = await completeRefundRequest({
     refundRequestId: claimResult.refundRequestId!,
@@ -184,7 +192,7 @@ async function completeSucceededAttempt(
       automatic_sumup_refund: true,
       refund_channel: "sumup",
       sumup_refund_attempt_id: claimResult.attemptId,
-      sumup_transaction_id: claimResult.sumUpTransactionId,
+      sumup_transaction_id: sumUpTransactionId,
     },
   });
 
@@ -201,12 +209,109 @@ async function completeSucceededAttempt(
   return completionResponse(claimResult, completionResult, skippedSumUpRefundCall);
 }
 
+function safeString(value: unknown, maxLength = 300) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+
+  return trimmedValue ? trimmedValue.slice(0, maxLength) : null;
+}
+
+function safeNumber(value: unknown) {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function safeSumUpResponse(response: Record<string, unknown> | null | undefined) {
+  if (!response) {
+    return null;
+  }
+
+  return {
+    id: safeString(response.id),
+    status: safeString(response.status),
+    amount: safeNumber(response.amount),
+    currency: safeString(response.currency, 20),
+    transaction_id: safeString(response.transaction_id),
+    error_code: safeString(response.error_code),
+    error_message: safeString(response.error_message),
+    message: safeString(response.message),
+  };
+}
+
+async function resolveMissingTransactionIdForNewAttempt({
+  claimResult,
+  resolveTransactionId,
+  persistTransactionIdForAttempt,
+}: {
+  claimResult: ClaimSumUpRefundAttemptResult;
+  resolveTransactionId: typeof resolveAndStoreSumUpTransactionIdForPaymentId;
+  persistTransactionIdForAttempt: typeof persistSumUpTransactionIdForProcessingAttempt;
+}) {
+  const existingTransactionId = claimResult.sumUpTransactionId?.trim();
+
+  if (existingTransactionId) {
+    return {
+      success: true as const,
+      sumUpTransactionId: existingTransactionId,
+    };
+  }
+
+  if (!claimResult.bookingPaymentId) {
+    return {
+      success: false as const,
+      error: "Refund request is not linked to a booking payment for transaction lookup.",
+    };
+  }
+
+  let resolvedTransactionId: string | null;
+
+  try {
+    resolvedTransactionId = await resolveTransactionId(claimResult.bookingPaymentId);
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Unable to resolve SumUp transaction id.",
+    };
+  }
+
+  if (!resolvedTransactionId?.trim()) {
+    return {
+      success: false as const,
+      error: "Unable to resolve SumUp transaction id for this refund.",
+    };
+  }
+
+  const updatedAttempt = await persistTransactionIdForAttempt({
+    attemptId: claimResult.attemptId!,
+    refundRequestId: claimResult.refundRequestId!,
+    sumUpTransactionId: resolvedTransactionId,
+  });
+
+  if (!updatedAttempt) {
+    return {
+      success: false as const,
+      error: "SumUp refund attempt state changed before transaction id persistence.",
+    };
+  }
+
+  return {
+    success: true as const,
+    sumUpTransactionId: resolvedTransactionId,
+  };
+}
+
 export async function processAutomaticSumUpRefund({
   refundRequestId,
   adminUserId,
   refundDependency,
   claimAttempt = claimSumUpRefundAttempt,
   completeRefundRequest = completeWalletRefundRequest,
+  resolveTransactionId = resolveAndStoreSumUpTransactionIdForPaymentId,
+  persistTransactionIdForAttempt = persistSumUpTransactionIdForProcessingAttempt,
   updateAttemptStatus = updateSumUpRefundAttemptStatus,
   restoreRefundRequestToPending = restoreRefundRequestToPendingAfterFailedSumUpAttempt,
 }: ProcessAutomaticSumUpRefundParams): Promise<ProcessAutomaticSumUpRefundResult> {
@@ -224,13 +329,13 @@ export async function processAutomaticSumUpRefund({
     };
   }
 
-  const requiredFieldsError = assertClaimHasRequiredFields(claimResult);
+  const claimedTransactionId = claimResult.sumUpTransactionId?.trim() || null;
 
-  if (requiredFieldsError) {
+  if (!claimResult.attemptId || !claimResult.refundRequestId) {
     return {
       outcome: "blocked",
       status: 409,
-      error: requiredFieldsError,
+      error: "SumUp refund claim did not return an attempt.",
       attemptStatus: claimResult.attemptStatus,
       attemptId: claimResult.attemptId,
     };
@@ -242,7 +347,8 @@ export async function processAutomaticSumUpRefund({
         claimResult,
         adminUserId,
         completeRefundRequest,
-        true
+        true,
+        claimedTransactionId
       );
     }
 
@@ -258,8 +364,39 @@ export async function processAutomaticSumUpRefund({
     };
   }
 
+  const resolvedTransaction = await resolveMissingTransactionIdForNewAttempt({
+    claimResult,
+    resolveTransactionId,
+    persistTransactionIdForAttempt,
+  });
+
+  if (!resolvedTransaction.success) {
+    return {
+      outcome: "blocked",
+      status: 409,
+      error: resolvedTransaction.error,
+      attemptStatus: claimResult.attemptStatus,
+      attemptId: claimResult.attemptId,
+    };
+  }
+
+  const requiredFieldsError = assertClaimHasRequiredFields(
+    claimResult,
+    resolvedTransaction.sumUpTransactionId
+  );
+
+  if (requiredFieldsError) {
+    return {
+      outcome: "blocked",
+      status: 409,
+      error: requiredFieldsError,
+      attemptStatus: claimResult.attemptStatus,
+      attemptId: claimResult.attemptId,
+    };
+  }
+
   const refundResult = await refundDependency({
-    transactionId: claimResult.sumUpTransactionId!,
+    transactionId: resolvedTransaction.sumUpTransactionId,
     amount: claimResult.amount,
   });
 
@@ -269,7 +406,7 @@ export async function processAutomaticSumUpRefund({
       refundRequestId: claimResult.refundRequestId!,
       status: "failed",
       errorMessage: refundResult.errorMessage,
-      sumUpResponse: refundResult.response ?? null,
+      sumUpResponse: safeSumUpResponse(refundResult.response),
       metadata: {
         sumup_refund_finished_at: new Date().toISOString(),
         sumup_refund_outcome: "failed",
@@ -298,7 +435,7 @@ export async function processAutomaticSumUpRefund({
       refundRequestId: claimResult.refundRequestId!,
       status: "unknown",
       errorMessage: refundResult.errorMessage,
-      sumUpResponse: refundResult.response ?? null,
+      sumUpResponse: safeSumUpResponse(refundResult.response),
       metadata: {
         sumup_refund_finished_at: new Date().toISOString(),
         sumup_refund_outcome: "unknown",
@@ -319,7 +456,7 @@ export async function processAutomaticSumUpRefund({
     refundRequestId: claimResult.refundRequestId!,
     status: "succeeded",
     errorMessage: null,
-    sumUpResponse: refundResult.response ?? null,
+    sumUpResponse: safeSumUpResponse(refundResult.response),
     metadata: {
       sumup_refund_finished_at: new Date().toISOString(),
       sumup_refund_outcome: "succeeded",
@@ -340,6 +477,7 @@ export async function processAutomaticSumUpRefund({
     claimResult,
     adminUserId,
     completeRefundRequest,
-    false
+    false,
+    resolvedTransaction.sumUpTransactionId
   );
 }

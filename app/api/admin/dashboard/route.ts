@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAutomaticSumUpRefundCapabilities } from "@/lib/sumupRefundCapabilities";
 
 type Payment = {
   id: number;
@@ -80,14 +81,6 @@ function getMetadataNumber(metadata: Record<string, unknown> | null | undefined,
   const numberValue = Number(value);
 
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
-}
-
-function isAutomaticSumUpRefundMockEnabled() {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("gtrpegnxhawmkbhyqedh.supabase.co") === true &&
-    process.env.E2E_ALLOW_DB_MUTATION === "true" &&
-    process.env.E2E_MOCK_SUMUP_REFUNDS === "true"
-  );
 }
 
 export async function GET(request: NextRequest) {
@@ -220,7 +213,7 @@ export async function GET(request: NextRequest) {
       wallet_transactions: walletTransactions,
       refund_requests: refundRequests,
       waiting_list: waitingList,
-      automaticSumUpRefundMockEnabled: isAutomaticSumUpRefundMockEnabled(),
+      ...getAutomaticSumUpRefundCapabilities(),
       summary: {
         games_count: games.length,
         bookings_count: bookings.length,
