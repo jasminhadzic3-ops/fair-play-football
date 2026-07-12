@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import Modal from "@/components/shared/ui/Modal";
 import TeamList from "./TeamList";
 import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
+import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 
 interface GameDetailsProps {
   isOpen: boolean;
@@ -94,7 +95,7 @@ export default function GameDetails({
   const [showPassword, setShowPassword] = useState(false);
   const [authOpenedFromNavbar, setAuthOpenedFromNavbar] = useState(false);
   const [isClosingAfterSignIn, setIsClosingAfterSignIn] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState<"idle" | "creating" | "pending" | "paid" | "paid_no_space" | "failed" | "expired">("idle");
+  const [paymentStatus, setPaymentStatus] = useState<"idle" | "creating" | "pending" | "paid" | "paid_no_space" | "duplicate_paid" | "failed" | "expired">("idle");
   const [paymentCheckoutId, setPaymentCheckoutId] = useState<string | null>(null);
   const [paymentCheckoutReference, setPaymentCheckoutReference] = useState<string | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
@@ -594,6 +595,15 @@ export default function GameDetails({
         setPaymentStatus("paid_no_space");
         setPaymentMessage(result.message || "This spot has already been taken. You are still on the waiting list.");
         await onPaymentComplete?.();
+        return;
+      }
+
+      if (result.paymentStatus === "duplicate_paid") {
+        localStorage.removeItem("pendingSumUpGameId");
+        localStorage.removeItem("pendingSumUpCheckoutId");
+        localStorage.removeItem("pendingSumUpCheckoutReference");
+        setPaymentStatus("duplicate_paid");
+        setPaymentMessage(result.message || duplicatePaidPaymentMessage);
         return;
       }
 
@@ -1621,7 +1631,7 @@ export default function GameDetails({
               className={`rounded-3xl border px-5 py-4 text-sm font-semibold ${
                 paymentStatus === "paid"
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                  : paymentStatus === "failed" || paymentStatus === "expired" || paymentStatus === "paid_no_space"
+                  : paymentStatus === "failed" || paymentStatus === "expired" || paymentStatus === "paid_no_space" || paymentStatus === "duplicate_paid"
                     ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
                     : "border-amber-500/30 bg-amber-500/10 text-amber-100"
               }`}
@@ -1635,7 +1645,7 @@ export default function GameDetails({
               <div className="grid gap-2">
                 <button
                   onClick={handleWalletBooking}
-                  disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
+                  disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space" || paymentStatus === "duplicate_paid"}
                   className="rounded-3xl bg-stone-200 px-6 py-3 text-zinc-950 font-bold transition duration-150 ease-out enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4"
                 >
                   {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : `Pay £${game.price} with Wallet`}
@@ -1643,7 +1653,7 @@ export default function GameDetails({
                 <button
                   type="button"
                   onClick={handleOpenPaymentLink}
-                  disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
+                  disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space" || paymentStatus === "duplicate_paid"}
                   className="text-sm font-semibold text-zinc-400 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Pay by Card
@@ -1652,7 +1662,7 @@ export default function GameDetails({
             ) : (
               <button
                 onClick={handleOpenPaymentLink}
-                disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space"}
+                disabled={!canBookGame || bookingLoading || paymentStatus === "pending" || paymentStatus === "paid" || paymentStatus === "paid_no_space" || paymentStatus === "duplicate_paid"}
                 className="rounded-3xl bg-stone-200 px-6 py-3 text-zinc-950 font-bold transition duration-150 ease-out enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4"
               >
                 {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : `Pay £${game.price} with SumUp`}

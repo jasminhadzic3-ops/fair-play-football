@@ -479,6 +479,59 @@ describe("SumUp payment helpers", () => {
     expect(runPostBookingActionsMock).not.toHaveBeenCalled();
   });
 
+  it("returns duplicate_paid without booking side effects when the atomic RPC detects a duplicate paid checkout", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    rpcResult = {
+      success: true,
+      payment_status: "duplicate_paid",
+      booking_id: null,
+      reason: "duplicate_payment_detected",
+      already_finalized: false,
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({
+      paymentStatus: "duplicate_paid",
+      bookingId: null,
+      reason: "duplicate_payment_detected",
+      message: "This payment needs manual reconciliation before the booking can be confirmed.",
+    });
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+    expect(removeWaitingListEntryForBookedUserMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps already detected duplicate paid checkouts idempotent", async () => {
+    paymentRow = defaultPayment({ payment_status: "duplicate_paid", booking_id: null });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PAID",
+        transactions: [{ transaction_code: "TXN-1", status: "SUCCESSFUL" }],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({
+      paymentStatus: "duplicate_paid",
+      bookingId: null,
+      reason: "already_duplicate_payment_detected",
+      message: "This payment needs manual reconciliation before the booking can be confirmed.",
+    });
+    expect(rpcCalls).toHaveLength(0);
+    expect(updateCalls).toHaveLength(0);
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+    expect(removeWaitingListEntryForBookedUserMock).not.toHaveBeenCalled();
+  });
+
   it("links an existing matching booking returned by the atomic RPC", async () => {
     paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
     rpcResult = {

@@ -4,6 +4,63 @@
 -- database transaction. The app must call this only after server-side SumUp
 -- verification has confirmed the checkout is paid.
 
+do $$
+declare
+  v_constraint_name text;
+begin
+  select conname
+  into v_constraint_name
+  from pg_constraint
+  where conrelid = 'public.booking_payments'::regclass
+    and contype = 'c'
+    and pg_get_constraintdef(oid) like '%payment_status%'
+  limit 1;
+
+  if v_constraint_name is not null then
+    execute format(
+      'alter table public.booking_payments drop constraint %I',
+      v_constraint_name
+    );
+  end if;
+end $$;
+
+alter table public.booking_payments
+add constraint booking_payments_payment_status_check
+check (payment_status in ('pending', 'paid', 'paid_no_space', 'duplicate_paid', 'failed', 'expired'));
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.booking_payments
+    where payment_status = 'paid'
+      and booking_id is not null
+    group by booking_id
+    having count(*) > 1
+  ) then
+    raise exception 'Cannot install paid checkout duplicate protection: existing paid booking_payments rows reference the same booking. Reconcile duplicates before applying this SQL.';
+  end if;
+
+  if exists (
+    select 1
+    from public.booking_payments
+    where payment_status = 'pending'
+    group by user_id, game_id, lower(btrim(player_name))
+    having count(*) > 1
+  ) then
+    raise exception 'Cannot install active checkout duplicate protection: existing pending booking_payments rows share the same user, game, and player name. Reconcile duplicates before applying this SQL.';
+  end if;
+end $$;
+
+create unique index if not exists booking_payments_one_paid_per_booking_uidx
+on public.booking_payments(booking_id)
+where payment_status = 'paid'
+  and booking_id is not null;
+
+create unique index if not exists booking_payments_one_pending_identity_uidx
+on public.booking_payments(user_id, game_id, lower(btrim(player_name)))
+where payment_status = 'pending';
+
 drop function if exists public.finalize_paid_sumup_checkout(
   text,
   uuid,
@@ -37,6 +94,7 @@ as $$
 declare
   v_booking_count integer;
   v_booking_id bigint;
+  v_existing_paid_payment_id bigint;
   v_game_status text;
   v_max_players integer;
   v_payment public.booking_payments%rowtype;
@@ -44,6 +102,7 @@ declare
   v_reason text;
   v_sumup_transaction_id text;
   v_transaction_code text;
+  v_wallet_booking_transaction_id bigint;
 begin
   v_player_name := nullif(trim(p_expected_player_name), '');
   v_transaction_code := nullif(trim(p_transaction_code), '');
@@ -90,6 +149,19 @@ begin
     where id = v_payment.id;
 
     return query select true, 'paid'::text, v_payment.booking_id, null::text, true;
+    return;
+  end if;
+
+  if v_payment.payment_status = 'duplicate_paid' then
+    update public.booking_payments
+    set
+      raw_checkout = coalesce(p_raw_checkout, raw_checkout),
+      transaction_code = coalesce(v_transaction_code, transaction_code),
+      sumup_transaction_id = coalesce(v_sumup_transaction_id, sumup_transaction_id),
+      updated_at = now()
+    where id = v_payment.id;
+
+    return query select true, 'duplicate_paid'::text, null::bigint, 'already_duplicate_payment_detected'::text, true;
     return;
   end if;
 
@@ -163,6 +235,56 @@ begin
     insert into public.bookings (game_id, user_id, player_name)
     values (v_payment.game_id, v_payment.user_id, v_payment.player_name)
     returning id into v_booking_id;
+  end if;
+
+  select booking_payments.id
+  into v_existing_paid_payment_id
+  from public.booking_payments
+  where booking_payments.booking_id = v_booking_id
+    and booking_payments.payment_status = 'paid'
+    and booking_payments.id <> v_payment.id
+  order by booking_payments.id asc
+  limit 1;
+
+  if v_existing_paid_payment_id is not null then
+    update public.booking_payments
+    set
+      booking_id = null,
+      payment_status = 'duplicate_paid',
+      raw_checkout = coalesce(p_raw_checkout, raw_checkout),
+      transaction_code = coalesce(v_transaction_code, transaction_code),
+      sumup_transaction_id = coalesce(v_sumup_transaction_id, sumup_transaction_id),
+      updated_at = now()
+    where id = v_payment.id;
+
+    return query select true, 'duplicate_paid'::text, null::bigint, 'duplicate_payment_detected'::text, false;
+    return;
+  end if;
+
+  if to_regclass('public.wallet_transactions') is not null then
+    select wallet_transactions.id
+    into v_wallet_booking_transaction_id
+    from public.wallet_transactions
+    where wallet_transactions.booking_id = v_booking_id
+      and wallet_transactions.transaction_type = 'wallet_booking_payment'
+      and wallet_transactions.status = 'completed'
+    order by wallet_transactions.id asc
+    limit 1;
+  end if;
+
+  if v_wallet_booking_transaction_id is not null then
+    update public.booking_payments
+    set
+      booking_id = null,
+      payment_status = 'duplicate_paid',
+      raw_checkout = coalesce(p_raw_checkout, raw_checkout),
+      transaction_code = coalesce(v_transaction_code, transaction_code),
+      sumup_transaction_id = coalesce(v_sumup_transaction_id, sumup_transaction_id),
+      updated_at = now()
+    where id = v_payment.id;
+
+    return query select true, 'duplicate_paid'::text, null::bigint, 'mixed_wallet_payment_detected'::text, false;
+    return;
   end if;
 
   update public.booking_payments

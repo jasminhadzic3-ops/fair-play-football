@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       .select("checkout_id,checkout_reference,hosted_checkout_url,payment_status")
       .eq("user_id", user.id)
       .eq("game_id", gameId)
-      .in("payment_status", ["pending", "paid", "paid_no_space"])
+      .in("payment_status", ["pending", "paid", "paid_no_space", "duplicate_paid"])
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -107,6 +107,13 @@ export async function POST(request: NextRequest) {
     if (existingPayment?.payment_status === "paid_no_space") {
       return Response.json(
         { error: "You have already paid for this game, but no space was available." },
+        { status: 409 }
+      );
+    }
+
+    if (existingPayment?.payment_status === "duplicate_paid") {
+      return Response.json(
+        { error: "A previous payment for this game needs manual reconciliation." },
         { status: 409 }
       );
     }

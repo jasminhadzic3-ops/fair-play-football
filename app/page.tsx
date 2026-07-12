@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 import GameCard from "@/components/games/GameCard";
 import Navbar from "@/components/shared/layout/Navbar";
 import Hero from "@/components/shared/layout/Hero";
@@ -20,7 +21,7 @@ export default function Home() {
   const [pendingCheckoutId, setPendingCheckoutId] = useState<string | null>(null);
   const [pendingCheckoutReference, setPendingCheckoutReference] = useState<string | null>(null);
   const [returnPaymentMessage, setReturnPaymentMessage] = useState<string | null>(null);
-  const [returnPaymentState, setReturnPaymentState] = useState<"checking" | "paid" | "paid_no_space" | "pending" | "failed" | null>(null);
+  const [returnPaymentState, setReturnPaymentState] = useState<"checking" | "paid" | "paid_no_space" | "duplicate_paid" | "pending" | "failed" | null>(null);
   const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
   const [navbarAuthEmail, setNavbarAuthEmail] = useState("");
   const [navbarAuthPassword, setNavbarAuthPassword] = useState("");
@@ -306,6 +307,20 @@ export default function Home() {
         clearSumUpCheckoutReferenceFromUrl();
         setReturnPaymentState("paid_no_space");
         setReturnPaymentMessage("Payment received, but this game is now full. You are still on the waiting list and we’ll notify you if a spot opens.");
+        scrollToGames();
+        return;
+      }
+
+      if (paymentStatus === "duplicate_paid") {
+        localStorage.removeItem("pendingSumUpGameId");
+        localStorage.removeItem("pendingSumUpCheckoutId");
+        localStorage.removeItem("pendingSumUpCheckoutReference");
+        setPendingCheckoutId(null);
+        setPendingCheckoutReference(null);
+        setCheckoutGameId(null);
+        clearSumUpCheckoutReferenceFromUrl();
+        setReturnPaymentState("duplicate_paid");
+        setReturnPaymentMessage(result?.message || duplicatePaidPaymentMessage);
         scrollToGames();
         return;
       }
@@ -861,7 +876,7 @@ export default function Home() {
               className={`mb-6 rounded-3xl border px-5 py-4 text-sm font-semibold ${
                 returnPaymentState === "paid"
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                  : returnPaymentState === "failed" || returnPaymentState === "paid_no_space"
+                  : returnPaymentState === "failed" || returnPaymentState === "paid_no_space" || returnPaymentState === "duplicate_paid"
                     ? "border-rose-500/40 bg-rose-500/10 text-rose-100"
                     : "border-amber-500/30 bg-amber-500/10 text-amber-100"
               }`}

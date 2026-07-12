@@ -54,6 +54,7 @@ export class SumUpRefundHttpError extends Error {
 const sumupApiBase = "https://api.sumup.com/v0.1";
 const sumupApiRoot = "https://api.sumup.com";
 const noSpacePaymentMessage = "This spot has already been taken. You are still on the waiting list.";
+const duplicatePaymentMessage = "This payment needs manual reconciliation before the booking can be confirmed.";
 
 type FinalizePaidCheckoutResult = {
   success: boolean;
@@ -515,6 +516,15 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     };
   }
 
+  if (payment.payment_status === "duplicate_paid") {
+    return {
+      paymentStatus: "duplicate_paid",
+      bookingId: null,
+      reason: "already_duplicate_payment_detected",
+      message: duplicatePaymentMessage,
+    };
+  }
+
   if (status !== "paid") {
     const { error: updateError } = await supabaseAdmin
       .from("booking_payments")
@@ -561,6 +571,15 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
       bookingId: null,
       reason: finalizationResult.reason || "game_full",
       message: noSpacePaymentMessage,
+    };
+  }
+
+  if (finalizationResult.payment_status === "duplicate_paid") {
+    return {
+      paymentStatus: "duplicate_paid",
+      bookingId: null,
+      reason: finalizationResult.reason || "duplicate_payment_detected",
+      message: duplicatePaymentMessage,
     };
   }
 
