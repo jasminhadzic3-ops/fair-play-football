@@ -150,10 +150,8 @@ grant all on sequence public.games_id_seq to anon;
 grant all on sequence public.games_id_seq to authenticated;
 grant all on sequence public.games_id_seq to service_role;
 
-grant all on table public.bookings to anon;
-grant all on table public.bookings to authenticated;
+grant select on table public.bookings to anon;
+grant select on table public.bookings to authenticated;
 grant all on table public.bookings to service_role;
 
-grant all on sequence public.bookings_id_seq to anon;
-grant all on sequence public.bookings_id_seq to authenticated;
 grant all on sequence public.bookings_id_seq to service_role;

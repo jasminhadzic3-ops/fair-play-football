@@ -36,6 +36,12 @@ alter column user_id set default auth.uid();
 
 alter table public.bookings enable row level security;
 
+revoke insert, update, delete on public.bookings from anon, authenticated;
+revoke usage, select on sequence public.bookings_id_seq from anon, authenticated;
+grant select on public.bookings to anon, authenticated;
+grant all on public.bookings to service_role;
+grant all on sequence public.bookings_id_seq to service_role;
+
 drop policy if exists "Bookings are publicly readable" on public.bookings;
 drop policy if exists "Bookings are insertable by owner" on public.bookings;
 drop policy if exists "Bookings are deletable by owner" on public.bookings;
@@ -49,20 +55,10 @@ for select
 to anon, authenticated
 using (true);
 
-create policy "Bookings are insertable by owner"
-on public.bookings
-for insert
-to authenticated
-with check (auth.uid() = user_id);
-
-create policy "Bookings are deletable by owner"
-on public.bookings
-for delete
-to authenticated
-using (auth.uid() = user_id);
-
--- No bookings update policy is created. Without a matching policy,
--- client-side updates are denied by RLS.
+-- No bookings insert/update/delete policies are created. Without matching
+-- policies and table privileges, client-side writes are denied by RLS.
+-- Trusted server-side routes using the Supabase service role should create
+-- and delete bookings through the payment-aware API/RPC flow.
 
 -- Games: public read-only from client apps.
 alter table public.games enable row level security;
