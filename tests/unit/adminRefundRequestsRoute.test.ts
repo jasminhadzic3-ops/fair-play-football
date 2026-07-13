@@ -138,6 +138,17 @@ function defaultRefundRequest(overrides: Partial<RefundRequestRow> = {}): Refund
   };
 }
 
+function enableProductionRealRefundMode() {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+  vi.stubEnv("NODE_ENV", "production");
+  delete process.env.E2E_ALLOW_DB_MUTATION;
+  delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+  delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+  process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+  process.env.SUMUP_API_KEY = "sumup-key";
+  process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
@@ -400,14 +411,7 @@ describe("admin refund request route", () => {
   });
 
   it("selects the real refund dependency only behind the production real gate", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
-    vi.stubEnv("NODE_ENV", "production");
-    delete process.env.E2E_ALLOW_DB_MUTATION;
-    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
-    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
-    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
-    process.env.SUMUP_API_KEY = "sumup-key";
-    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    enableProductionRealRefundMode();
 
     const response = await PATCH(
       requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
@@ -424,14 +428,7 @@ describe("admin refund request route", () => {
   });
 
   it("classifies real SumUp HTTP rejection as failed through the production dependency", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
-    vi.stubEnv("NODE_ENV", "production");
-    delete process.env.E2E_ALLOW_DB_MUTATION;
-    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
-    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
-    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
-    process.env.SUMUP_API_KEY = "sumup-key";
-    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    enableProductionRealRefundMode();
     refundSumUpTransactionMock.mockRejectedValueOnce(
       new SumUpRefundHttpError("Refund amount is too high.", 422, {
         detail: "Refund amount is too high.",
@@ -460,15 +457,75 @@ describe("admin refund request route", () => {
     });
   });
 
+  it.each([429, 500, 502, 503, 504])(
+    "classifies real SumUp HTTP %s as unknown through the production dependency",
+    async (status) => {
+      enableProductionRealRefundMode();
+      refundSumUpTransactionMock.mockRejectedValueOnce(
+        new SumUpRefundHttpError(`SumUp HTTP ${status}.`, status, {
+          http_status: status,
+          message: `SumUp HTTP ${status}.`,
+        })
+      );
+
+      const response = await PATCH(
+        requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+        routeContext()
+      );
+
+      expect(response.status).toBe(200);
+      const dependency = processAutomaticSumUpRefundMock.mock.calls[0]?.[0]
+        .refundDependency;
+      const result = await dependency({
+        transactionId: "transaction-id-1",
+        amount: 99,
+      });
+
+      expect(result).toEqual({
+        outcome: "unknown",
+        errorMessage: `SumUp HTTP ${status}.`,
+        response: {
+          http_status: status,
+          message: `SumUp HTTP ${status}.`,
+        },
+      });
+    }
+  );
+
+  it("classifies uncertain HTTP 409 as unknown through the production dependency", async () => {
+    enableProductionRealRefundMode();
+    refundSumUpTransactionMock.mockRejectedValueOnce(
+      new SumUpRefundHttpError("Conflict.", 409, {
+        http_status: 409,
+        message: "Conflict.",
+      })
+    );
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+
+    expect(response.status).toBe(200);
+    const dependency = processAutomaticSumUpRefundMock.mock.calls[0]?.[0]
+      .refundDependency;
+    const result = await dependency({
+      transactionId: "transaction-id-1",
+      amount: 99,
+    });
+
+    expect(result).toEqual({
+      outcome: "unknown",
+      errorMessage: "Conflict.",
+      response: {
+        http_status: 409,
+        message: "Conflict.",
+      },
+    });
+  });
+
   it("classifies real SumUp transport errors as unknown through the production dependency", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
-    vi.stubEnv("NODE_ENV", "production");
-    delete process.env.E2E_ALLOW_DB_MUTATION;
-    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
-    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
-    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
-    process.env.SUMUP_API_KEY = "sumup-key";
-    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    enableProductionRealRefundMode();
     refundSumUpTransactionMock.mockRejectedValueOnce(new Error("fetch failed"));
 
     const response = await PATCH(
@@ -488,6 +545,59 @@ describe("admin refund request route", () => {
       outcome: "unknown",
       errorMessage: "fetch failed",
       response: null,
+    });
+  });
+
+  it.each(["network timeout", "connection reset"])(
+    "classifies real SumUp %s as unknown through the production dependency",
+    async (message) => {
+      enableProductionRealRefundMode();
+      refundSumUpTransactionMock.mockRejectedValueOnce(new Error(message));
+
+      const response = await PATCH(
+        requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+        routeContext()
+      );
+
+      expect(response.status).toBe(200);
+      const dependency = processAutomaticSumUpRefundMock.mock.calls[0]?.[0]
+        .refundDependency;
+      const result = await dependency({
+        transactionId: "transaction-id-1",
+        amount: 99,
+      });
+
+      expect(result).toEqual({
+        outcome: "unknown",
+        errorMessage: message,
+        response: null,
+      });
+    }
+  );
+
+  it("surfaces unknown SumUp attempts as manual-review results", async () => {
+    processAutomaticSumUpRefundMock.mockResolvedValue({
+      outcome: "sumup_unknown",
+      status: 502,
+      error: "SumUp refund outcome is unknown. Reconcile manually before retrying.",
+      attemptId: 900,
+      refundRequestId: 501,
+    });
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toEqual({
+      error: "SumUp refund outcome is unknown. Reconcile manually before retrying.",
+      outcome: "sumup_unknown",
+      sumup_refund_attempt: {
+        id: 900,
+        status: "unknown",
+      },
     });
   });
 

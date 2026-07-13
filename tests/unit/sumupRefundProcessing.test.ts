@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const captureMessageMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@sentry/nextjs", () => ({
+  captureMessage: captureMessageMock,
+}));
+
 import { processAutomaticSumUpRefund, type SumUpRefundDependencyResult } from "@/lib/sumupRefundProcessing";
 
 const defaultClaim = {
@@ -286,9 +293,10 @@ describe("processAutomaticSumUpRefund", () => {
       attemptId: 900,
     });
     expect(deps.completeRefundRequest).not.toHaveBeenCalled();
+    expect(captureMessageMock).not.toHaveBeenCalled();
   });
 
-  it("marks ambiguous mocked outcomes unknown and creates no wallet debit", async () => {
+  it("marks ambiguous mocked outcomes unknown, keeps the reservation, and creates no wallet debit", async () => {
     const deps = setup({
       refundResult: {
         outcome: "unknown",
@@ -311,6 +319,21 @@ describe("processAutomaticSumUpRefund", () => {
     );
     expect(deps.restoreRefundRequestToPending).not.toHaveBeenCalled();
     expect(deps.completeRefundRequest).not.toHaveBeenCalled();
+    expect(captureMessageMock).toHaveBeenCalledWith(
+      "SumUp refund outcome is unknown",
+      expect.objectContaining({
+        level: "warning",
+        tags: {
+          area: "sumup_refunds",
+          outcome: "unknown",
+        },
+        extra: expect.objectContaining({
+          refund_request_id: 501,
+          sumup_refund_attempt_id: 900,
+          error_message: "Mocked timeout.",
+        }),
+      })
+    );
   });
 
   it("preserves a succeeded attempt when wallet DB completion fails", async () => {

@@ -139,6 +139,21 @@ function getTestOnlyMockRefundDependency(): SumUpRefundDependency {
   };
 }
 
+function isAmbiguousSumUpRefundHttpStatus(status: number) {
+  return status >= 500 || status === 408 || status === 409 || status === 425 || status === 429;
+}
+
+function safeRefundHttpErrorResponse(error: SumUpRefundHttpError) {
+  if (error.responseBody && typeof error.responseBody === "object") {
+    return error.responseBody as Record<string, unknown>;
+  }
+
+  return {
+    message: error.message,
+    status: error.status,
+  };
+}
+
 function getRealSumUpRefundDependency(): SumUpRefundDependency {
   return async ({ transactionId, amount }) => {
     try {
@@ -150,16 +165,20 @@ function getRealSumUpRefundDependency(): SumUpRefundDependency {
       };
     } catch (error) {
       if (error instanceof SumUpRefundHttpError) {
+        const response = safeRefundHttpErrorResponse(error);
+
+        if (isAmbiguousSumUpRefundHttpStatus(error.status)) {
+          return {
+            outcome: "unknown",
+            errorMessage: error.message,
+            response,
+          };
+        }
+
         return {
           outcome: "failed",
           errorMessage: error.message,
-          response:
-            error.responseBody && typeof error.responseBody === "object"
-              ? (error.responseBody as Record<string, unknown>)
-              : {
-                  message: error.message,
-                  status: error.status,
-                },
+          response,
         };
       }
 
@@ -181,6 +200,22 @@ function getAutomaticRefundDependency(): SumUpRefundDependency | null {
 
   if (mode === "production_real") {
     return getRealSumUpRefundDependency();
+  }
+
+  return null;
+}
+
+function getAttemptStatusForProcessorResult(result: Awaited<ReturnType<typeof processAutomaticSumUpRefund>>) {
+  if (result.outcome === "sumup_unknown") {
+    return "unknown";
+  }
+
+  if (result.outcome === "sumup_failed") {
+    return "failed";
+  }
+
+  if ("attemptStatus" in result) {
+    return result.attemptStatus;
   }
 
   return null;
@@ -258,7 +293,7 @@ export async function PATCH(
             "attemptId" in result
               ? {
                   id: result.attemptId,
-                  status: "attemptStatus" in result ? result.attemptStatus : null,
+                  status: getAttemptStatusForProcessorResult(result),
                 }
               : null,
         },

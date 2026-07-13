@@ -1,5 +1,6 @@
 import "server-only";
 
+import * as Sentry from "@sentry/nextjs";
 import {
   claimSumUpRefundAttempt,
   completeWalletRefundRequest,
@@ -440,6 +441,19 @@ export async function processAutomaticSumUpRefund({
       metadata: {
         sumup_refund_finished_at: new Date().toISOString(),
         sumup_refund_outcome: "unknown",
+      },
+    });
+
+    Sentry.captureMessage("SumUp refund outcome is unknown", {
+      level: "warning",
+      tags: {
+        area: "sumup_refunds",
+        outcome: "unknown",
+      },
+      extra: {
+        refund_request_id: claimResult.refundRequestId,
+        sumup_refund_attempt_id: claimResult.attemptId,
+        error_message: safeString(refundResult.errorMessage),
       },
     });
 
