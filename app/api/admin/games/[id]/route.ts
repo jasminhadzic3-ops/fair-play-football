@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
-import { cancelGameWithWalletCredits, GameCancellationError } from "@/lib/gameCancellation";
+import {
+  cancelGameWithWalletCredits,
+  GameCancellationError,
+  retryGameCancellationEmails,
+} from "@/lib/gameCancellation";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type GamePayload = {
@@ -50,6 +54,10 @@ function isCancelGamePayload(body: GamePayload | null): body is GamePayload {
   return body?.action === "cancel";
 }
 
+function isRetryCancellationEmailsPayload(body: GamePayload | null): body is GamePayload {
+  return body?.action === "retry_cancellation_emails";
+}
+
 function parseCancellationReason(body: GamePayload | null) {
   return typeof body?.cancellation_reason === "string" ? body.cancellation_reason.trim() || null : null;
 }
@@ -82,6 +90,15 @@ export async function PATCH(
       });
 
       return Response.json(result);
+    }
+
+    if (isRetryCancellationEmailsPayload(body)) {
+      const emailWarning = await retryGameCancellationEmails({ gameId });
+
+      return Response.json({
+        ok: true,
+        ...(emailWarning ? { email_warning: emailWarning } : {}),
+      });
     }
 
     const payload = parseGamePayload(body);
