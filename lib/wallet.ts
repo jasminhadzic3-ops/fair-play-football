@@ -122,6 +122,11 @@ type PersistSumUpTransactionIdForProcessingAttemptParams = {
   sumUpTransactionId: string;
 };
 
+type ClaimUnknownSumUpRefundAttemptForReconciliationParams = {
+  refundRequestId: number;
+  adminUserId: string;
+};
+
 type CreateWalletRefundRequestParams = {
   userId: string;
   sourceWalletTransactionId: number;
@@ -684,6 +689,133 @@ export async function updateSumUpRefundAttemptStatus({
     .eq("id", attemptId)
     .eq("refund_request_id", refundRequestId)
     .eq("status", "processing")
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as SumUpRefundAttempt | null;
+}
+
+export async function getLatestSumUpRefundAttemptForRequest(refundRequestId: number) {
+  assertSupabaseAdminConfigured();
+
+  if (!Number.isInteger(refundRequestId) || refundRequestId <= 0) {
+    throw new Error("Refund request id is required.");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("sumup_refund_attempts")
+    .select("*")
+    .eq("refund_request_id", refundRequestId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as SumUpRefundAttempt | null;
+}
+
+export async function claimUnknownSumUpRefundAttemptForReconciliation({
+  refundRequestId,
+  adminUserId,
+}: ClaimUnknownSumUpRefundAttemptForReconciliationParams) {
+  assertSupabaseAdminConfigured();
+  assertUserId(adminUserId);
+
+  if (!Number.isInteger(refundRequestId) || refundRequestId <= 0) {
+    throw new Error("Refund request id is required.");
+  }
+
+  const { data: existingAttempt, error: existingAttemptError } = await supabaseAdmin
+    .from("sumup_refund_attempts")
+    .select("*")
+    .eq("refund_request_id", refundRequestId)
+    .eq("status", "unknown")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingAttemptError) {
+    throw existingAttemptError;
+  }
+
+  if (!existingAttempt) {
+    const { data: staleAttempt, error: staleAttemptError } = await supabaseAdmin
+      .from("sumup_refund_attempts")
+      .select("*")
+      .eq("refund_request_id", refundRequestId)
+      .eq("status", "processing")
+      .not("metadata->>reconciliation_claimed_at", "is", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (staleAttemptError) {
+      throw staleAttemptError;
+    }
+
+    if (!staleAttempt) {
+      return null;
+    }
+
+    const staleReconciliationAttempt = staleAttempt as SumUpRefundAttempt;
+    const previousClaimedAt = staleReconciliationAttempt.metadata?.reconciliation_claimed_at;
+    const previousClaimedAtTime =
+      typeof previousClaimedAt === "string" ? Date.parse(previousClaimedAt) : Number.NaN;
+    const staleAfterMs = 15 * 60 * 1000;
+
+    if (!Number.isFinite(previousClaimedAtTime) || Date.now() - previousClaimedAtTime < staleAfterMs) {
+      return null;
+    }
+
+    const reclaimedAt = new Date().toISOString();
+
+    const { data: reclaimedAttempt, error: reclaimedAttemptError } = await supabaseAdmin
+      .from("sumup_refund_attempts")
+      .update({
+        metadata: {
+          ...(staleReconciliationAttempt.metadata ?? {}),
+          reconciliation_claimed_by: adminUserId,
+          reconciliation_claimed_at: reclaimedAt,
+          reconciliation_reclaimed_at: reclaimedAt,
+        },
+      })
+      .eq("id", staleReconciliationAttempt.id)
+      .eq("refund_request_id", refundRequestId)
+      .eq("status", "processing")
+      .eq("metadata->>reconciliation_claimed_at", previousClaimedAt)
+      .select("*")
+      .maybeSingle();
+
+    if (reclaimedAttemptError) {
+      throw reclaimedAttemptError;
+    }
+
+    return reclaimedAttempt as SumUpRefundAttempt | null;
+  }
+
+  const attempt = existingAttempt as SumUpRefundAttempt;
+  const checkedAt = new Date().toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("sumup_refund_attempts")
+    .update({
+      status: "processing",
+      metadata: {
+        ...(attempt.metadata ?? {}),
+        reconciliation_claimed_by: adminUserId,
+        reconciliation_claimed_at: checkedAt,
+      },
+    })
+    .eq("id", attempt.id)
+    .eq("refund_request_id", refundRequestId)
+    .eq("status", "unknown")
     .select("*")
     .maybeSingle();
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getAuthenticatedAdminUserMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
 const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
+const reconcileUnknownSumUpRefundAttemptMock = vi.hoisted(() => vi.fn());
 const completeWalletRefundRequestMock = vi.hoisted(() => vi.fn());
 const refundSumUpTransactionMock = vi.hoisted(() => vi.fn());
 
@@ -18,6 +19,10 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 
 vi.mock("@/lib/sumupRefundProcessing", () => ({
   processAutomaticSumUpRefund: processAutomaticSumUpRefundMock,
+}));
+
+vi.mock("@/lib/sumupRefundReconciliation", () => ({
+  reconcileUnknownSumUpRefundAttempt: reconcileUnknownSumUpRefundAttemptMock,
 }));
 
 vi.mock("@/lib/wallet", () => ({
@@ -104,7 +109,10 @@ class MockSupabaseQuery {
   }
 }
 
-function requestBody(action: "approve" | "reject" | "refund_via_sumup", reason = "Admin note") {
+function requestBody(
+  action: "approve" | "reject" | "refund_via_sumup" | "recheck_sumup_refund",
+  reason = "Admin note"
+) {
   return new Request("http://localhost/api/admin/refund-requests/501", {
     method: "PATCH",
     headers: {
@@ -171,6 +179,14 @@ beforeEach(() => {
       availableBalance: 0,
     },
   });
+  reconcileUnknownSumUpRefundAttemptMock.mockResolvedValue({
+    status: 200,
+    result: "refund_confirmed",
+    message: "SumUp refund confirmed and wallet refund completed.",
+    attemptId: 900,
+    refundRequestId: 501,
+    refundTransactionId: 700,
+  });
   completeWalletRefundRequestMock.mockImplementation(async () => {
     if (state.refundRequest) {
       state.refundRequest = {
@@ -210,9 +226,80 @@ describe("admin refund request route", () => {
 
     expect(response.status).toBe(401);
     expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(reconcileUnknownSumUpRefundAttemptMock).not.toHaveBeenCalled();
     expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
     expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("rechecks an unknown SumUp refund without issuing another refund call", async () => {
+    state.refundRequest = defaultRefundRequest({
+      status: "processing",
+      metadata: {
+        sumup_refund_attempt_id: 900,
+      },
+    });
+
+    const response = await PATCH(
+      requestBody("recheck_sumup_refund") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(reconcileUnknownSumUpRefundAttemptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        refundRequestId: 501,
+        adminUserId: "admin-1",
+      })
+    );
+    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+    expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
+    expect(body).toMatchObject({
+      message: "SumUp refund confirmed and wallet refund completed.",
+      result: "refund_confirmed",
+      refund_request: {
+        id: 501,
+      },
+      refund_transaction: {
+        id: 700,
+      },
+      sumup_refund_attempt: {
+        id: 900,
+      },
+    });
+  });
+
+  it("returns safe reconciliation responses without raw SumUp bodies or secrets", async () => {
+    reconcileUnknownSumUpRefundAttemptMock.mockResolvedValue({
+      status: 409,
+      result: "manual_review",
+      message: "Manual review is required.",
+      attemptId: 900,
+      refundRequestId: 501,
+      raw_response: {
+        authorization: "Bearer secret",
+        card: "4242",
+      },
+    });
+
+    const response = await PATCH(
+      requestBody("recheck_sumup_refund") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+    const body = await response.json();
+    const serializedBody = JSON.stringify(body);
+
+    expect(response.status).toBe(409);
+    expect(body).toMatchObject({
+      result: "manual_review",
+      message: "Manual review is required.",
+    });
+    expect(serializedBody).not.toContain("secret");
+    expect(serializedBody).not.toContain("4242");
+    expect(serializedBody).not.toContain("raw_response");
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
   });
 
   it("rejects a pending request without changing wallet balance", async () => {

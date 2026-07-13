@@ -87,6 +87,122 @@ async function openAdminRefundQueue(page: Page, adminSeed: AdminSeed) {
   await expect(page.getByRole("heading", { name: "Refund Requests" })).toBeVisible();
 }
 
+async function getBrowserAccessToken(page: Page) {
+  return page.evaluate(() => {
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      const rawValue = key ? window.localStorage.getItem(key) : null;
+
+      if (!rawValue || !key?.includes("auth-token")) {
+        continue;
+      }
+
+      try {
+        const parsedValue = JSON.parse(rawValue);
+        const token =
+          parsedValue?.access_token ??
+          parsedValue?.currentSession?.access_token ??
+          parsedValue?.session?.access_token;
+
+        if (typeof token === "string" && token.trim()) {
+          return token;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  });
+}
+
+async function recheckRefundRequestFromBrowser(page: Page, refundRequestId: number) {
+  const token = await getBrowserAccessToken(page);
+
+  expect(token).toBeTruthy();
+
+  return page.evaluate(
+    async ({ accessToken, id }) => {
+      const response = await fetch(`/api/admin/refund-requests/${id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "recheck_sumup_refund",
+        }),
+      });
+
+      return {
+        status: response.status,
+        body: await response.json(),
+      };
+    },
+    { accessToken: token, id: refundRequestId }
+  );
+}
+
+async function seedUnknownSumUpRefundAttempt(
+  supabase: SupabaseClient,
+  seed: MoneyFlowSeed,
+  refundRequestId: number,
+  amount: number
+) {
+  const { data: attempt, error: attemptError } = await supabase
+    .from("sumup_refund_attempts")
+    .insert({
+      refund_request_id: refundRequestId,
+      source_wallet_transaction_id: seed.sourceCredit.id,
+      booking_payment_id: seed.payment.id,
+      requested_by: null,
+      sumup_transaction_id: `${seed.runId}_sumup_txn`,
+      amount,
+      currency: "GBP",
+      status: "unknown",
+      idempotency_key: `e2e:${seed.runId}:unknown_sumup_attempt`,
+      error_message: "E2E unknown SumUp refund outcome.",
+      sumup_response: {
+        reconciliation_test: true,
+      },
+      metadata: {
+        e2e_run_id: seed.runId,
+        transaction_code: `${seed.runId}_txn_code`,
+      },
+    })
+    .select("id")
+    .single();
+
+  if (attemptError) {
+    throw new Error(`seed unknown SumUp refund attempt: ${attemptError.message}`);
+  }
+
+  const refundRequests = await getRefundRequestsForSourceCredit(
+    supabase,
+    seed.player.id,
+    seed.sourceCredit.id
+  );
+  const refundRequest = refundRequests.find((request) => Number(request.id) === refundRequestId);
+
+  const { error: requestError } = await supabase
+    .from("wallet_transactions")
+    .update({
+      status: "processing",
+      metadata: {
+        ...((refundRequest?.metadata as Record<string, unknown> | null) ?? {}),
+        sumup_refund_attempt_id: attempt.id,
+      },
+    })
+    .eq("id", refundRequestId)
+    .eq("transaction_type", "refund_requested");
+
+  if (requestError) {
+    throw new Error(`mark refund request processing: ${requestError.message}`);
+  }
+
+  return Number(attempt.id);
+}
+
 test.describe("admin refund processing", () => {
   test.skip(
     !canRunDatabaseMutationE2E(),
@@ -311,5 +427,158 @@ test.describe("admin refund processing", () => {
       availableBalance: 0,
     });
     expect(sumupRefundUrls).toHaveLength(0);
+  });
+
+  test("admin can recheck an unknown SumUp refund and complete from mocked evidence", async ({ page }) => {
+    test.skip(
+      !canRunMockSumUpRefundE2E(),
+      "Mocked SumUp refund reconciliation E2E requires TEST Supabase ref, E2E_ALLOW_DB_MUTATION=true, and E2E_MOCK_SUMUP_REFUNDS=true."
+    );
+
+    const sumupRefundUrls: string[] = [];
+    page.on("request", (request) => {
+      const url = request.url();
+
+      if (url.includes("/refunds")) {
+        sumupRefundUrls.push(url);
+      }
+    });
+
+    const { adminSeed, moneySeed, refundRequestId } = await seedPendingAdminRefund(
+      supabase,
+      adminSeeds,
+      moneySeeds,
+      11
+    );
+    await seedUnknownSumUpRefundAttempt(supabase, moneySeed, refundRequestId, 11);
+
+    await openAdminRefundQueue(page, adminSeed);
+
+    const card = refundRequestCard(page, moneySeed);
+    await expect(card).toContainText("SumUp outcome is unknown");
+    await expect(card.getByRole("button", { name: "Recheck SumUp" })).toBeVisible();
+
+    const dialogMessages: string[] = [];
+    const dialogHandler = async (dialog: Dialog) => {
+      dialogMessages.push(dialog.message());
+      await dialog.accept("");
+    };
+    page.on("dialog", dialogHandler);
+    const recheckResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/admin/refund-requests/${refundRequestId}`) &&
+        response.request().method() === "PATCH"
+    );
+
+    await card.getByRole("button", { name: "Recheck SumUp" }).click();
+    const recheckResponse = await recheckResponsePromise;
+    const recheckResponseBody = await recheckResponse.json();
+
+    expect(recheckResponse.ok(), JSON.stringify(recheckResponseBody)).toBe(true);
+    expect(recheckResponseBody.result).toBe("refund_confirmed");
+
+    page.off("dialog", dialogHandler);
+
+    await expect(page.getByText(moneySeed.player.email)).toHaveCount(0);
+    expect(dialogMessages.some((message) => message.includes("wallet refund completed"))).toBe(true);
+    expect(dialogMessages.join("\n")).not.toContain(moneySeed.player.email);
+
+    const refundRequests = await getRefundRequestsForSourceCredit(
+      supabase,
+      moneySeed.player.id,
+      moneySeed.sourceCredit.id
+    );
+    const completedDebits = await getRefundCompletedDebitsForRequest(
+      supabase,
+      moneySeed.player.id,
+      refundRequestId
+    );
+    const refundAttempts = await getSumUpRefundAttemptsForRequest(supabase, refundRequestId);
+
+    expect(refundRequests).toHaveLength(1);
+    expect(refundRequests[0].status).toBe("completed");
+    expect(refundAttempts).toHaveLength(1);
+    expect(refundAttempts[0].status).toBe("succeeded");
+    expect(completedDebits).toHaveLength(1);
+    expect(Number(completedDebits[0].amount)).toBe(-11);
+    expect(sumupRefundUrls).toHaveLength(0);
+
+    const repeatResult = await recheckRefundRequestFromBrowser(page, refundRequestId);
+    const repeatCompletedDebits = await getRefundCompletedDebitsForRequest(
+      supabase,
+      moneySeed.player.id,
+      refundRequestId
+    );
+
+    expect(repeatResult.status).toBe(200);
+    expect(repeatResult.body.result).toBe("already_completed");
+    expect(repeatCompletedDebits).toHaveLength(1);
+    expect(sumupRefundUrls).toHaveLength(0);
+  });
+
+  test("admin recheck keeps unknown SumUp refunds in manual review when mocked evidence conflicts", async ({ page }) => {
+    test.skip(
+      !canRunMockSumUpRefundE2E() ||
+        process.env.E2E_MOCK_SUMUP_REFUND_RECHECK_OUTCOME !== "manual_review",
+      "Mocked manual-review reconciliation E2E requires E2E_MOCK_SUMUP_REFUND_RECHECK_OUTCOME=manual_review."
+    );
+
+    const { adminSeed, moneySeed, refundRequestId } = await seedPendingAdminRefund(
+      supabase,
+      adminSeeds,
+      moneySeeds,
+      10
+    );
+    await seedUnknownSumUpRefundAttempt(supabase, moneySeed, refundRequestId, 10);
+
+    await openAdminRefundQueue(page, adminSeed);
+
+    const dialogMessages: string[] = [];
+    const dialogHandler = async (dialog: Dialog) => {
+      dialogMessages.push(dialog.message());
+      await dialog.accept("");
+    };
+    page.on("dialog", dialogHandler);
+    const recheckResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/admin/refund-requests/${refundRequestId}`) &&
+        response.request().method() === "PATCH"
+    );
+
+    await refundRequestCard(page, moneySeed)
+      .getByRole("button", { name: "Recheck SumUp" })
+      .click();
+    const recheckResponse = await recheckResponsePromise;
+    const recheckResponseBody = await recheckResponse.json();
+
+    expect(recheckResponse.status()).toBe(409);
+    expect(recheckResponseBody.result).toBe("manual_review");
+
+    page.off("dialog", dialogHandler);
+
+    const refundRequests = await getRefundRequestsForSourceCredit(
+      supabase,
+      moneySeed.player.id,
+      moneySeed.sourceCredit.id
+    );
+    const completedDebits = await getRefundCompletedDebitsForRequest(
+      supabase,
+      moneySeed.player.id,
+      refundRequestId
+    );
+    const refundAttempts = await getSumUpRefundAttemptsForRequest(supabase, refundRequestId);
+
+    expect(refundRequests).toHaveLength(1);
+    expect(refundRequests[0].status).toBe("processing");
+    expect(refundAttempts).toHaveLength(1);
+    expect(refundAttempts[0].status).toBe("unknown");
+    expect(completedDebits).toHaveLength(0);
+    expect(dialogMessages.some((message) => message.includes("Mocked SumUp evidence requires manual review"))).toBe(true);
+    expect(dialogMessages.join("\n")).not.toContain("Bearer");
+    expect(dialogMessages.join("\n")).not.toContain("secret");
+    expect(dialogMessages.join("\n")).not.toContain(moneySeed.player.email);
+    expect(JSON.stringify(recheckResponseBody)).not.toContain("Bearer");
+    expect(JSON.stringify(recheckResponseBody)).not.toContain("secret");
+    expect(JSON.stringify(recheckResponseBody)).not.toContain(moneySeed.player.email);
   });
 });

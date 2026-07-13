@@ -22,6 +22,26 @@ export type SumUpTransaction = {
   status: string;
   simple_status?: string;
   merchant_code?: string;
+  events?: SumUpTransactionEvent[];
+  history?: SumUpTransactionEvent[];
+  transaction_events?: SumUpTransactionEvent[];
+  refunds?: SumUpTransactionEvent[];
+  refund_events?: SumUpTransactionEvent[];
+  [key: string]: unknown;
+};
+
+export type SumUpTransactionEvent = {
+  id?: string;
+  type?: string;
+  event_type?: string;
+  status?: string;
+  simple_status?: string;
+  amount?: number | string;
+  currency?: string;
+  timestamp?: string;
+  created_at?: string;
+  transaction_id?: string;
+  [key: string]: unknown;
 };
 
 export type SumUpRefundResponse = {

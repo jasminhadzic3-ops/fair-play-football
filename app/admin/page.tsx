@@ -482,7 +482,7 @@ export default function AdminPage() {
 
   const processRefundRequest = async (
     request: RefundRequest,
-    action: "approve" | "reject" | "refund_via_sumup"
+    action: "approve" | "reject" | "refund_via_sumup" | "recheck_sumup_refund"
   ) => {
     if (processingRefundRequestId) {
       return;
@@ -490,9 +490,12 @@ export default function AdminPage() {
 
     const amount = formatRefundRequestAmount(request);
     const isSumUpRefund = action === "refund_via_sumup";
+    const isSumUpRecheck = action === "recheck_sumup_refund";
     const confirmed = window.confirm(
       isSumUpRefund
         ? `Refund request ${request.id} for ${amount} via SumUp? This will attempt a card refund before completing the wallet refund.`
+        : isSumUpRecheck
+        ? `Recheck SumUp evidence for refund request ${request.id} for ${amount}? This will not issue another refund.`
         : action === "approve"
         ? `Mark refund request ${request.id} for ${amount} as manually refunded? This will deduct the amount from the wallet balance.`
         : `Reject refund request ${request.id} for ${amount}? This will not change the wallet balance.`
@@ -502,7 +505,7 @@ export default function AdminPage() {
       return;
     }
 
-    const reason = isSumUpRefund
+    const reason = isSumUpRefund || isSumUpRecheck
       ? null
       : window.prompt(
           action === "approve"
@@ -524,12 +527,12 @@ export default function AdminPage() {
       const result = await response.json().catch(() => null);
 
       if (!response.ok) {
-        alert(result?.error || "Unable to process refund request.");
+        alert(result?.message || result?.error || "Unable to process refund request.");
         return;
       }
 
       alert(
-        isSumUpRefund
+        isSumUpRefund || isSumUpRecheck
           ? result?.message || "SumUp refund action completed."
           : action === "approve"
             ? "Refund marked as completed."
@@ -665,7 +668,7 @@ export default function AdminPage() {
 
   const getRefundRequestStatusMessage = (request: RefundRequest) => {
     if (request.sumup_refund_attempt_status === "unknown") {
-      return "SumUp outcome is unknown. Reconcile manually before retrying.";
+      return "SumUp outcome is unknown. Recheck SumUp before retrying.";
     }
 
     if (request.sumup_refund_attempt_status === "succeeded" && request.status === "processing") {
@@ -690,6 +693,11 @@ export default function AdminPage() {
 
   const canManuallyProcessRefund = (request: RefundRequest) =>
     request.status === "pending";
+
+  const canRecheckSumUpRefund = (request: RefundRequest) =>
+    request.status === "processing" &&
+    request.sumup_refund_attempt_status === "unknown" &&
+    Boolean(request.sumup_refund_attempt_id);
 
   const summaryCards = [
     { label: "Total games", value: summary.games_count },
@@ -1105,6 +1113,16 @@ export default function AdminPage() {
                           {processingRefundRequestId === request.id ? "Processing..." : "Refund via SumUp"}
                         </button>
                       ) : null}
+                      {canRecheckSumUpRefund(request) ? (
+                        <button
+                          type="button"
+                          onClick={() => void processRefundRequest(request, "recheck_sumup_refund")}
+                          disabled={processingRefundRequestId === request.id}
+                          className="w-full rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                        >
+                          {processingRefundRequestId === request.id ? "Checking..." : "Recheck SumUp"}
+                        </button>
+                      ) : null}
                       {canManuallyProcessRefund(request) ? (
                         <>
                           <button
@@ -1125,7 +1143,9 @@ export default function AdminPage() {
                           </button>
                         </>
                       ) : null}
-                      {!canRefundViaSumUp(request) && !canManuallyProcessRefund(request) ? (
+                      {!canRefundViaSumUp(request) &&
+                      !canRecheckSumUpRefund(request) &&
+                      !canManuallyProcessRefund(request) ? (
                         <p className="max-w-48 text-right text-xs text-zinc-400">
                           {getRefundRequestStatusMessage(request) || "No automatic action is available."}
                         </p>

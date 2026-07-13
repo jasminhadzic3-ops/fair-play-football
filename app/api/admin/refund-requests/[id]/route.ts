@@ -4,6 +4,10 @@ import {
   processAutomaticSumUpRefund,
   type SumUpRefundDependency,
 } from "@/lib/sumupRefundProcessing";
+import {
+  reconcileUnknownSumUpRefundAttempt,
+  type SumUpRefundEvidenceDependency,
+} from "@/lib/sumupRefundReconciliation";
 import { getAutomaticSumUpRefundMode } from "@/lib/sumupRefundCapabilities";
 import { refundSumUpTransaction, SumUpRefundHttpError } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -205,6 +209,70 @@ function getAutomaticRefundDependency(): SumUpRefundDependency | null {
   return null;
 }
 
+function getTestOnlyMockReconciliationEvidenceDependency(): SumUpRefundEvidenceDependency {
+  return async ({ sumup_transaction_id, amount, currency }) => {
+    const outcome = process.env.E2E_MOCK_SUMUP_REFUND_RECHECK_OUTCOME || "refund_confirmed";
+
+    if (outcome === "not_refunded_retry_allowed") {
+      return {
+        outcome,
+        message: "Mocked SumUp evidence confirms the refund did not occur. The request is retryable.",
+        evidence: {
+          source: "mock_sumup_refund_event",
+          transaction_id: sumup_transaction_id,
+          event_type: "REFUND_FAILED",
+          event_status: "FAILED",
+          event_amount: Number(amount),
+          event_currency: currency,
+          reason: "mock_failed_refund_event",
+        },
+      };
+    }
+
+    if (outcome === "manual_review") {
+      return {
+        outcome,
+        message: "Mocked SumUp evidence requires manual review.",
+        evidence: {
+          source: "mock_sumup_refund_event",
+          transaction_id: sumup_transaction_id,
+          event_type: "REFUND_SUCCEEDED",
+          event_status: "SUCCESSFUL",
+          event_amount: Number(amount) + 1,
+          event_currency: currency,
+          reason: "mock_conflicting_amount",
+        },
+      };
+    }
+
+    if (outcome === "still_unknown") {
+      return {
+        outcome,
+        message: "Mocked SumUp evidence is still inconclusive.",
+        evidence: {
+          source: "mock_sumup_refund_event",
+          transaction_id: sumup_transaction_id,
+          reason: "mock_inconclusive",
+        },
+      };
+    }
+
+    return {
+      outcome: "refund_confirmed",
+      message: "Mocked SumUp evidence confirms the refund succeeded.",
+      evidence: {
+        source: "mock_sumup_refund_event",
+        transaction_id: sumup_transaction_id,
+        event_type: "REFUND_SUCCEEDED",
+        event_status: "SUCCESSFUL",
+        event_amount: Number(amount),
+        event_currency: currency,
+        reason: "mock_successful_refund_event",
+      },
+    };
+  };
+}
+
 function getAttemptStatusForProcessorResult(result: Awaited<ReturnType<typeof processAutomaticSumUpRefund>>) {
   if (result.outcome === "sumup_unknown") {
     return "unknown";
@@ -242,8 +310,41 @@ export async function PATCH(
     const body = (await request.json().catch(() => null)) as RefundRequestPayload | null;
     const action = body?.action;
 
-    if (action !== "approve" && action !== "reject" && action !== "refund_via_sumup") {
+    if (
+      action !== "approve" &&
+      action !== "reject" &&
+      action !== "refund_via_sumup" &&
+      action !== "recheck_sumup_refund"
+    ) {
       return Response.json({ error: "Invalid refund request action." }, { status: 400 });
+    }
+
+    if (action === "recheck_sumup_refund") {
+      const mode = getAutomaticSumUpRefundMode();
+      const result = await reconcileUnknownSumUpRefundAttempt({
+        refundRequestId,
+        adminUserId: adminUser.id,
+        retrieveEvidence: mode === "test_mock" ? getTestOnlyMockReconciliationEvidenceDependency() : undefined,
+      });
+
+      return Response.json(
+        {
+          message: result.message,
+          result: result.result,
+          refund_request: {
+            id: result.refundRequestId,
+          },
+          refund_transaction: result.refundTransactionId
+            ? { id: result.refundTransactionId }
+            : null,
+          sumup_refund_attempt: result.attemptId
+            ? {
+                id: result.attemptId,
+              }
+            : null,
+        },
+        { status: result.status }
+      );
     }
 
     if (action === "refund_via_sumup") {
