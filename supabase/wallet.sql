@@ -71,6 +71,13 @@ where transaction_type = 'refund_requested'
   and status in ('pending', 'processing', 'completed')
   and metadata ? 'source_wallet_transaction_id';
 
+create unique index if not exists wallet_refund_completed_one_debit_per_request_uidx
+on public.wallet_transactions((metadata->>'refund_request_id'))
+where transaction_type = 'refund_completed'
+  and status = 'completed'
+  and metadata ? 'refund_request_id'
+  and (metadata->>'refund_request_id') ~ '^[0-9]+$';
+
 create or replace function public.set_wallet_transactions_updated_at()
 returns trigger
 language plpgsql
