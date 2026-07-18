@@ -125,6 +125,15 @@ function errorJson(body: Record<string, unknown>, status = 400) {
   return new Response(JSON.stringify(body), { status });
 }
 
+function problemJson(body: Record<string, unknown>, status = 400) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/problem+json",
+    },
+  });
+}
+
 function defaultPayment(overrides: Partial<PaymentRow> = {}): PaymentRow {
   return {
     id: 44,
@@ -600,28 +609,55 @@ describe("SumUp payment helpers", () => {
     expect(updateCalls).toHaveLength(0);
   });
 
-  it("refunds a SumUp transaction with the exact positive amount payload", async () => {
+  it("sends an empty request body for a full SumUp refund", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const result = await refundSumUpTransaction({
+      transactionId: "transaction-id-1",
+      amount: 10,
+      originalPaymentAmount: 10,
+    });
+
+    expect(result).toEqual({
+      transactionId: "transaction-id-1",
+      amount: 10,
+      response: null,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.sumup.com/v1.0/merchants/MERCHANT-1/payments/transaction-id-1/refunds",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/problem+json, application/json",
+          Authorization: "Bearer sumup-key",
+        },
+      }
+    );
+  });
+
+  it("sends an amount payload for a partial SumUp refund", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       okJson({
         id: "refund-1",
         status: "SUCCESSFUL",
-        amount: 10,
+        amount: 5,
         transaction_id: "transaction-id-1",
       })
     );
 
     const result = await refundSumUpTransaction({
       transactionId: "transaction-id-1",
-      amount: 10,
+      amount: 5,
+      originalPaymentAmount: 10,
     });
 
     expect(result).toEqual({
       transactionId: "transaction-id-1",
-      amount: 10,
+      amount: 5,
       response: {
         id: "refund-1",
         status: "SUCCESSFUL",
-        amount: 10,
+        amount: 5,
         transaction_id: "transaction-id-1",
       },
     });
@@ -634,7 +670,7 @@ describe("SumUp payment helpers", () => {
           Authorization: "Bearer sumup-key",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ amount: 10 }),
+        body: JSON.stringify({ amount: 5 }),
       }
     );
   });
@@ -646,6 +682,7 @@ describe("SumUp payment helpers", () => {
     await refundSumUpTransaction({
       transactionId: "txn/id 1",
       amount: 1,
+      originalPaymentAmount: 1,
     });
 
     expect(fetch).toHaveBeenCalledWith(
@@ -660,6 +697,7 @@ describe("SumUp payment helpers", () => {
     const result = await refundSumUpTransaction({
       transactionId: "transaction-id-1",
       amount: 10.555,
+      originalPaymentAmount: 20,
     });
 
     expect(result.amount).toBe(10.56);
@@ -672,21 +710,33 @@ describe("SumUp payment helpers", () => {
   });
 
   it("rejects invalid SumUp refund inputs before calling SumUp", async () => {
-    await expect(refundSumUpTransaction({ transactionId: " ", amount: 10 })).rejects.toThrow(
+    await expect(refundSumUpTransaction({ transactionId: " ", amount: 10, originalPaymentAmount: 10 })).rejects.toThrow(
       "SumUp transaction id is required."
     );
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 0 })).rejects.toThrow(
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 0, originalPaymentAmount: 10 })).rejects.toThrow(
       "SumUp refund amount must be greater than 0."
     );
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: -1 })).rejects.toThrow(
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: -1, originalPaymentAmount: 10 })).rejects.toThrow(
       "SumUp refund amount must be greater than 0."
     );
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: Number.NaN })).rejects.toThrow(
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: Number.NaN, originalPaymentAmount: 10 })).rejects.toThrow(
       "SumUp refund amount must be greater than 0."
     );
     await expect(
-      refundSumUpTransaction({ transactionId: "transaction-id-1", amount: Number.POSITIVE_INFINITY })
+      refundSumUpTransaction({ transactionId: "transaction-id-1", amount: Number.POSITIVE_INFINITY, originalPaymentAmount: 10 })
     ).rejects.toThrow("SumUp refund amount must be greater than 0.");
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects over-refunds before calling SumUp", async () => {
+    await expect(
+      refundSumUpTransaction({
+        transactionId: "transaction-id-1",
+        amount: 10.01,
+        originalPaymentAmount: 10,
+      })
+    ).rejects.toThrow("SumUp refund amount cannot exceed the original payment amount.");
 
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -694,30 +744,59 @@ describe("SumUp payment helpers", () => {
   it("requires SumUp refund env vars", async () => {
     delete process.env.SUMUP_MERCHANT_CODE;
 
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 10 })).rejects.toThrow(
-      "SUMUP_MERCHANT_CODE is required."
-    );
+    await expect(
+      refundSumUpTransaction({
+        transactionId: "transaction-id-1",
+        amount: 10,
+        originalPaymentAmount: 10,
+      })
+    ).rejects.toThrow("SUMUP_MERCHANT_CODE is required.");
 
     process.env.SUMUP_MERCHANT_CODE = "MERCHANT-1";
     delete process.env.SUMUP_API_KEY;
 
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 10 })).rejects.toThrow(
-      "SUMUP_API_KEY is required."
-    );
+    await expect(
+      refundSumUpTransaction({
+        transactionId: "transaction-id-1",
+        amount: 10,
+        originalPaymentAmount: 10,
+      })
+    ).rejects.toThrow("SUMUP_API_KEY is required.");
   });
 
   it("surfaces non-OK SumUp refund responses", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(errorJson({ detail: "Refund amount is too high." }, 422));
+    vi.mocked(fetch).mockResolvedValueOnce(
+      errorJson(
+        {
+          detail: "Refund amount is too high.",
+          code: "validation_error",
+          transaction_id: "transaction-id-1",
+        },
+        422
+      )
+    );
 
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 })).rejects.toMatchObject({
-      name: "SumUpRefundHttpError",
-      message: "Refund amount is too high.",
-      status: 422,
-      responseBody: expect.objectContaining({
-        detail: "Refund amount is too high.",
-        http_status: 422,
-      }),
-    });
+    try {
+      await refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99, originalPaymentAmount: 100 });
+      throw new Error("Expected refundSumUpTransaction to throw.");
+    } catch (error) {
+      expect(error).toMatchObject({
+        name: "SumUpRefundHttpError",
+        message: "Refund amount is too high.",
+        status: 422,
+        responseBody: expect.objectContaining({
+          upstream_http_status: 422,
+          endpoint_family: "transactions_refund_v1_merchant_payment",
+          response_body_kind: "json",
+          detail: "Refund amount is too high.",
+          code: "validation_error",
+          error_code: "validation_error",
+          safe_message: "Refund amount is too high.",
+          http_status: 422,
+        }),
+      });
+      expect((error as SumUpRefundHttpError).responseBody).not.toHaveProperty("transaction_id");
+    }
   });
 
   it("treats non-JSON SumUp refund rejections as definite HTTP failures", async () => {
@@ -730,13 +809,94 @@ describe("SumUp payment helpers", () => {
       })
     );
 
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 })).rejects.toMatchObject({
+    try {
+      await refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99, originalPaymentAmount: 100 });
+      throw new Error("Expected refundSumUpTransaction to throw.");
+    } catch (error) {
+      expect(error).toMatchObject({
+        name: "SumUpRefundHttpError",
+        message: "SumUp returned a non-JSON error response.",
+        status: 503,
+        responseBody: expect.objectContaining({
+          upstream_http_status: 503,
+          endpoint_family: "transactions_refund_v1_merchant_payment",
+          response_body_kind: "non_json",
+          safe_message: "SumUp returned a non-JSON error response.",
+          http_status: 503,
+        }),
+      });
+      expect(JSON.stringify((error as SumUpRefundHttpError).responseBody)).not.toContain("<html>");
+      expect(JSON.stringify((error as SumUpRefundHttpError).responseBody)).not.toContain("transaction-id-1");
+      expect(JSON.stringify((error as SumUpRefundHttpError).responseBody)).not.toContain("sumup-key");
+    }
+  });
+
+  it("captures safe Problem Details diagnostics for forbidden refund responses", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      problemJson(
+        {
+          type: "https://developer.sumup.com/problem/request-not-allowed",
+          title: "Request not allowed.",
+          detail: "The request is authenticated but not permitted.",
+          error_code: "request_not_allowed",
+        },
+        403
+      )
+    );
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99, originalPaymentAmount: 100 })).rejects.toMatchObject({
       name: "SumUpRefundHttpError",
-      message: "SumUp returned a non-JSON error response.",
-      status: 503,
+      message: "The request is authenticated but not permitted.",
+      status: 403,
       responseBody: expect.objectContaining({
-        body_excerpt: "<html>service unavailable</html>",
-        http_status: 503,
+        upstream_http_status: 403,
+        endpoint_family: "transactions_refund_v1_merchant_payment",
+        response_body_kind: "problem_json",
+        problem_type: "https://developer.sumup.com/problem/request-not-allowed",
+        title: "Request not allowed.",
+        detail: "The request is authenticated but not permitted.",
+        error_code: "request_not_allowed",
+        safe_message: "The request is authenticated but not permitted.",
+      }),
+    });
+  });
+
+  it("captures safe conflict diagnostics for rejected refund responses", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      errorJson(
+        {
+          error_code: "CONFLICT",
+          message: "The transaction is not refundable in its current state.",
+        },
+        409
+      )
+    );
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99, originalPaymentAmount: 100 })).rejects.toMatchObject({
+      name: "SumUpRefundHttpError",
+      message: "The transaction is not refundable in its current state.",
+      status: 409,
+      responseBody: expect.objectContaining({
+        upstream_http_status: 409,
+        response_body_kind: "json",
+        error_code: "CONFLICT",
+        safe_message: "The transaction is not refundable in its current state.",
+      }),
+    });
+  });
+
+  it("captures safe empty-body diagnostics for rejected refund responses", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 422 }));
+
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99, originalPaymentAmount: 100 })).rejects.toMatchObject({
+      name: "SumUpRefundHttpError",
+      message: "SumUp returned an empty error response.",
+      status: 422,
+      responseBody: expect.objectContaining({
+        upstream_http_status: 422,
+        endpoint_family: "transactions_refund_v1_merchant_payment",
+        response_body_kind: "empty",
+        safe_message: "SumUp returned an empty error response.",
       }),
     });
   });
@@ -745,7 +905,7 @@ describe("SumUp payment helpers", () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error("fetch failed"));
 
     try {
-      await refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99 });
+      await refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 99, originalPaymentAmount: 100 });
       throw new Error("Expected refundSumUpTransaction to throw.");
     } catch (error) {
       expect(error).not.toBeInstanceOf(SumUpRefundHttpError);
@@ -756,7 +916,7 @@ describe("SumUp payment helpers", () => {
   it("handles an empty successful SumUp refund response", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
 
-    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 5 })).resolves.toEqual({
+    await expect(refundSumUpTransaction({ transactionId: "transaction-id-1", amount: 5, originalPaymentAmount: 5 })).resolves.toEqual({
       transactionId: "transaction-id-1",
       amount: 5,
       response: null,

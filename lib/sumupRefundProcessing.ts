@@ -11,10 +11,13 @@ import {
   type CompleteWalletRefundRequestResult,
 } from "@/lib/wallet";
 import { resolveAndStoreSumUpTransactionIdForPaymentId } from "@/lib/sumupPayments";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type RefundDependencyParams = {
   transactionId: string;
   amount: number;
+  originalPaymentAmount: number;
+  currency: string | null;
 };
 
 export type SumUpRefundDependencyResult =
@@ -47,6 +50,7 @@ export type ProcessAutomaticSumUpRefundParams = {
   persistTransactionIdForAttempt?: typeof persistSumUpTransactionIdForProcessingAttempt;
   updateAttemptStatus?: typeof updateSumUpRefundAttemptStatus;
   restoreRefundRequestToPending?: typeof restoreRefundRequestToPendingAfterFailedSumUpAttempt;
+  loadOriginalPayment?: typeof loadOriginalPaymentForRefundAttempt;
 };
 
 export type ProcessAutomaticSumUpRefundResult =
@@ -67,6 +71,7 @@ export type ProcessAutomaticSumUpRefundResult =
       outcome: "sumup_failed" | "sumup_unknown";
       status: number;
       error: string;
+      diagnosticCode: string;
       attemptId: number;
       refundRequestId: number;
     }
@@ -237,10 +242,81 @@ function safeSumUpResponse(response: Record<string, unknown> | null | undefined)
     status: safeString(response.status),
     amount: safeNumber(response.amount),
     currency: safeString(response.currency, 20),
-    transaction_id: safeString(response.transaction_id),
+    upstream_http_status: safeNumber(response.upstream_http_status ?? response.http_status),
+    endpoint_family: safeString(response.endpoint_family, 120),
+    response_body_kind: safeString(response.response_body_kind, 40),
+    problem_type: safeString(response.problem_type ?? response.type, 300),
+    title: safeString(response.title),
+    detail: safeString(response.detail, 500),
     error_code: safeString(response.error_code),
+    code: safeString(response.code),
+    safe_message: safeString(response.safe_message ?? response.message ?? response.error_message),
     error_message: safeString(response.error_message),
     message: safeString(response.message),
+  };
+}
+
+function getSumUpDiagnosticCode(response: Record<string, unknown> | null | undefined) {
+  const safeResponse = safeSumUpResponse(response);
+  const status = safeResponse?.upstream_http_status;
+  const rawReason =
+    safeResponse?.error_code ??
+    safeResponse?.code ??
+    safeResponse?.title ??
+    safeResponse?.response_body_kind ??
+    "unknown";
+  const reason = rawReason
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+
+  return `sumup_refund_${status ?? "unknown"}_${reason || "unknown"}`;
+}
+
+function getFailureMetadata(response: Record<string, unknown> | null | undefined) {
+  const safeResponse = safeSumUpResponse(response);
+
+  return {
+    sumup_refund_diagnostic_code: getSumUpDiagnosticCode(response),
+    sumup_refund_upstream_http_status: safeResponse?.upstream_http_status ?? null,
+    sumup_refund_endpoint_family: safeResponse?.endpoint_family ?? null,
+    sumup_refund_response_body_kind: safeResponse?.response_body_kind ?? null,
+  };
+}
+
+async function loadOriginalPaymentForRefundAttempt(bookingPaymentId: number | null) {
+  if (!bookingPaymentId) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("booking_payments")
+    .select("amount,currency,payment_status")
+    .eq("id", bookingPaymentId)
+    .maybeSingle<{
+      amount: number | string | null;
+      currency: string | null;
+      payment_status: string | null;
+    }>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.payment_status !== "paid") {
+    return null;
+  }
+
+  const amount = Number(data.amount);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  return {
+    amount,
+    currency: data.currency,
   };
 }
 
@@ -316,6 +392,7 @@ export async function processAutomaticSumUpRefund({
   persistTransactionIdForAttempt = persistSumUpTransactionIdForProcessingAttempt,
   updateAttemptStatus = updateSumUpRefundAttemptStatus,
   restoreRefundRequestToPending = restoreRefundRequestToPendingAfterFailedSumUpAttempt,
+  loadOriginalPayment = loadOriginalPaymentForRefundAttempt,
 }: ProcessAutomaticSumUpRefundParams): Promise<ProcessAutomaticSumUpRefundResult> {
   const claimResult = await claimAttempt({
     refundRequestId,
@@ -397,9 +474,35 @@ export async function processAutomaticSumUpRefund({
     };
   }
 
+  let originalPayment: Awaited<ReturnType<typeof loadOriginalPaymentForRefundAttempt>>;
+
+  try {
+    originalPayment = await loadOriginalPayment(claimResult.bookingPaymentId);
+  } catch (error) {
+    return {
+      outcome: "blocked",
+      status: 409,
+      error: error instanceof Error ? error.message : "Unable to load original SumUp payment.",
+      attemptStatus: claimResult.attemptStatus,
+      attemptId: claimResult.attemptId,
+    };
+  }
+
+  if (!originalPayment) {
+    return {
+      outcome: "blocked",
+      status: 409,
+      error: "Refund request is not linked to a paid SumUp payment amount.",
+      attemptStatus: claimResult.attemptStatus,
+      attemptId: claimResult.attemptId,
+    };
+  }
+
   const refundResult = await refundDependency({
     transactionId: resolvedTransaction.sumUpTransactionId,
     amount: claimResult.amount,
+    originalPaymentAmount: originalPayment.amount,
+    currency: originalPayment.currency,
   });
 
   if (refundResult.outcome === "failed") {
@@ -412,6 +515,7 @@ export async function processAutomaticSumUpRefund({
       metadata: {
         sumup_refund_finished_at: new Date().toISOString(),
         sumup_refund_outcome: "failed",
+        ...getFailureMetadata(refundResult.response),
       },
     });
 
@@ -426,6 +530,7 @@ export async function processAutomaticSumUpRefund({
       outcome: "sumup_failed",
       status: 502,
       error: "SumUp rejected the refund. No wallet debit was created.",
+      diagnosticCode: getSumUpDiagnosticCode(refundResult.response),
       attemptId: claimResult.attemptId!,
       refundRequestId: claimResult.refundRequestId!,
     };
@@ -441,6 +546,7 @@ export async function processAutomaticSumUpRefund({
       metadata: {
         sumup_refund_finished_at: new Date().toISOString(),
         sumup_refund_outcome: "unknown",
+        ...getFailureMetadata(refundResult.response),
       },
     });
 
@@ -461,6 +567,7 @@ export async function processAutomaticSumUpRefund({
       outcome: "sumup_unknown",
       status: 502,
       error: "SumUp refund outcome is unknown. Reconcile manually before retrying.",
+      diagnosticCode: getSumUpDiagnosticCode(refundResult.response),
       attemptId: claimResult.attemptId!,
       refundRequestId: claimResult.refundRequestId!,
     };

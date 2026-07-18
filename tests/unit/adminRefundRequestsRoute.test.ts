@@ -442,6 +442,38 @@ describe("admin refund request route", () => {
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
   });
 
+  it("returns a safe diagnostic code for rejected SumUp refunds", async () => {
+    processAutomaticSumUpRefundMock.mockResolvedValue({
+      outcome: "sumup_failed",
+      status: 502,
+      error: "SumUp rejected the refund. No wallet debit was created.",
+      diagnosticCode: "sumup_refund_403_request_not_allowed",
+      attemptId: 900,
+      refundRequestId: 501,
+    });
+
+    const response = await PATCH(
+      requestBody("refund_via_sumup") as Parameters<typeof PATCH>[0],
+      routeContext()
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toEqual({
+      error: "SumUp rejected the refund. No wallet debit was created.",
+      diagnostic_code: "sumup_refund_403_request_not_allowed",
+      outcome: "sumup_failed",
+      sumup_refund_attempt: {
+        id: 900,
+        status: "failed",
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain("Bearer");
+    expect(JSON.stringify(body)).not.toContain("transaction-id");
+    expect(JSON.stringify(body)).not.toContain("MERCHANT");
+    expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
+  });
+
   it("does not enable the automatic path unless the explicit TEST mock guard is active", async () => {
     delete process.env.E2E_MOCK_SUMUP_REFUNDS;
 
@@ -661,6 +693,14 @@ describe("admin refund request route", () => {
     const result = await dependency({
       transactionId: "transaction-id-1",
       amount: 99,
+      originalPaymentAmount: 100,
+      currency: "GBP",
+    });
+
+    expect(refundSumUpTransactionMock).toHaveBeenCalledWith({
+      transactionId: "transaction-id-1",
+      amount: 99,
+      originalPaymentAmount: 100,
     });
 
     expect(result).toEqual({
@@ -694,6 +734,8 @@ describe("admin refund request route", () => {
       const result = await dependency({
         transactionId: "transaction-id-1",
         amount: 99,
+        originalPaymentAmount: 100,
+        currency: "GBP",
       });
 
       expect(result).toEqual({
@@ -727,6 +769,8 @@ describe("admin refund request route", () => {
     const result = await dependency({
       transactionId: "transaction-id-1",
       amount: 99,
+      originalPaymentAmount: 100,
+      currency: "GBP",
     });
 
     expect(result).toEqual({
@@ -754,6 +798,8 @@ describe("admin refund request route", () => {
     const result = await dependency({
       transactionId: "transaction-id-1",
       amount: 99,
+      originalPaymentAmount: 100,
+      currency: "GBP",
     });
 
     expect(result).toEqual({
@@ -780,6 +826,8 @@ describe("admin refund request route", () => {
       const result = await dependency({
         transactionId: "transaction-id-1",
         amount: 99,
+        originalPaymentAmount: 100,
+        currency: "GBP",
       });
 
       expect(result).toEqual({

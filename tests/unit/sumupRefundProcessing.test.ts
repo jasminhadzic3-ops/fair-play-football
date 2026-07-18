@@ -36,6 +36,7 @@ function setup(overrides: {
   claim?: Record<string, unknown>;
   refundResult?: SumUpRefundDependencyResult;
   completion?: Record<string, unknown>;
+  originalPayment?: { amount: number; currency: string | null } | null;
 } = {}) {
   const claimAttempt = vi.fn().mockResolvedValue({
     ...defaultClaim,
@@ -62,6 +63,11 @@ function setup(overrides: {
   });
   const updateAttemptStatus = vi.fn().mockResolvedValue({ id: 900, status: "succeeded" });
   const restoreRefundRequestToPending = vi.fn().mockResolvedValue({ id: 501, status: "pending" });
+  const loadOriginalPayment = vi.fn().mockResolvedValue(
+    overrides.originalPayment === undefined
+      ? { amount: 12, currency: "GBP" }
+      : overrides.originalPayment
+  );
 
   return {
     claimAttempt,
@@ -71,6 +77,7 @@ function setup(overrides: {
     persistTransactionIdForAttempt,
     updateAttemptStatus,
     restoreRefundRequestToPending,
+    loadOriginalPayment,
   };
 }
 
@@ -85,6 +92,7 @@ async function runWith(deps: ReturnType<typeof setup>) {
     persistTransactionIdForAttempt: deps.persistTransactionIdForAttempt as never,
     updateAttemptStatus: deps.updateAttemptStatus as never,
     restoreRefundRequestToPending: deps.restoreRefundRequestToPending as never,
+    loadOriginalPayment: deps.loadOriginalPayment as never,
   });
 }
 
@@ -185,6 +193,13 @@ describe("processAutomaticSumUpRefund", () => {
       refundTransactionId: 700,
     });
     expect(deps.refundDependency).toHaveBeenCalledTimes(1);
+    expect(deps.loadOriginalPayment).toHaveBeenCalledWith(300);
+    expect(deps.refundDependency).toHaveBeenCalledWith({
+      transactionId: "sumup-txn-1",
+      amount: 12,
+      originalPaymentAmount: 12,
+      currency: "GBP",
+    });
     expect(deps.updateAttemptStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         attemptId: 900,
@@ -226,7 +241,27 @@ describe("processAutomaticSumUpRefund", () => {
     expect(deps.refundDependency).toHaveBeenCalledWith({
       transactionId: "resolved-txn-1",
       amount: 12,
+      originalPaymentAmount: 12,
+      currency: "GBP",
     });
+  });
+
+  it("blocks before refunding when the original paid amount cannot be loaded", async () => {
+    const deps = setup({
+      originalPayment: null,
+    });
+
+    const result = await runWith(deps);
+
+    expect(result).toMatchObject({
+      outcome: "blocked",
+      status: 409,
+      error: "Refund request is not linked to a paid SumUp payment amount.",
+    });
+    expect(deps.loadOriginalPayment).toHaveBeenCalledWith(300);
+    expect(deps.refundDependency).not.toHaveBeenCalled();
+    expect(deps.updateAttemptStatus).not.toHaveBeenCalled();
+    expect(deps.completeRefundRequest).not.toHaveBeenCalled();
   });
 
   it("blocks without a refund call when transaction lookup fails", async () => {
@@ -272,7 +307,16 @@ describe("processAutomaticSumUpRefund", () => {
       refundResult: {
         outcome: "failed",
         errorMessage: "Mocked failure.",
-        response: { error_message: "Mocked failure." },
+        response: {
+          upstream_http_status: 403,
+          endpoint_family: "transactions_refund_v1_merchant_payment",
+          response_body_kind: "problem_json",
+          problem_type: "https://developer.sumup.com/problem/request-not-allowed",
+          title: "Request not allowed.",
+          detail: "The request is authenticated but not permitted.",
+          error_code: "request_not_allowed",
+          safe_message: "The request is authenticated but not permitted.",
+        },
       },
     });
 
@@ -281,11 +325,28 @@ describe("processAutomaticSumUpRefund", () => {
     expect(result).toMatchObject({
       outcome: "sumup_failed",
       status: 502,
+      diagnosticCode: "sumup_refund_403_request_not_allowed",
     });
     expect(deps.updateAttemptStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "failed",
         errorMessage: "Mocked failure.",
+        sumUpResponse: expect.objectContaining({
+          upstream_http_status: 403,
+          endpoint_family: "transactions_refund_v1_merchant_payment",
+          response_body_kind: "problem_json",
+          problem_type: "https://developer.sumup.com/problem/request-not-allowed",
+          title: "Request not allowed.",
+          detail: "The request is authenticated but not permitted.",
+          error_code: "request_not_allowed",
+          safe_message: "The request is authenticated but not permitted.",
+        }),
+        metadata: expect.objectContaining({
+          sumup_refund_diagnostic_code: "sumup_refund_403_request_not_allowed",
+          sumup_refund_upstream_http_status: 403,
+          sumup_refund_endpoint_family: "transactions_refund_v1_merchant_payment",
+          sumup_refund_response_body_kind: "problem_json",
+        }),
       })
     );
     expect(deps.restoreRefundRequestToPending).toHaveBeenCalledWith({
@@ -301,7 +362,13 @@ describe("processAutomaticSumUpRefund", () => {
       refundResult: {
         outcome: "unknown",
         errorMessage: "Mocked timeout.",
-        response: { status: "UNKNOWN" },
+        response: {
+          upstream_http_status: 409,
+          endpoint_family: "transactions_refund_v1_merchant_payment",
+          response_body_kind: "json",
+          error_code: "CONFLICT",
+          safe_message: "Conflict.",
+        },
       },
     });
 
@@ -310,11 +377,25 @@ describe("processAutomaticSumUpRefund", () => {
     expect(result).toMatchObject({
       outcome: "sumup_unknown",
       status: 502,
+      diagnosticCode: "sumup_refund_409_conflict",
     });
     expect(deps.updateAttemptStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "unknown",
         errorMessage: "Mocked timeout.",
+        sumUpResponse: expect.objectContaining({
+          upstream_http_status: 409,
+          endpoint_family: "transactions_refund_v1_merchant_payment",
+          response_body_kind: "json",
+          error_code: "CONFLICT",
+          safe_message: "Conflict.",
+        }),
+        metadata: expect.objectContaining({
+          sumup_refund_diagnostic_code: "sumup_refund_409_conflict",
+          sumup_refund_upstream_http_status: 409,
+          sumup_refund_endpoint_family: "transactions_refund_v1_merchant_payment",
+          sumup_refund_response_body_kind: "json",
+        }),
       })
     );
     expect(deps.restoreRefundRequestToPending).not.toHaveBeenCalled();

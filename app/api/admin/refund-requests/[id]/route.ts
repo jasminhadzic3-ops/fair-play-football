@@ -159,9 +159,13 @@ function safeRefundHttpErrorResponse(error: SumUpRefundHttpError) {
 }
 
 function getRealSumUpRefundDependency(): SumUpRefundDependency {
-  return async ({ transactionId, amount }) => {
+  return async ({ transactionId, amount, originalPaymentAmount }) => {
     try {
-      const result = await refundSumUpTransaction({ transactionId, amount });
+      const result = await refundSumUpTransaction({
+        transactionId,
+        amount,
+        originalPaymentAmount,
+      });
 
       return {
         outcome: "succeeded",
@@ -389,6 +393,8 @@ export async function PATCH(
       return Response.json(
         {
           error: result.error,
+          diagnostic_code:
+            "diagnosticCode" in result ? result.diagnosticCode : undefined,
           outcome: result.outcome,
           sumup_refund_attempt:
             "attemptId" in result

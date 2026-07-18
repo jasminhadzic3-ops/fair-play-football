@@ -117,29 +117,64 @@ function boundedString(value: unknown, maxLength = 500) {
   return trimmedValue ? trimmedValue.slice(0, maxLength) : null;
 }
 
+const refundEndpointFamily = "transactions_refund_v1_merchant_payment";
+
+function getResponseBodyKind(response: Response, parsedBody: unknown, bodyText: string) {
+  if (!bodyText) {
+    return "empty";
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (contentType.includes("application/problem+json")) {
+    return "problem_json";
+  }
+
+  if (parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)) {
+    return "json";
+  }
+
+  return "non_json";
+}
+
 function safeErrorResponseBody(response: Response, bodyText: string, parsedBody: unknown) {
   if (parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)) {
     const body = parsedBody as Record<string, unknown>;
 
     return {
+      upstream_http_status: response.status,
+      endpoint_family: refundEndpointFamily,
+      response_body_kind: getResponseBodyKind(response, parsedBody, bodyText),
+      problem_type: boundedString(body.type),
+      title: boundedString(body.title),
+      detail: boundedString(body.detail),
+      error_code: boundedString(body.error_code ?? body.code, 100),
+      code: boundedString(body.code, 100),
+      safe_message: boundedString(body.message ?? body.error_message ?? body.detail ?? body.title),
       message: boundedString(body.message),
       error_message: boundedString(body.error_message),
-      detail: boundedString(body.detail),
-      title: boundedString(body.title),
-      error_code: boundedString(body.error_code, 100),
       status: boundedString(body.status, 100),
       amount: Number.isFinite(Number(body.amount)) ? Number(body.amount) : null,
       currency: boundedString(body.currency, 20),
-      transaction_id: boundedString(body.transaction_id),
       http_status: response.status,
     };
   }
 
   return {
+    upstream_http_status: response.status,
+    endpoint_family: refundEndpointFamily,
+    response_body_kind: getResponseBodyKind(response, parsedBody, bodyText),
+    problem_type: null,
+    title: null,
+    detail: null,
+    error_code: null,
+    code: null,
+    safe_message: bodyText.trim()
+      ? "SumUp returned a non-JSON error response."
+      : "SumUp returned an empty error response.",
     message: bodyText.trim()
       ? "SumUp returned a non-JSON error response."
       : "SumUp returned an empty error response.",
-    body_excerpt: boundedString(bodyText, 500),
     http_status: response.status,
   };
 }
@@ -377,6 +412,7 @@ export async function retrieveSumUpTransactionByCode(transactionCode: string) {
 export async function refundSumUpTransaction(params: {
   transactionId: string;
   amount: number;
+  originalPaymentAmount: number;
 }) {
   const transactionId = params.transactionId.trim();
 
@@ -385,23 +421,36 @@ export async function refundSumUpTransaction(params: {
   }
 
   const refundAmount = normalizeRefundAmount(params.amount);
+  const originalPaymentAmount = normalizeRefundAmount(params.originalPaymentAmount);
+
+  if (refundAmount > originalPaymentAmount) {
+    throw new Error("SumUp refund amount cannot exceed the original payment amount.");
+  }
+
+  const isFullRefund = refundAmount === originalPaymentAmount;
   const merchantCode = getSumUpMerchantCode();
   const url = `${sumupApiRoot}/v1.0/merchants/${encodeURIComponent(merchantCode)}/payments/${encodeURIComponent(transactionId)}/refunds`;
+  const headers: Record<string, string> = {
+    Accept: "application/problem+json, application/json",
+    Authorization: `Bearer ${getSumUpApiKey()}`,
+  };
+
+  const requestInit: RequestInit = {
+    method: "POST",
+    headers,
+  };
+
+  if (!isFullRefund) {
+    headers["Content-Type"] = "application/json";
+    requestInit.body = JSON.stringify({
+      amount: refundAmount,
+    });
+  }
 
   let response: Response;
 
   try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Accept: "application/problem+json, application/json",
-        Authorization: `Bearer ${getSumUpApiKey()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        amount: refundAmount,
-      }),
-    });
+    response = await fetch(url, requestInit);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Unable to reach SumUp refund endpoint.");
   }
