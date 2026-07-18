@@ -2,7 +2,7 @@ import "server-only";
 
 import * as Sentry from "@sentry/nextjs";
 import {
-  retrieveSumUpTransactionByCode,
+  retrieveValidatedSumUpTransactionForPayment,
   type SumUpTransaction,
   type SumUpTransactionEvent,
 } from "@/lib/sumupPayments";
@@ -328,7 +328,7 @@ export async function retrieveSumUpRefundEvidenceForAttempt(attempt: SumUpRefund
   const payment = await loadBookingPaymentForAttempt(attempt);
   const transactionCode = payment?.transaction_code?.trim();
 
-  if (!payment || !transactionCode) {
+  if (!payment || (!payment.sumup_transaction_id?.trim() && !transactionCode)) {
     return {
       outcome: "manual_review",
       message: "The original SumUp transaction could not be located. Manual review is required.",
@@ -339,20 +339,7 @@ export async function retrieveSumUpRefundEvidenceForAttempt(attempt: SumUpRefund
     } satisfies SumUpRefundEvidenceResult;
   }
 
-  const transaction = await retrieveSumUpTransactionByCode(transactionCode);
-
-  if (payment.sumup_transaction_id?.trim() && transaction.id !== payment.sumup_transaction_id.trim()) {
-    return {
-      outcome: "manual_review",
-      message: "SumUp transaction lookup did not match the booking payment.",
-      evidence: {
-        source: "sumup_transaction",
-        transaction_id: boundedString(transaction.id),
-        transaction_code: boundedString(transaction.transaction_code),
-        reason: "booking_payment_transaction_id_mismatch",
-      },
-    } satisfies SumUpRefundEvidenceResult;
-  }
+  const transaction = await retrieveValidatedSumUpTransactionForPayment(payment);
 
   return classifySumUpTransactionRefundEvidence(transaction, attempt);
 }

@@ -88,10 +88,25 @@ type BookingPaymentForSumUpResolution = {
   id: number;
   amount: number | string;
   currency: string | null;
-  payment_status: string | null;
+  payment_status?: string | null;
   transaction_code?: string | null;
   sumup_transaction_id?: string | null;
 };
+
+type SumUpTransactionLookupParams = {
+  id?: string | null;
+  transactionCode?: string | null;
+};
+
+export class SumUpTransactionLookupError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "SumUpTransactionLookupError";
+    this.status = status;
+  }
+}
 
 async function readJsonResponse(response: Response) {
   const text = await response.text();
@@ -262,9 +277,14 @@ function validateResolvedTransactionForPayment(
   transaction: SumUpTransaction
 ) {
   const transactionCode = payment.transaction_code?.trim();
+  const transactionId = payment.sumup_transaction_id?.trim();
 
   if (!transaction.id) {
     throw new Error("SumUp transaction response did not include a transaction id.");
+  }
+
+  if (transactionId && transaction.id !== transactionId) {
+    throw new Error("SumUp transaction id did not match the booking payment.");
   }
 
   if (!transactionCode || transaction.transaction_code !== transactionCode) {
@@ -378,16 +398,37 @@ export async function createSumUpCheckout(params: {
   return checkout as SumUpCheckout;
 }
 
-export async function retrieveSumUpTransactionByCode(transactionCode: string) {
-  const normalizedTransactionCode = transactionCode.trim();
+function getTransactionLookupValue(params: SumUpTransactionLookupParams) {
+  const id = params.id?.trim();
+  const transactionCode = params.transactionCode?.trim();
 
-  if (!normalizedTransactionCode) {
+  if (id) {
+    return {
+      parameter: "id",
+      value: id,
+    };
+  }
+
+  if (transactionCode) {
+    return {
+      parameter: "transaction_code",
+      value: transactionCode,
+    };
+  }
+
+  return null;
+}
+
+export async function retrieveSumUpTransaction(params: SumUpTransactionLookupParams) {
+  const lookup = getTransactionLookupValue(params);
+
+  if (!lookup) {
     throw new Error("SumUp transaction code is required.");
   }
 
   const merchantCode = getSumUpMerchantCode();
   const url = new URL(`${sumupApiRoot}/v2.1/merchants/${encodeURIComponent(merchantCode)}/transactions`);
-  url.searchParams.set("transaction_code", normalizedTransactionCode);
+  url.searchParams.set(lookup.parameter, lookup.value);
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -399,7 +440,10 @@ export async function retrieveSumUpTransactionByCode(transactionCode: string) {
   const transaction = await readJsonResponse(response);
 
   if (!response.ok) {
-    throw new Error(getSumUpErrorMessage(transaction, "Unable to retrieve SumUp transaction."));
+    throw new SumUpTransactionLookupError(
+      getSumUpErrorMessage(transaction, "Unable to retrieve SumUp transaction."),
+      response.status
+    );
   }
 
   if (!transaction || !transaction.id || !transaction.transaction_code) {
@@ -407,6 +451,40 @@ export async function retrieveSumUpTransactionByCode(transactionCode: string) {
   }
 
   return transaction as SumUpTransaction;
+}
+
+export async function retrieveSumUpTransactionByCode(transactionCode: string) {
+  return retrieveSumUpTransaction({ transactionCode });
+}
+
+export async function retrieveValidatedSumUpTransactionForPayment(
+  payment: BookingPaymentForSumUpResolution
+) {
+  const transactionId = payment.sumup_transaction_id?.trim();
+  const transactionCode = payment.transaction_code?.trim();
+
+  if (!transactionId && !transactionCode) {
+    throw new Error("SumUp transaction code is required.");
+  }
+
+  if (transactionId) {
+    try {
+      const transaction = await retrieveSumUpTransaction({ id: transactionId });
+      validateResolvedTransactionForPayment(payment, transaction);
+      return transaction;
+    } catch (error) {
+      if (!(error instanceof SumUpTransactionLookupError) || error.status !== 404 || !transactionCode) {
+        throw error;
+      }
+    }
+  }
+
+  const transaction = await retrieveSumUpTransaction({ transactionCode });
+  validateResolvedTransactionForPayment(
+    transactionId ? { ...payment, sumup_transaction_id: null } : payment,
+    transaction
+  );
+  return transaction;
 }
 
 export async function refundSumUpTransaction(params: {
@@ -515,9 +593,7 @@ export async function resolveAndStoreSumUpTransactionIdForPayment(
     return null;
   }
 
-  const transaction = await retrieveSumUpTransactionByCode(transactionCode);
-
-  validateResolvedTransactionForPayment(payment, transaction);
+  const transaction = await retrieveValidatedSumUpTransactionForPayment(payment);
 
   const { error } = await supabaseAdmin
     .from("booking_payments")

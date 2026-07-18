@@ -1,9 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const captureMessageMock = vi.hoisted(() => vi.fn());
+const supabaseFromMock = vi.hoisted(() => vi.fn());
+const retrieveValidatedSumUpTransactionForPaymentMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@sentry/nextjs", () => ({
   captureMessage: captureMessageMock,
+}));
+
+vi.mock("@/lib/supabaseAdmin", () => ({
+  supabaseAdmin: {
+    from: supabaseFromMock,
+  },
+}));
+
+vi.mock("@/lib/sumupPayments", () => ({
+  retrieveValidatedSumUpTransactionForPayment: retrieveValidatedSumUpTransactionForPaymentMock,
 }));
 
 import {
@@ -107,6 +119,8 @@ async function runWith(deps: ReturnType<typeof setup>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  supabaseFromMock.mockReset();
+  retrieveValidatedSumUpTransactionForPaymentMock.mockReset();
 });
 
 describe("reconcileUnknownSumUpRefundAttempt", () => {
@@ -345,8 +359,102 @@ describe("reconcileUnknownSumUpRefundAttempt", () => {
 });
 
 describe("retrieveSumUpRefundEvidenceForAttempt", () => {
-  it("is covered by injected dependencies in reconciliation tests", () => {
-    expect(retrieveSumUpRefundEvidenceForAttempt).toBeTypeOf("function");
+  function mockBookingPayment(row: Record<string, unknown> | null) {
+    supabaseFromMock.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: row,
+        error: null,
+      }),
+    });
+  }
+
+  it("uses the preferred SumUp transaction id path when the booking payment has one", async () => {
+    const payment = {
+      id: 300,
+      amount: 12,
+      currency: "GBP",
+      transaction_code: "TXN-1",
+      sumup_transaction_id: "sumup-txn-1",
+    };
+    mockBookingPayment(payment);
+    retrieveValidatedSumUpTransactionForPaymentMock.mockResolvedValue({
+      id: "sumup-txn-1",
+      transaction_code: "TXN-1",
+      amount: 12,
+      currency: "GBP",
+      status: "REFUNDED",
+      transaction_events: [
+        {
+          event_type: "REFUND",
+          status: "REFUNDED",
+          amount: 12,
+          currency: "GBP",
+        },
+      ],
+    });
+
+    const result = await retrieveSumUpRefundEvidenceForAttempt(defaultAttempt);
+
+    expect(retrieveValidatedSumUpTransactionForPaymentMock).toHaveBeenCalledWith(payment);
+    expect(result).toMatchObject({
+      outcome: "refund_confirmed",
+      evidence: {
+        event_type: "REFUND",
+        event_status: "REFUNDED",
+      },
+    });
+  });
+
+  it("passes transaction code only when no SumUp transaction id is stored", async () => {
+    const payment = {
+      id: 300,
+      amount: 12,
+      currency: "GBP",
+      transaction_code: "TXN-1",
+      sumup_transaction_id: null,
+    };
+    mockBookingPayment(payment);
+    retrieveValidatedSumUpTransactionForPaymentMock.mockResolvedValue({
+      id: "sumup-txn-1",
+      transaction_code: "TXN-1",
+      amount: 12,
+      currency: "GBP",
+      status: "SUCCESSFUL",
+      events: [
+        {
+          event_type: "REFUND",
+          status: "SUCCESSFUL",
+          amount: 12,
+          currency: "GBP",
+        },
+      ],
+    });
+
+    await retrieveSumUpRefundEvidenceForAttempt(defaultAttempt);
+
+    expect(retrieveValidatedSumUpTransactionForPaymentMock).toHaveBeenCalledWith(payment);
+  });
+
+  it("returns manual review when no local SumUp identifier is available", async () => {
+    mockBookingPayment({
+      id: 300,
+      amount: 12,
+      currency: "GBP",
+      transaction_code: null,
+      sumup_transaction_id: null,
+    });
+
+    const result = await retrieveSumUpRefundEvidenceForAttempt(defaultAttempt);
+
+    expect(result).toMatchObject({
+      outcome: "manual_review",
+      evidence: {
+        reason: "missing_transaction_code",
+      },
+    });
+    expect(retrieveValidatedSumUpTransactionForPaymentMock).not.toHaveBeenCalled();
   });
 });
 

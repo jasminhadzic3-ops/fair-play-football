@@ -22,6 +22,8 @@ import {
   finalizeCheckoutPayment,
   refundSumUpTransaction,
   resolveAndStoreSumUpTransactionIdForPayment,
+  retrieveValidatedSumUpTransactionForPayment,
+  retrieveSumUpTransaction,
   retrieveSumUpTransactionByCode,
   SumUpRefundHttpError,
 } from "@/lib/sumupPayments";
@@ -214,6 +216,31 @@ describe("SumUp payment helpers", () => {
     );
   });
 
+  it("retrieves a SumUp transaction by transaction id", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "transaction-id-1",
+        transaction_code: "TXN-1",
+        amount: 10,
+        currency: "GBP",
+        status: "SUCCESSFUL",
+      })
+    );
+
+    const transaction = await retrieveSumUpTransaction({ id: "transaction-id-1" });
+
+    expect(transaction.id).toBe("transaction-id-1");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.sumup.com/v2.1/merchants/MERCHANT-1/transactions?id=transaction-id-1",
+      {
+        headers: {
+          Accept: "application/problem+json, application/json",
+          Authorization: "Bearer sumup-key",
+        },
+      }
+    );
+  });
+
   it("requires SumUp transaction lookup env vars", async () => {
     delete process.env.SUMUP_MERCHANT_CODE;
 
@@ -229,6 +256,122 @@ describe("SumUp payment helpers", () => {
     vi.mocked(fetch).mockResolvedValueOnce(errorJson({ detail: "No transaction found." }, 404));
 
     await expect(retrieveSumUpTransactionByCode("TXN-404")).rejects.toThrow("No transaction found.");
+  });
+
+  it("prefers stored SumUp transaction id for validated payment lookup", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "transaction-id-1",
+        transaction_code: "TXN-1",
+        amount: 10,
+        currency: "GBP",
+        status: "SUCCESSFUL",
+      })
+    );
+
+    const transaction = await retrieveValidatedSumUpTransactionForPayment(
+      defaultPayment({ sumup_transaction_id: "transaction-id-1" })
+    );
+
+    expect(transaction.id).toBe("transaction-id-1");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.sumup.com/v2.1/merchants/MERCHANT-1/transactions?id=transaction-id-1",
+      expect.any(Object)
+    );
+  });
+
+  it("falls back to transaction code when stored SumUp transaction id is not found", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(errorJson({ detail: "No transaction found." }, 404))
+      .mockResolvedValueOnce(
+        okJson({
+          id: "transaction-id-1",
+          transaction_code: "TXN-1",
+          amount: 10,
+          currency: "GBP",
+          status: "SUCCESSFUL",
+        })
+      );
+
+    const transaction = await retrieveValidatedSumUpTransactionForPayment(
+      defaultPayment({ sumup_transaction_id: "stale-transaction-id" })
+    );
+
+    expect(transaction.id).toBe("transaction-id-1");
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      "https://api.sumup.com/v2.1/merchants/MERCHANT-1/transactions?id=stale-transaction-id",
+      expect.any(Object)
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://api.sumup.com/v2.1/merchants/MERCHANT-1/transactions?transaction_code=TXN-1",
+      expect.any(Object)
+    );
+  });
+
+  it("rejects a SumUp transaction id mismatch before reconciliation use", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "different-transaction-id",
+        transaction_code: "TXN-1",
+        amount: 10,
+        currency: "GBP",
+        status: "SUCCESSFUL",
+      })
+    );
+
+    await expect(
+      retrieveValidatedSumUpTransactionForPayment(
+        defaultPayment({ sumup_transaction_id: "transaction-id-1" })
+      )
+    ).rejects.toThrow("SumUp transaction id did not match the booking payment.");
+  });
+
+  it("rejects a SumUp transaction code mismatch before reconciliation use", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "transaction-id-1",
+        transaction_code: "TXN-2",
+        amount: 10,
+        currency: "GBP",
+        status: "SUCCESSFUL",
+      })
+    );
+
+    await expect(retrieveValidatedSumUpTransactionForPayment(defaultPayment())).rejects.toThrow(
+      "SumUp transaction code did not match the booking payment."
+    );
+  });
+
+  it("rejects amount and currency mismatches before reconciliation use", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        okJson({
+          id: "transaction-id-1",
+          transaction_code: "TXN-1",
+          amount: 12,
+          currency: "GBP",
+          status: "SUCCESSFUL",
+        })
+      )
+      .mockResolvedValueOnce(
+        okJson({
+          id: "transaction-id-1",
+          transaction_code: "TXN-1",
+          amount: 10,
+          currency: "EUR",
+          status: "SUCCESSFUL",
+        })
+      );
+
+    await expect(retrieveValidatedSumUpTransactionForPayment(defaultPayment())).rejects.toThrow(
+      "SumUp transaction amount did not match the booking payment."
+    );
+    await expect(retrieveValidatedSumUpTransactionForPayment(defaultPayment())).rejects.toThrow(
+      "SumUp transaction currency did not match the booking payment."
+    );
   });
 
   it("stores a resolved SumUp transaction id for a matching paid booking payment", async () => {
