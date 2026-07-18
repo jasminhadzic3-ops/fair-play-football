@@ -88,6 +88,14 @@ class MockSupabaseQuery {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
+  delete process.env.E2E_ALLOW_DB_MUTATION;
+  delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+  delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+  delete process.env.SUMUP_REAL_REFUNDS_ENABLED;
+  delete process.env.SUMUP_SANDBOX_REFUNDS_ENABLED;
+  delete process.env.SUMUP_API_KEY;
+  delete process.env.SUMUP_MERCHANT_CODE;
+  delete process.env.SUMUP_CURRENCY;
   getAuthenticatedAdminUserMock.mockResolvedValue({ id: "admin-1" });
   supabaseFromMock.mockImplementation((table: TableName) => new MockSupabaseQuery(table));
 
@@ -239,12 +247,88 @@ describe("admin dashboard refund requests", () => {
     expect(body.automaticSumUpRefundMode).toBe("test_mock");
   });
 
+  it("enables local sandbox real SumUp refunds only with the complete sandbox gate", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://gtrpegnxhawmkbhyqedh.supabase.co";
+    process.env.SUMUP_SANDBOX_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_API_KEY = "sandbox-key";
+    process.env.SUMUP_MERCHANT_CODE = "MY4BGACH";
+    process.env.SUMUP_CURRENCY = "GBP";
+    delete process.env.SUMUP_REAL_REFUNDS_ENABLED;
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL_ENV", "preview");
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.automaticSumUpRefundMockEnabled).toBe(false);
+    expect(body.automaticSumUpRefundEnabled).toBe(true);
+    expect(body.automaticSumUpRefundMode).toBe("local_sandbox_real");
+  });
+
+  it("refuses local sandbox real SumUp refunds in production contexts", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://gtrpegnxhawmkbhyqedh.supabase.co";
+    process.env.SUMUP_SANDBOX_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_API_KEY = "sandbox-key";
+    process.env.SUMUP_MERCHANT_CODE = "MY4BGACH";
+    process.env.SUMUP_CURRENCY = "GBP";
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "production");
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.automaticSumUpRefundEnabled).toBe(false);
+    expect(body.automaticSumUpRefundMode).toBe("disabled");
+  });
+
   it("does not enable real SumUp refunds without the explicit production gate", async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
     vi.stubEnv("NODE_ENV", "production");
     process.env.SUMUP_API_KEY = "sumup-key";
     process.env.SUMUP_MERCHANT_CODE = "merchant-1";
     delete process.env.SUMUP_REAL_REFUNDS_ENABLED;
+    delete process.env.E2E_ALLOW_DB_MUTATION;
+    delete process.env.E2E_MOCK_SUMUP_REFUNDS;
+    delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.automaticSumUpRefundEnabled).toBe(false);
+    expect(body.automaticSumUpRefundMode).toBe("disabled");
+  });
+
+  it("does not enable production real refunds when the sandbox flag is present", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.SUMUP_API_KEY = "sumup-key";
+    process.env.SUMUP_MERCHANT_CODE = "merchant-1";
+    process.env.SUMUP_REAL_REFUNDS_ENABLED = "true";
+    process.env.SUMUP_SANDBOX_REFUNDS_ENABLED = "true";
     delete process.env.E2E_ALLOW_DB_MUTATION;
     delete process.env.E2E_MOCK_SUMUP_REFUNDS;
     delete process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME;

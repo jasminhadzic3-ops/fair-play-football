@@ -102,7 +102,7 @@ interface AdminDashboardData {
   waiting_list: WaitingListEntry[];
   automaticSumUpRefundEnabled?: boolean;
   automaticSumUpRefundMockEnabled?: boolean;
-  automaticSumUpRefundMode?: "disabled" | "test_mock" | "production_real";
+  automaticSumUpRefundMode?: "disabled" | "test_mock" | "local_sandbox_real" | "production_real";
   summary: AdminSummary;
 }
 

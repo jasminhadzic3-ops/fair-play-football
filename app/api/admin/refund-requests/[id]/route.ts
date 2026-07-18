@@ -202,7 +202,7 @@ function getAutomaticRefundDependency(): SumUpRefundDependency | null {
     return getTestOnlyMockRefundDependency();
   }
 
-  if (mode === "production_real") {
+  if (mode === "local_sandbox_real" || mode === "production_real") {
     return getRealSumUpRefundDependency();
   }
 
