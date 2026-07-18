@@ -42,7 +42,8 @@ export type SumUpRefundDependency = (
 
 export type ProcessAutomaticSumUpRefundParams = {
   refundRequestId: number;
-  adminUserId: string;
+  actorUserId: string;
+  initiatedBy: "admin" | "player";
   refundDependency: SumUpRefundDependency;
   claimAttempt?: typeof claimSumUpRefundAttempt;
   completeRefundRequest?: typeof completeWalletRefundRequest;
@@ -181,21 +182,26 @@ function completionResponse(
 
 async function completeSucceededAttempt(
   claimResult: ClaimSumUpRefundAttemptResult,
-  adminUserId: string,
+  actorUserId: string,
+  initiatedBy: "admin" | "player",
   completeRefundRequest: typeof completeWalletRefundRequest,
   skippedSumUpRefundCall: boolean,
   sumUpTransactionId: string | null
 ) {
   const completionResult = await completeRefundRequest({
     refundRequestId: claimResult.refundRequestId!,
-    adminUserId,
+    adminUserId: actorUserId,
     idempotencyKey: `refund_completed:sumup_attempt:${claimResult.attemptId}`,
     description: "SumUp refund completed",
     adminNote: "Completed via SumUp",
     completionSource: "automatic_sumup",
     metadata: {
       refund_request_id: claimResult.refundRequestId,
-      processed_by: adminUserId,
+      processed_by: actorUserId,
+      initiated_by_user_id: actorUserId,
+      initiated_by_role: initiatedBy,
+      refund_initiation_source:
+        initiatedBy === "player" ? "player_refund_request" : "admin_refund_request",
       automatic_sumup_refund: true,
       refund_channel: "sumup",
       sumup_refund_attempt_id: claimResult.attemptId,
@@ -384,7 +390,8 @@ async function resolveMissingTransactionIdForNewAttempt({
 
 export async function processAutomaticSumUpRefund({
   refundRequestId,
-  adminUserId,
+  actorUserId,
+  initiatedBy,
   refundDependency,
   claimAttempt = claimSumUpRefundAttempt,
   completeRefundRequest = completeWalletRefundRequest,
@@ -396,7 +403,7 @@ export async function processAutomaticSumUpRefund({
 }: ProcessAutomaticSumUpRefundParams): Promise<ProcessAutomaticSumUpRefundResult> {
   const claimResult = await claimAttempt({
     refundRequestId,
-    adminUserId,
+    adminUserId: actorUserId,
   });
 
   if (!claimResult.success) {
@@ -424,7 +431,8 @@ export async function processAutomaticSumUpRefund({
     if (claimResult.attemptStatus === "succeeded") {
       return completeSucceededAttempt(
         claimResult,
-        adminUserId,
+        actorUserId,
+        initiatedBy,
         completeRefundRequest,
         true,
         claimedTransactionId
@@ -515,6 +523,10 @@ export async function processAutomaticSumUpRefund({
       metadata: {
         sumup_refund_finished_at: new Date().toISOString(),
         sumup_refund_outcome: "failed",
+        initiated_by_user_id: actorUserId,
+        initiated_by_role: initiatedBy,
+        refund_initiation_source:
+          initiatedBy === "player" ? "player_refund_request" : "admin_refund_request",
         ...getFailureMetadata(refundResult.response),
       },
     });
@@ -546,6 +558,10 @@ export async function processAutomaticSumUpRefund({
       metadata: {
         sumup_refund_finished_at: new Date().toISOString(),
         sumup_refund_outcome: "unknown",
+        initiated_by_user_id: actorUserId,
+        initiated_by_role: initiatedBy,
+        refund_initiation_source:
+          initiatedBy === "player" ? "player_refund_request" : "admin_refund_request",
         ...getFailureMetadata(refundResult.response),
       },
     });
@@ -582,6 +598,10 @@ export async function processAutomaticSumUpRefund({
     metadata: {
       sumup_refund_finished_at: new Date().toISOString(),
       sumup_refund_outcome: "succeeded",
+      initiated_by_user_id: actorUserId,
+      initiated_by_role: initiatedBy,
+      refund_initiation_source:
+        initiatedBy === "player" ? "player_refund_request" : "admin_refund_request",
     },
   });
 
@@ -597,7 +617,8 @@ export async function processAutomaticSumUpRefund({
 
   return completeSucceededAttempt(
     claimResult,
-    adminUserId,
+    actorUserId,
+    initiatedBy,
     completeRefundRequest,
     false,
     resolvedTransaction.sumUpTransactionId

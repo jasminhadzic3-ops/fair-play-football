@@ -402,7 +402,8 @@ describe("admin refund request route", () => {
     expect(processAutomaticSumUpRefundMock).toHaveBeenCalledTimes(1);
     expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
       refundRequestId: 501,
-      adminUserId: "admin-1",
+      actorUserId: "admin-1",
+      initiatedBy: "admin",
       refundDependency: expect.any(Function),
     });
     expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
@@ -581,7 +582,8 @@ describe("admin refund request route", () => {
     expect(response.status).toBe(200);
     expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
       refundRequestId: 501,
-      adminUserId: "admin-1",
+      actorUserId: "admin-1",
+      initiatedBy: "admin",
       refundDependency: expect.any(Function),
     });
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
@@ -668,7 +670,8 @@ describe("admin refund request route", () => {
     expect(response.status).toBe(200);
     expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
       refundRequestId: 501,
-      adminUserId: "admin-1",
+      actorUserId: "admin-1",
+      initiatedBy: "admin",
       refundDependency: expect.any(Function),
     });
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();

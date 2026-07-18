@@ -252,7 +252,8 @@ export async function PATCH(
 
       const result = await processAutomaticSumUpRefund({
         refundRequestId,
-        adminUserId: adminUser.id,
+        actorUserId: adminUser.id,
+        initiatedBy: "admin",
         refundDependency,
       });
 

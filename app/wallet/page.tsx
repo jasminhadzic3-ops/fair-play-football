@@ -24,6 +24,14 @@ type WalletBalanceBreakdown = {
   available_balance?: number | string | null;
 };
 
+type WalletRefundRequestResponse = {
+  error?: string;
+  automatic_refund?: {
+    status?: string;
+    message?: string;
+  };
+};
+
 function formatMoney(amount: number, currency = "GBP") {
   const absoluteAmount = Math.abs(amount);
 
@@ -78,6 +86,23 @@ function formatTransactionType(transactionType: string | null) {
     .filter(Boolean)
     .map((word) => word[0]?.toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function getRefundMessage(result: WalletRefundRequestResponse | null) {
+  switch (result?.automatic_refund?.status) {
+    case "completed":
+      return "Refund completed.";
+    case "processing":
+      return "Refund processing.";
+    case "manual_review":
+      return "Refund needs review; your wallet credit remains reserved.";
+    case "failed":
+      return "Automatic refund could not complete. Please try again later or contact support.";
+    case "disabled":
+      return "Refund requested; awaiting processing.";
+    default:
+      return result?.automatic_refund?.message || "Refund requested; awaiting processing.";
+  }
 }
 
 export default function WalletPage() {
@@ -223,14 +248,14 @@ export default function WalletPage() {
         },
         body: JSON.stringify({ source_wallet_transaction_id: sourceWalletTransactionId }),
       });
-      const result = await response.json().catch(() => null);
+      const result = (await response.json().catch(() => null)) as WalletRefundRequestResponse | null;
 
       if (!response.ok) {
         setRefundMessage(result?.error || "Unable to request refund.");
         return;
       }
 
-      setRefundMessage("Refund request sent. This amount is now reserved until an admin processes it.");
+      setRefundMessage(getRefundMessage(result));
       await loadWallet();
     } catch (error) {
       setRefundMessage(error instanceof Error ? error.message : "Unable to request refund.");
@@ -245,7 +270,7 @@ export default function WalletPage() {
     if (refundRequestStatus === "pending" || refundRequestStatus === "processing") {
       return (
         <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-amber-100">
-          Refund requested
+          {refundRequestStatus === "processing" ? "Refund processing" : "Refund requested"}
         </span>
       );
     }

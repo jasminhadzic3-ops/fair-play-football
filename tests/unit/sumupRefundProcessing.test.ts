@@ -81,10 +81,17 @@ function setup(overrides: {
   };
 }
 
-async function runWith(deps: ReturnType<typeof setup>) {
+async function runWith(
+  deps: ReturnType<typeof setup>,
+  overrides: {
+    actorUserId?: string;
+    initiatedBy?: "admin" | "player";
+  } = {}
+) {
   return processAutomaticSumUpRefund({
     refundRequestId: 501,
-    adminUserId: "admin-1",
+    actorUserId: overrides.actorUserId ?? "admin-1",
+    initiatedBy: overrides.initiatedBy ?? "admin",
     refundDependency: deps.refundDependency,
     claimAttempt: deps.claimAttempt as never,
     completeRefundRequest: deps.completeRefundRequest as never,
@@ -211,8 +218,60 @@ describe("processAutomaticSumUpRefund", () => {
     expect(deps.completeRefundRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         completionSource: "automatic_sumup",
+        metadata: expect.objectContaining({
+          processed_by: "admin-1",
+          initiated_by_user_id: "admin-1",
+          initiated_by_role: "admin",
+          refund_initiation_source: "admin_refund_request",
+          automatic_sumup_refund: true,
+          refund_channel: "sumup",
+          sumup_refund_attempt_id: 900,
+        }),
+      })
+    );
+    expect(deps.completeRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
         metadata: expect.not.objectContaining({
           manual: true,
+        }),
+      })
+    );
+  });
+
+  it("records player initiated automatic refund audit metadata truthfully", async () => {
+    const deps = setup();
+
+    const result = await runWith(deps, {
+      actorUserId: "user-1",
+      initiatedBy: "player",
+    });
+
+    expect(result).toMatchObject({
+      outcome: "completed",
+    });
+    expect(deps.claimAttempt).toHaveBeenCalledWith({
+      refundRequestId: 501,
+      adminUserId: "user-1",
+    });
+    expect(deps.updateAttemptStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "succeeded",
+        metadata: expect.objectContaining({
+          initiated_by_user_id: "user-1",
+          initiated_by_role: "player",
+          refund_initiation_source: "player_refund_request",
+        }),
+      })
+    );
+    expect(deps.completeRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adminUserId: "user-1",
+        metadata: expect.objectContaining({
+          processed_by: "user-1",
+          initiated_by_user_id: "user-1",
+          initiated_by_role: "player",
+          refund_initiation_source: "player_refund_request",
+          automatic_sumup_refund: true,
         }),
       })
     );
