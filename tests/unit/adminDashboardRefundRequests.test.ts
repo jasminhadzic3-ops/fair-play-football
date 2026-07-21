@@ -205,6 +205,15 @@ describe("admin dashboard refund requests", () => {
     expect(body.automaticSumUpRefundMockEnabled).toBe(false);
     expect(body.automaticSumUpRefundEnabled).toBe(false);
     expect(body.automaticSumUpRefundMode).toBe("disabled");
+    expect(body.automaticSumUpRefundDiagnostics).toEqual({
+      isProductionProject: false,
+      productionRuntime: false,
+      realRefundsExplicitlyEnabled: false,
+      hasRequiredSumUpRefundConfig: false,
+      mockOrTestFlagPresent: false,
+      sandboxRefundsExplicitlyEnabled: false,
+      mode: "disabled",
+    });
   });
 
   it("does not enable mocked automatic SumUp refunds without the complete TEST mock gate", async () => {
@@ -370,5 +379,16 @@ describe("admin dashboard refund requests", () => {
     expect(body.automaticSumUpRefundMockEnabled).toBe(false);
     expect(body.automaticSumUpRefundEnabled).toBe(true);
     expect(body.automaticSumUpRefundMode).toBe("production_real");
+    expect(body.automaticSumUpRefundDiagnostics).toEqual({
+      isProductionProject: true,
+      productionRuntime: true,
+      realRefundsExplicitlyEnabled: true,
+      hasRequiredSumUpRefundConfig: true,
+      mockOrTestFlagPresent: false,
+      sandboxRefundsExplicitlyEnabled: false,
+      mode: "production_real",
+    });
+    expect(JSON.stringify(body.automaticSumUpRefundDiagnostics)).not.toContain("sumup-key");
+    expect(JSON.stringify(body.automaticSumUpRefundDiagnostics)).not.toContain("merchant-1");
   });
 });

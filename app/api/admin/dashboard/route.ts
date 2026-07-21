@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { getAutomaticSumUpRefundCapabilities } from "@/lib/sumupRefundCapabilities";
+import {
+  getAutomaticSumUpRefundCapabilities,
+  getAutomaticSumUpRefundDiagnostics,
+} from "@/lib/sumupRefundCapabilities";
 
 type Payment = {
   id: number;
@@ -214,6 +217,7 @@ export async function GET(request: NextRequest) {
       refund_requests: refundRequests,
       waiting_list: waitingList,
       ...getAutomaticSumUpRefundCapabilities(),
+      automaticSumUpRefundDiagnostics: getAutomaticSumUpRefundDiagnostics(),
       summary: {
         games_count: games.length,
         bookings_count: bookings.length,

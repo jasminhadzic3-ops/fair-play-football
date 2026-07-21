@@ -6,6 +6,16 @@ export type AutomaticSumUpRefundMode =
   | "local_sandbox_real"
   | "production_real";
 
+export type AutomaticSumUpRefundDiagnostics = {
+  isProductionProject: boolean;
+  productionRuntime: boolean;
+  realRefundsExplicitlyEnabled: boolean;
+  hasRequiredSumUpRefundConfig: boolean;
+  mockOrTestFlagPresent: boolean;
+  sandboxRefundsExplicitlyEnabled: boolean;
+  mode: AutomaticSumUpRefundMode;
+};
+
 const testSupabaseRef = "gtrpegnxhawmkbhyqedh";
 const productionSupabaseRef = "bpvbkndywnvfvxxzzaes";
 const sumUpSandboxMerchantCode = "MY4BGACH";
@@ -26,33 +36,17 @@ function hasRequiredSumUpSandboxRefundConfig() {
   );
 }
 
-export function getAutomaticSumUpRefundMode(): AutomaticSumUpRefundMode {
+function calculateAutomaticSumUpRefundState(): AutomaticSumUpRefundDiagnostics {
   const supabaseUrl = getSupabaseUrl();
   const isTestProject = supabaseUrl.includes(`${testSupabaseRef}.supabase.co`);
   const isProductionProject = supabaseUrl.includes(`${productionSupabaseRef}.supabase.co`);
   const isMutationE2E = process.env.E2E_ALLOW_DB_MUTATION === "true";
   const isMockEnabled = process.env.E2E_MOCK_SUMUP_REFUNDS === "true";
-
-  if (isTestProject && isMutationE2E && isMockEnabled) {
-    return "test_mock";
-  }
-
   const productionRuntime = process.env.NODE_ENV === "production";
   const productionVercelEnvironment = process.env.VERCEL_ENV === "production";
   const realRefundsExplicitlyEnabled = process.env.SUMUP_REAL_REFUNDS_ENABLED === "true";
   const sandboxRefundsExplicitlyEnabled = process.env.SUMUP_SANDBOX_REFUNDS_ENABLED === "true";
-
-  if (
-    isTestProject &&
-    sandboxRefundsExplicitlyEnabled &&
-    hasRequiredSumUpSandboxRefundConfig() &&
-    !realRefundsExplicitlyEnabled &&
-    !productionRuntime &&
-    !productionVercelEnvironment
-  ) {
-    return "local_sandbox_real";
-  }
-
+  const sumUpRefundConfigPresent = hasRequiredSumUpRefundConfig();
   const mockOrTestFlagPresent = Boolean(
     process.env.E2E_ALLOW_DB_MUTATION ||
       process.env.E2E_MOCK_SUMUP_REFUNDS ||
@@ -60,21 +54,54 @@ export function getAutomaticSumUpRefundMode(): AutomaticSumUpRefundMode {
       sandboxRefundsExplicitlyEnabled
   );
 
-  if (
+  let mode: AutomaticSumUpRefundMode = "disabled";
+
+  if (isTestProject && isMutationE2E && isMockEnabled) {
+    mode = "test_mock";
+  }
+
+  if (mode === "disabled" &&
+    isTestProject &&
+    sandboxRefundsExplicitlyEnabled &&
+    hasRequiredSumUpSandboxRefundConfig() &&
+    !realRefundsExplicitlyEnabled &&
+    !productionRuntime &&
+    !productionVercelEnvironment
+  ) {
+    mode = "local_sandbox_real";
+  }
+
+  if (mode === "disabled" &&
     isProductionProject &&
     productionRuntime &&
     realRefundsExplicitlyEnabled &&
-    hasRequiredSumUpRefundConfig() &&
+    sumUpRefundConfigPresent &&
     !mockOrTestFlagPresent
   ) {
-    return "production_real";
+    mode = "production_real";
   }
 
-  return "disabled";
+  return {
+    isProductionProject,
+    productionRuntime,
+    realRefundsExplicitlyEnabled,
+    hasRequiredSumUpRefundConfig: sumUpRefundConfigPresent,
+    mockOrTestFlagPresent,
+    sandboxRefundsExplicitlyEnabled,
+    mode,
+  };
+}
+
+export function getAutomaticSumUpRefundMode(): AutomaticSumUpRefundMode {
+  return calculateAutomaticSumUpRefundState().mode;
+}
+
+export function getAutomaticSumUpRefundDiagnostics(): AutomaticSumUpRefundDiagnostics {
+  return calculateAutomaticSumUpRefundState();
 }
 
 export function getAutomaticSumUpRefundCapabilities() {
-  const mode = getAutomaticSumUpRefundMode();
+  const { mode } = calculateAutomaticSumUpRefundState();
 
   return {
     automaticSumUpRefundMode: mode,
