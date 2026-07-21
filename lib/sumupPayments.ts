@@ -287,7 +287,7 @@ function validateResolvedTransactionForPayment(
     throw new Error("SumUp transaction id did not match the booking payment.");
   }
 
-  if (!transactionCode || transaction.transaction_code !== transactionCode) {
+  if (transactionCode && transaction.transaction_code !== transactionCode) {
     throw new Error("SumUp transaction code did not match the booking payment.");
   }
 

@@ -281,6 +281,31 @@ describe("SumUp payment helpers", () => {
     );
   });
 
+  it("validates an id-only SumUp transaction when no transaction code is stored", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "transaction-id-1",
+        transaction_code: "TXN-1",
+        amount: 10,
+        currency: "GBP",
+        status: "SUCCESSFUL",
+      })
+    );
+
+    const transaction = await retrieveValidatedSumUpTransactionForPayment(
+      defaultPayment({
+        transaction_code: null,
+        sumup_transaction_id: "transaction-id-1",
+      })
+    );
+
+    expect(transaction.id).toBe("transaction-id-1");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.sumup.com/v2.1/merchants/MERCHANT-1/transactions?id=transaction-id-1",
+      expect.any(Object)
+    );
+  });
+
   it("falls back to transaction code when stored SumUp transaction id is not found", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(errorJson({ detail: "No transaction found." }, 404))

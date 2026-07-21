@@ -36,7 +36,16 @@ function setup(overrides: {
   claim?: Record<string, unknown>;
   refundResult?: SumUpRefundDependencyResult;
   completion?: Record<string, unknown>;
-  originalPayment?: { amount: number; currency: string | null } | null;
+  originalPayment?: {
+    id: number;
+    amount: number;
+    currency: string | null;
+    payment_status: string | null;
+    transaction_code: string | null;
+    sumup_transaction_id: string | null;
+  } | null;
+  validatedTransaction?: Record<string, unknown>;
+  validationError?: Error;
 } = {}) {
   const claimAttempt = vi.fn().mockResolvedValue({
     ...defaultClaim,
@@ -65,9 +74,33 @@ function setup(overrides: {
   const restoreRefundRequestToPending = vi.fn().mockResolvedValue({ id: 501, status: "pending" });
   const loadOriginalPayment = vi.fn().mockResolvedValue(
     overrides.originalPayment === undefined
-      ? { amount: 12, currency: "GBP" }
+      ? {
+          id: 300,
+          amount: 12,
+          currency: "GBP",
+          payment_status: "paid",
+          transaction_code: "TXN-1",
+          sumup_transaction_id: "sumup-txn-1",
+        }
       : overrides.originalPayment
   );
+  const retrieveValidatedTransaction = vi.fn();
+
+  if (overrides.validationError) {
+    retrieveValidatedTransaction.mockRejectedValue(overrides.validationError);
+  } else if (overrides.validatedTransaction) {
+    retrieveValidatedTransaction.mockResolvedValue(overrides.validatedTransaction);
+  } else {
+    retrieveValidatedTransaction.mockImplementation(
+      async (payment: { sumup_transaction_id?: string | null; transaction_code?: string | null }) => ({
+        id: payment.sumup_transaction_id ?? "sumup-txn-1",
+        transaction_code: "TXN-1",
+        amount: 12,
+        currency: "GBP",
+        status: "SUCCESSFUL",
+      })
+    );
+  }
 
   return {
     claimAttempt,
@@ -78,6 +111,7 @@ function setup(overrides: {
     updateAttemptStatus,
     restoreRefundRequestToPending,
     loadOriginalPayment,
+    retrieveValidatedTransaction,
   };
 }
 
@@ -100,6 +134,7 @@ async function runWith(
     updateAttemptStatus: deps.updateAttemptStatus as never,
     restoreRefundRequestToPending: deps.restoreRefundRequestToPending as never,
     loadOriginalPayment: deps.loadOriginalPayment as never,
+    retrieveValidatedTransaction: deps.retrieveValidatedTransaction as never,
   });
 }
 
@@ -201,6 +236,14 @@ describe("processAutomaticSumUpRefund", () => {
     });
     expect(deps.refundDependency).toHaveBeenCalledTimes(1);
     expect(deps.loadOriginalPayment).toHaveBeenCalledWith(300);
+    expect(deps.retrieveValidatedTransaction).toHaveBeenCalledWith({
+      id: 300,
+      amount: 12,
+      currency: "GBP",
+      payment_status: "paid",
+      transaction_code: "TXN-1",
+      sumup_transaction_id: "sumup-txn-1",
+    });
     expect(deps.refundDependency).toHaveBeenCalledWith({
       transactionId: "sumup-txn-1",
       amount: 12,
@@ -297,6 +340,14 @@ describe("processAutomaticSumUpRefund", () => {
       refundRequestId: 501,
       sumUpTransactionId: "resolved-txn-1",
     });
+    expect(deps.retrieveValidatedTransaction).toHaveBeenCalledWith({
+      id: 300,
+      amount: 12,
+      currency: "GBP",
+      payment_status: "paid",
+      transaction_code: "TXN-1",
+      sumup_transaction_id: "resolved-txn-1",
+    });
     expect(deps.refundDependency).toHaveBeenCalledWith({
       transactionId: "resolved-txn-1",
       amount: 12,
@@ -320,6 +371,79 @@ describe("processAutomaticSumUpRefund", () => {
     expect(deps.loadOriginalPayment).toHaveBeenCalledWith(300);
     expect(deps.refundDependency).not.toHaveBeenCalled();
     expect(deps.updateAttemptStatus).not.toHaveBeenCalled();
+    expect(deps.completeRefundRequest).not.toHaveBeenCalled();
+  });
+
+  it("revalidates a stored transaction id before refunding and uses the validated returned id", async () => {
+    const deps = setup({
+      claim: {
+        sumUpTransactionId: "stored-txn-1",
+      },
+      validatedTransaction: {
+        id: "validated-txn-1",
+        transaction_code: "TXN-1",
+        amount: 12,
+        currency: "GBP",
+        status: "SUCCESSFUL",
+      },
+    });
+
+    const result = await runWith(deps);
+
+    expect(result).toMatchObject({
+      outcome: "completed",
+    });
+    expect(deps.retrieveValidatedTransaction).toHaveBeenCalledWith({
+      id: 300,
+      amount: 12,
+      currency: "GBP",
+      payment_status: "paid",
+      transaction_code: "TXN-1",
+      sumup_transaction_id: "stored-txn-1",
+    });
+    expect(deps.refundDependency).toHaveBeenCalledTimes(1);
+    expect(deps.refundDependency).toHaveBeenCalledWith({
+      transactionId: "validated-txn-1",
+      amount: 12,
+      originalPaymentAmount: 12,
+      currency: "GBP",
+    });
+  });
+
+  it("fails safely without a refund call when preflight transaction validation fails", async () => {
+    const deps = setup({
+      validationError: new Error("SumUp transaction amount did not match the booking payment."),
+    });
+
+    const result = await runWith(deps);
+
+    expect(result).toMatchObject({
+      outcome: "sumup_failed",
+      status: 502,
+      diagnosticCode: "sumup_refund_preflight_validation_failed",
+      error: "SumUp transaction validation failed. No refund was sent.",
+    });
+    expect(deps.refundDependency).not.toHaveBeenCalled();
+    expect(deps.updateAttemptStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attemptId: 900,
+        refundRequestId: 501,
+        status: "failed",
+        errorMessage: "SumUp transaction amount did not match the booking payment.",
+        sumUpResponse: null,
+        metadata: expect.objectContaining({
+          sumup_refund_outcome: "failed",
+          sumup_refund_preflight_validation_failed: true,
+          initiated_by_user_id: "admin-1",
+          initiated_by_role: "admin",
+          refund_initiation_source: "admin_refund_request",
+        }),
+      })
+    );
+    expect(deps.restoreRefundRequestToPending).toHaveBeenCalledWith({
+      refundRequestId: 501,
+      attemptId: 900,
+    });
     expect(deps.completeRefundRequest).not.toHaveBeenCalled();
   });
 

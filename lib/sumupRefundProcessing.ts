@@ -10,7 +10,10 @@ import {
   type ClaimSumUpRefundAttemptResult,
   type CompleteWalletRefundRequestResult,
 } from "@/lib/wallet";
-import { resolveAndStoreSumUpTransactionIdForPaymentId } from "@/lib/sumupPayments";
+import {
+  resolveAndStoreSumUpTransactionIdForPaymentId,
+  retrieveValidatedSumUpTransactionForPayment,
+} from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type RefundDependencyParams = {
@@ -48,6 +51,7 @@ export type ProcessAutomaticSumUpRefundParams = {
   claimAttempt?: typeof claimSumUpRefundAttempt;
   completeRefundRequest?: typeof completeWalletRefundRequest;
   resolveTransactionId?: typeof resolveAndStoreSumUpTransactionIdForPaymentId;
+  retrieveValidatedTransaction?: typeof retrieveValidatedSumUpTransactionForPayment;
   persistTransactionIdForAttempt?: typeof persistSumUpTransactionIdForProcessingAttempt;
   updateAttemptStatus?: typeof updateSumUpRefundAttemptStatus;
   restoreRefundRequestToPending?: typeof restoreRefundRequestToPendingAfterFailedSumUpAttempt;
@@ -298,12 +302,15 @@ async function loadOriginalPaymentForRefundAttempt(bookingPaymentId: number | nu
 
   const { data, error } = await supabaseAdmin
     .from("booking_payments")
-    .select("amount,currency,payment_status")
+    .select("id,amount,currency,payment_status,transaction_code,sumup_transaction_id")
     .eq("id", bookingPaymentId)
     .maybeSingle<{
+      id: number;
       amount: number | string | null;
       currency: string | null;
       payment_status: string | null;
+      transaction_code: string | null;
+      sumup_transaction_id: string | null;
     }>();
 
   if (error) {
@@ -321,8 +328,61 @@ async function loadOriginalPaymentForRefundAttempt(bookingPaymentId: number | nu
   }
 
   return {
+    id: data.id,
     amount,
     currency: data.currency,
+    payment_status: data.payment_status,
+    transaction_code: data.transaction_code,
+    sumup_transaction_id: data.sumup_transaction_id,
+  };
+}
+
+async function failAttemptBeforeSumUpRefund({
+  claimResult,
+  actorUserId,
+  initiatedBy,
+  errorMessage,
+  updateAttemptStatus,
+  restoreRefundRequestToPending,
+}: {
+  claimResult: ClaimSumUpRefundAttemptResult;
+  actorUserId: string;
+  initiatedBy: "admin" | "player";
+  errorMessage: string;
+  updateAttemptStatus: typeof updateSumUpRefundAttemptStatus;
+  restoreRefundRequestToPending: typeof restoreRefundRequestToPendingAfterFailedSumUpAttempt;
+}): Promise<ProcessAutomaticSumUpRefundResult> {
+  const updatedAttempt = await updateAttemptStatus({
+    attemptId: claimResult.attemptId!,
+    refundRequestId: claimResult.refundRequestId!,
+    status: "failed",
+    errorMessage,
+    sumUpResponse: null,
+    metadata: {
+      sumup_refund_finished_at: new Date().toISOString(),
+      sumup_refund_outcome: "failed",
+      sumup_refund_preflight_validation_failed: true,
+      initiated_by_user_id: actorUserId,
+      initiated_by_role: initiatedBy,
+      refund_initiation_source:
+        initiatedBy === "player" ? "player_refund_request" : "admin_refund_request",
+    },
+  });
+
+  if (updatedAttempt) {
+    await restoreRefundRequestToPending({
+      refundRequestId: claimResult.refundRequestId!,
+      attemptId: claimResult.attemptId!,
+    });
+  }
+
+  return {
+    outcome: "sumup_failed",
+    status: 502,
+    error: "SumUp transaction validation failed. No refund was sent.",
+    diagnosticCode: "sumup_refund_preflight_validation_failed",
+    attemptId: claimResult.attemptId!,
+    refundRequestId: claimResult.refundRequestId!,
   };
 }
 
@@ -396,6 +456,7 @@ export async function processAutomaticSumUpRefund({
   claimAttempt = claimSumUpRefundAttempt,
   completeRefundRequest = completeWalletRefundRequest,
   resolveTransactionId = resolveAndStoreSumUpTransactionIdForPaymentId,
+  retrieveValidatedTransaction = retrieveValidatedSumUpTransactionForPayment,
   persistTransactionIdForAttempt = persistSumUpTransactionIdForProcessingAttempt,
   updateAttemptStatus = updateSumUpRefundAttemptStatus,
   restoreRefundRequestToPending = restoreRefundRequestToPendingAfterFailedSumUpAttempt,
@@ -506,8 +567,33 @@ export async function processAutomaticSumUpRefund({
     };
   }
 
+  let validatedTransaction: Awaited<ReturnType<typeof retrieveValidatedSumUpTransactionForPayment>>;
+
+  try {
+    validatedTransaction = await retrieveValidatedTransaction({
+      id: originalPayment.id,
+      amount: originalPayment.amount,
+      currency: originalPayment.currency,
+      payment_status: originalPayment.payment_status,
+      transaction_code: originalPayment.transaction_code,
+      sumup_transaction_id: resolvedTransaction.sumUpTransactionId,
+    });
+  } catch (error) {
+    return failAttemptBeforeSumUpRefund({
+      claimResult,
+      actorUserId,
+      initiatedBy,
+      errorMessage:
+        error instanceof Error
+          ? error.message
+          : "Unable to validate SumUp transaction before refund.",
+      updateAttemptStatus,
+      restoreRefundRequestToPending,
+    });
+  }
+
   const refundResult = await refundDependency({
-    transactionId: resolvedTransaction.sumUpTransactionId,
+    transactionId: validatedTransaction.id,
     amount: claimResult.amount,
     originalPaymentAmount: originalPayment.amount,
     currency: originalPayment.currency,
@@ -621,6 +707,6 @@ export async function processAutomaticSumUpRefund({
     initiatedBy,
     completeRefundRequest,
     false,
-    resolvedTransaction.sumUpTransactionId
+    validatedTransaction.id
   );
 }
