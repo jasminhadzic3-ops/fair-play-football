@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/nextjs";
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -10,5 +12,10 @@ export async function GET(request: Request) {
     });
   }
 
-  throw new Error("Sentry test error: explicit /api/sentry-test?throw=1 visit");
+  const error = new Error("Sentry test error: explicit /api/sentry-test?throw=1 visit");
+
+  Sentry.captureException(error);
+  await Sentry.flush(2000);
+
+  throw error;
 }
