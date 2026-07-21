@@ -57,7 +57,7 @@ export function getAutomaticSumUpRefundMode(): AutomaticSumUpRefundMode {
     process.env.E2E_ALLOW_DB_MUTATION ||
       process.env.E2E_MOCK_SUMUP_REFUNDS ||
       process.env.E2E_MOCK_SUMUP_REFUND_OUTCOME ||
-      process.env.SUMUP_SANDBOX_REFUNDS_ENABLED
+      sandboxRefundsExplicitlyEnabled
   );
 
   if (
