@@ -22,7 +22,9 @@ type TableName =
   | "booking_payments"
   | "wallet_transactions"
   | "sumup_refund_attempts"
-  | "waiting_list";
+  | "waiting_list"
+  | "game_reminder_deliveries"
+  | "waiting_list_notifications";
 
 type TableRow = Record<string, unknown>;
 
@@ -38,6 +40,8 @@ const state: Record<TableName, TableRow[]> = {
   wallet_transactions: [],
   sumup_refund_attempts: [],
   waiting_list: [],
+  game_reminder_deliveries: [],
+  waiting_list_notifications: [],
 };
 
 function applyFilters(rows: TableRow[], filters: Filter[]) {
@@ -104,11 +108,17 @@ beforeEach(() => {
     {
       id: 10,
       title: "Friday Football",
+      location: "Pitch 1",
+      time: "15 Jul 2026, 20:30",
+      starts_at: "2026-07-15T19:30:00.000Z",
+      max_players: 12,
+      status: "active",
     },
   ];
   state.bookings = [
     {
       id: 100,
+      game_id: 10,
       player_name: "Booked Player",
     },
   ];
@@ -122,6 +132,7 @@ beforeEach(() => {
   state.booking_payments = [
     {
       id: 200,
+      game_id: 10,
       payment_status: "paid",
       amount: 8,
       checkout_reference: "checkout-reference-1",
@@ -152,6 +163,8 @@ beforeEach(() => {
     {
       id: 502,
       user_id: "user-1",
+      game_id: 10,
+      booking_id: 100,
       amount: -8,
       currency: "GBP",
       transaction_type: "wallet_booking_payment",
@@ -160,6 +173,8 @@ beforeEach(() => {
     },
   ];
   state.waiting_list = [];
+  state.game_reminder_deliveries = [];
+  state.waiting_list_notifications = [];
   state.sumup_refund_attempts = [];
 });
 
@@ -202,6 +217,19 @@ describe("admin dashboard refund requests", () => {
         transaction_type: "wallet_booking_payment",
       }),
     ]);
+    expect(body.games[0].admin_safety).toEqual(
+      expect.objectContaining({
+        bookings_count: 1,
+        spaces_remaining: 11,
+        paid_sumup_payments_count: 1,
+        wallet_bookings_count: 1,
+        pending_refund_requests_count: 1,
+        has_financial_history: true,
+        has_refunds: true,
+        safe_to_delete: false,
+        delete_block_reasons: expect.arrayContaining(["1 booking", "1 paid payment", "1 wallet booking", "1 pending refund"]),
+      })
+    );
     expect(body.automaticSumUpRefundMockEnabled).toBe(false);
     expect(body.automaticSumUpRefundEnabled).toBe(false);
     expect(body.automaticSumUpRefundMode).toBe("disabled");

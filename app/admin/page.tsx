@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  AdminGameFilter,
+  AdminGameSafetySummary,
+  getAdminGameLifecycle,
+  isValidAdminMoveDestination,
+} from "@/lib/adminGameSafety";
 import { supabase } from "@/lib/supabase";
 
 interface Game {
@@ -16,6 +22,7 @@ interface Game {
   cancelled_at?: string | null;
   cancelled_by?: string | null;
   cancellation_reason?: string | null;
+  admin_safety?: AdminGameSafetySummary | null;
 }
 
 interface Booking {
@@ -127,6 +134,26 @@ const londonFormFormatter = new Intl.DateTimeFormat("en-GB", {
   hourCycle: "h23",
 });
 
+const londonMoveFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+const gameFilters: Array<{ value: AdminGameFilter; label: string }> = [
+  { value: "active_upcoming", label: "Active / Upcoming" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "past_legacy", label: "Past / Legacy" },
+  { value: "has_financial_history", label: "Has Financial History" },
+  { value: "has_refunds", label: "Has Refunds" },
+  { value: "safe_to_delete", label: "Safe to Delete" },
+  { value: "all", label: "All" },
+];
+
 function getLondonKickoffFormValues(startsAt: string | null | undefined) {
   if (!startsAt) {
     return { kickoffDate: "", kickoffTime: "" };
@@ -156,6 +183,39 @@ function getLondonKickoffFormValues(startsAt: string | null | undefined) {
   };
 }
 
+function formatLondonKickoff(startsAt: string | null | undefined) {
+  if (!startsAt) {
+    return "Legacy time";
+  }
+
+  const date = new Date(startsAt);
+
+  return Number.isNaN(date.getTime()) ? "Invalid kickoff" : londonMoveFormatter.format(date);
+}
+
+function getFallbackGameSafety(game: Game, bookingsCount: number): AdminGameSafetySummary {
+  return {
+    bookings_count: bookingsCount,
+    spaces_remaining: Math.max(0, game.max_players - bookingsCount),
+    paid_sumup_payments_count: 0,
+    wallet_bookings_count: 0,
+    waiting_list_count: 0,
+    cancellation_credits_count: 0,
+    pending_refund_requests_count: 0,
+    completed_refunds_count: 0,
+    unresolved_refund_attempts_count: 0,
+    reminder_deliveries_count: 0,
+    payment_records_count: 0,
+    wallet_transactions_count: 0,
+    refund_attempts_count: 0,
+    waiting_list_notifications_count: 0,
+    has_financial_history: false,
+    has_refunds: false,
+    safe_to_delete: bookingsCount === 0,
+    delete_block_reasons: bookingsCount > 0 ? [`${bookingsCount} booking${bookingsCount === 1 ? "" : "s"}`] : [],
+  };
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [games, setGames] = useState<Game[]>([]);
@@ -165,6 +225,8 @@ export default function AdminPage() {
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
   const [automaticSumUpRefundEnabled, setAutomaticSumUpRefundEnabled] = useState(false);
+  const [gameSearch, setGameSearch] = useState("");
+  const [gameFilter, setGameFilter] = useState<AdminGameFilter>("active_upcoming");
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [kickoffDate, setKickoffDate] = useState("");
@@ -234,6 +296,53 @@ export default function AdminPage() {
 
     return () => window.clearTimeout(timeout);
   }, [fetchAdminData]);
+
+  const visibleGames = useMemo(() => {
+    const query = gameSearch.trim().toLowerCase();
+    const now = new Date();
+
+    return games.filter((game) => {
+      const bookingsCount = bookings.filter((booking) => booking.game_id === game.id).length;
+      const safety = game.admin_safety ?? getFallbackGameSafety(game, bookingsCount);
+      const lifecycle = getAdminGameLifecycle(game, now);
+      const matchesSearch =
+        !query ||
+        game.title.toLowerCase().includes(query) ||
+        game.location.toLowerCase().includes(query);
+      const matchesFilter =
+        gameFilter === "all" ||
+        lifecycle === gameFilter ||
+        (gameFilter === "has_financial_history" && safety.has_financial_history) ||
+        (gameFilter === "has_refunds" && safety.has_refunds) ||
+        (gameFilter === "safe_to_delete" && safety.safe_to_delete);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [gameFilter, gameSearch, games, bookings]);
+
+  const getValidMoveDestinations = useCallback(
+    (booking: Booking) => {
+      const now = new Date();
+
+      return games
+        .filter((game) =>
+          isValidAdminMoveDestination(
+            game,
+            booking.game_id,
+            bookings.filter((gameBooking) => gameBooking.game_id === game.id).length,
+            now
+          )
+        )
+        .map((game) => ({
+          ...game,
+          remainingSpaces: Math.max(
+            0,
+            game.max_players - bookings.filter((gameBooking) => gameBooking.game_id === game.id).length
+          ),
+        }));
+    },
+    [games, bookings]
+  );
 
   const resetForm = () => {
     setTitle("");
@@ -869,18 +978,53 @@ export default function AdminPage() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <h2 className="text-2xl font-bold">Games</h2>
             <span className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-400">
-              {games.length} total
+              {visibleGames.length} shown / {games.length} total
             </span>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <label className="sr-only" htmlFor="admin-game-search">
+              Search games
+            </label>
+            <input
+              id="admin-game-search"
+              value={gameSearch}
+              onChange={(event) => setGameSearch(event.target.value)}
+              placeholder="Search games by title or location"
+              className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm font-semibold text-white placeholder:text-zinc-500"
+            />
+            <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:justify-end lg:overflow-visible lg:pb-0">
+              {gameFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setGameFilter(filter.value)}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                    gameFilter === filter.value
+                      ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
+                      : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-white/20"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {games.length === 0 ? (
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-400">
               No games created yet.
             </div>
+          ) : visibleGames.length === 0 ? (
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-400">
+              No games match this search and filter.
+            </div>
           ) : (
             <div className="space-y-3">
-              {games.map((game) => {
+              {visibleGames.map((game) => {
                 const gameBookings = getGameBookings(game.id);
+                const safety = game.admin_safety ?? getFallbackGameSafety(game, gameBookings.length);
+                const lifecycle = getAdminGameLifecycle(game);
 
                 return (
                   <div
@@ -895,18 +1039,83 @@ export default function AdminPage() {
                             className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
                               game.status === "cancelled"
                                 ? "border-red-500/30 bg-red-500/10 text-red-200"
-                                : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                                : lifecycle === "active_upcoming"
+                                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                                  : "border-zinc-600 bg-zinc-950 text-zinc-300"
                             }`}
                           >
-                            {game.status === "cancelled" ? "Cancelled" : "Active"}
+                            {game.status === "cancelled"
+                              ? "Cancelled"
+                              : lifecycle === "active_upcoming"
+                                ? "Active"
+                                : "Past / Legacy"}
+                          </span>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                              safety.safe_to_delete
+                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                                : "border-amber-500/30 bg-amber-500/10 text-amber-100"
+                            }`}
+                          >
+                            {safety.safe_to_delete ? "Safe to delete" : "Delete blocked"}
                           </span>
                         </div>
                         <p className="mt-1 text-sm text-zinc-400">
                           {game.location} • {game.time} • £{game.price} • {game.max_players} players
                         </p>
-                        <p className="mt-2 text-sm font-semibold text-emerald-300">
-                          {getBookingCount(game.id)} bookings
-                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                          <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-zinc-300">
+                            {safety.bookings_count} bookings
+                          </span>
+                          <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-zinc-300">
+                            {safety.spaces_remaining} spaces
+                          </span>
+                          {safety.paid_sumup_payments_count > 0 ? (
+                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+                              {safety.paid_sumup_payments_count} paid SumUp
+                            </span>
+                          ) : null}
+                          {safety.wallet_bookings_count > 0 ? (
+                            <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-200">
+                              {safety.wallet_bookings_count} wallet bookings
+                            </span>
+                          ) : null}
+                          {safety.waiting_list_count > 0 ? (
+                            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-zinc-300">
+                              {safety.waiting_list_count} waiting
+                            </span>
+                          ) : null}
+                          {safety.cancellation_credits_count > 0 ? (
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
+                              {safety.cancellation_credits_count} credits
+                            </span>
+                          ) : null}
+                          {safety.pending_refund_requests_count > 0 ? (
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
+                              {safety.pending_refund_requests_count} pending refunds
+                            </span>
+                          ) : null}
+                          {safety.completed_refunds_count > 0 ? (
+                            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-zinc-300">
+                              {safety.completed_refunds_count} completed refunds
+                            </span>
+                          ) : null}
+                          {safety.unresolved_refund_attempts_count > 0 ? (
+                            <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-red-200">
+                              {safety.unresolved_refund_attempts_count} refund review
+                            </span>
+                          ) : null}
+                          {safety.reminder_deliveries_count > 0 ? (
+                            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-zinc-300">
+                              {safety.reminder_deliveries_count} reminders
+                            </span>
+                          ) : null}
+                        </div>
+                        {!safety.safe_to_delete ? (
+                          <p className="mt-3 text-sm text-amber-100">
+                            Keep for records. Delete is blocked by {safety.delete_block_reasons.join(", ")}.
+                          </p>
+                        ) : null}
                       </div>
 
                       <div className="flex gap-3">
@@ -1000,6 +1209,7 @@ export default function AdminPage() {
               {bookings.map((booking) => {
                 const game = getGameForBooking(booking);
                 const payment = getPaymentDisplayForBooking(booking);
+                const validMoveDestinations = getValidMoveDestinations(booking);
 
                 return (
                   <div
@@ -1054,24 +1264,36 @@ export default function AdminPage() {
                           }}
                           className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:justify-end"
                         >
-                          <select
-                            name="target_game_id"
-                            defaultValue={booking.game_id}
-                            className="w-full min-w-0 rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 sm:w-auto"
-                          >
-                            {games.map((gameOption) => (
-                              <option key={gameOption.id} value={gameOption.id}>
-                                {gameOption.title}
-                              </option>
-                            ))}
-                          </select>
+                          {validMoveDestinations.length > 0 ? (
+                            <>
+                              <select
+                                name="target_game_id"
+                                defaultValue=""
+                                className="w-full min-w-0 rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 sm:w-auto"
+                              >
+                                <option value="" disabled>
+                                  Move to...
+                                </option>
+                                {validMoveDestinations.map((gameOption) => (
+                                  <option key={gameOption.id} value={gameOption.id}>
+                                    {gameOption.title} - {formatLondonKickoff(gameOption.starts_at)} -{" "}
+                                    {gameOption.remainingSpaces} spaces
+                                  </option>
+                                ))}
+                              </select>
 
-                          <button
-                            type="submit"
-                            className="w-full rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 sm:w-auto"
-                          >
-                            Move
-                          </button>
+                              <button
+                                type="submit"
+                                className="w-full rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 sm:w-auto"
+                              >
+                                Move
+                              </button>
+                            </>
+                          ) : (
+                            <p className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-zinc-400">
+                              No safe move destination
+                            </p>
+                          )}
 
                           <button
                             type="button"

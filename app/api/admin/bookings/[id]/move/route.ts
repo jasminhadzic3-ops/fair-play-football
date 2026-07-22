@@ -3,7 +3,15 @@ import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { notifyWaitingListForOpenSpace } from "@/lib/waitingListNotifications";
 
-const cancelledTargetGameMessage = "Bookings cannot be moved into a cancelled game.";
+type MoveBookingResult = {
+  success: boolean;
+  booking_id: number | null;
+  source_game_id: number | null;
+  target_game_id: number | null;
+  reason: string | null;
+  source_was_full_before_move: boolean;
+  source_has_space_after_move: boolean;
+};
 
 type MoveBookingPayload = {
   target_game_id?: unknown;
@@ -13,6 +21,52 @@ function parsePositiveInteger(value: unknown) {
   const numberValue = Number(value);
 
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function getMoveBookingErrorMessage(reason: string | null) {
+  switch (reason) {
+    case "same_game":
+      return "This booking is already in the selected game.";
+    case "target_game_not_found":
+      return "Target game not found.";
+    case "target_game_cancelled":
+      return "Bookings cannot be moved into a cancelled game.";
+    case "target_game_not_active":
+      return "Bookings can only be moved into active games.";
+    case "target_game_missing_starts_at":
+      return "Bookings can only be moved into active future games with a structured kickoff time.";
+    case "target_game_past":
+      return "Bookings cannot be moved into past games.";
+    case "target_game_full":
+      return "Target game is full.";
+    case "booking_has_cancellation_history":
+      return "This booking cannot be moved because it already has cancellation credit history.";
+    case "booking_has_refund_history":
+      return "This booking cannot be moved because it already has refund history.";
+    case "booking_has_ambiguous_payment_history":
+      return "This booking has ambiguous payment history and cannot be moved automatically. Review its payment records first.";
+    case "booking_missing_game":
+      return "This booking is not linked to a valid source game.";
+    case "booking_not_found":
+      return "Booking not found.";
+    case "invalid_booking":
+    case "invalid_target_game":
+      return "Invalid booking move request.";
+    default:
+      return "Unable to move booking.";
+  }
+}
+
+function getMoveBookingStatus(reason: string | null) {
+  switch (reason) {
+    case "booking_not_found":
+      return 404;
+    case "invalid_booking":
+    case "invalid_target_game":
+      return 400;
+    default:
+      return 409;
+  }
 }
 
 export async function PATCH(
@@ -40,120 +94,37 @@ export async function PATCH(
       return Response.json({ error: "Invalid target game id." }, { status: 400 });
     }
 
-    const { data: booking, error: bookingError } = await supabaseAdmin
-      .from("bookings")
-      .select("id,game_id,user_id")
-      .eq("id", bookingId)
-      .maybeSingle();
+    const { data, error } = await supabaseAdmin
+      .rpc("move_booking_if_space", {
+        p_booking_id: bookingId,
+        p_target_game_id: targetGameId,
+      })
+      .single<MoveBookingResult>();
 
-    if (bookingError) {
-      return Response.json({ error: bookingError.message }, { status: 500 });
+    if (error) {
+      return Response.json({ error: error.message }, { status: 500 });
     }
 
-    if (!booking) {
-      return Response.json({ error: "Booking not found." }, { status: 404 });
+    if (!data?.success) {
+      return Response.json(
+        { error: getMoveBookingErrorMessage(data?.reason ?? null), reason: data?.reason ?? null },
+        { status: getMoveBookingStatus(data?.reason ?? null) }
+      );
     }
 
-    const { data: targetGame, error: targetGameError } = await supabaseAdmin
-      .from("games")
-      .select("id,max_players,status")
-      .eq("id", targetGameId)
-      .maybeSingle();
-
-    if (targetGameError) {
-      return Response.json({ error: targetGameError.message }, { status: 500 });
+    if (data.source_game_id && data.source_was_full_before_move && data.source_has_space_after_move) {
+      await notifyWaitingListForOpenSpace(data.source_game_id).catch((notificationError) => {
+        console.warn("Unable to notify waiting list after moving booking:", notificationError);
+      });
     }
 
-    if (!targetGame) {
-      return Response.json({ error: "Target game not found." }, { status: 404 });
-    }
-
-    if (targetGame.status === "cancelled") {
-      return Response.json({ error: cancelledTargetGameMessage }, { status: 409 });
-    }
-
-    if (booking.game_id === targetGameId) {
-      return Response.json({ ok: true, booking });
-    }
-
-    const sourceGameId = booking.game_id;
-    const { data: sourceGame, error: sourceGameError } = await supabaseAdmin
-      .from("games")
-      .select("id,max_players")
-      .eq("id", sourceGameId)
-      .maybeSingle();
-
-    if (sourceGameError) {
-      return Response.json({ error: sourceGameError.message }, { status: 500 });
-    }
-
-    const { count: sourceBookingCountBeforeMove, error: sourceCountBeforeError } = await supabaseAdmin
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("game_id", sourceGameId);
-
-    if (sourceCountBeforeError) {
-      return Response.json({ error: sourceCountBeforeError.message }, { status: 500 });
-    }
-
-    const sourceWasFullBeforeMove =
-      sourceGame ? (sourceBookingCountBeforeMove ?? 0) >= sourceGame.max_players : false;
-
-    const { count: targetBookingCount, error: countError } = await supabaseAdmin
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("game_id", targetGameId);
-
-    if (countError) {
-      return Response.json({ error: countError.message }, { status: 500 });
-    }
-
-    if ((targetBookingCount ?? 0) >= targetGame.max_players) {
-      return Response.json({ error: "Target game is full." }, { status: 409 });
-    }
-
-    const { data: updatedBooking, error: updateError } = await supabaseAdmin
-      .from("bookings")
-      .update({ game_id: targetGameId })
-      .eq("id", bookingId)
-      .select("id,game_id")
-      .single();
-
-    if (updateError) {
-      return Response.json({ error: updateError.message }, { status: 500 });
-    }
-
-    if (booking.user_id) {
-      const { error: waitingListCleanupError } = await supabaseAdmin
-        .from("waiting_list")
-        .update({ status: "removed" })
-        .eq("user_id", booking.user_id)
-        .eq("game_id", targetGameId)
-        .eq("status", "waiting");
-
-      if (waitingListCleanupError) {
-        return Response.json({ error: waitingListCleanupError.message }, { status: 500 });
-      }
-    }
-
-    if (sourceGame && sourceWasFullBeforeMove) {
-      const { count: sourceBookingCountAfterMove, error: sourceCountAfterError } = await supabaseAdmin
-        .from("bookings")
-        .select("id", { count: "exact", head: true })
-        .eq("game_id", sourceGameId);
-
-      if (sourceCountAfterError) {
-        return Response.json({ error: sourceCountAfterError.message }, { status: 500 });
-      }
-
-      if ((sourceBookingCountAfterMove ?? 0) < sourceGame.max_players) {
-        await notifyWaitingListForOpenSpace(sourceGameId).catch((notificationError) => {
-          console.warn("Unable to notify waiting list after moving booking:", notificationError);
-        });
-      }
-    }
-
-    return Response.json({ ok: true, booking: updatedBooking });
+    return Response.json({
+      ok: true,
+      booking: {
+        id: data.booking_id,
+        game_id: data.target_game_id,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to move booking.";
     return Response.json({ error: message }, { status: 500 });

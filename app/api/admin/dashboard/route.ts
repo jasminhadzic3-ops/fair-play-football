@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
+import { buildAdminGameSafetySummary } from "@/lib/adminGameSafety";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getAutomaticSumUpRefundCapabilities } from "@/lib/sumupRefundCapabilities";
 
 type Payment = {
   id: number;
+  game_id?: number | null;
   payment_status: string | null;
   amount: number | string | null;
   checkout_reference?: string | null;
@@ -14,10 +16,12 @@ type Payment = {
 type Game = {
   id: number;
   title: string | null;
+  max_players?: number | null;
 };
 
 type Booking = {
   id: number;
+  game_id?: number | null;
   player_name: string | null;
 };
 
@@ -42,10 +46,32 @@ type RefundRequest = {
 type SumUpRefundAttempt = {
   id: number;
   refund_request_id: number;
+  booking_payment_id?: number | null;
   status: string | null;
   error_message: string | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+type WalletSummaryTransaction = {
+  id: number;
+  game_id: number | null;
+  booking_id?: number | null;
+  payment_id?: number | null;
+  amount: number | string | null;
+  transaction_type: string | null;
+  status: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+type ReminderDelivery = {
+  id: number;
+  game_id: number | null;
+};
+
+type WaitingListSummaryEntry = {
+  id: number;
+  game_id: number | null;
 };
 
 function countPaymentsByStatus(payments: Payment[]) {
@@ -83,6 +109,14 @@ function getMetadataNumber(metadata: Record<string, unknown> | null | undefined,
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
+function increment(map: Map<number, number>, gameId: number | null | undefined) {
+  if (!gameId) {
+    return;
+  }
+
+  map.set(gameId, (map.get(gameId) ?? 0) + 1);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const adminUser = await getAuthenticatedAdminUser(request.headers.get("authorization"));
@@ -100,6 +134,10 @@ export async function GET(request: NextRequest) {
       refundRequestsResult,
       sumUpRefundAttemptsResult,
       waitingListResult,
+      walletSummaryTransactionsResult,
+      reminderDeliveriesResult,
+      waitingListSummaryResult,
+      waitingListNotificationsResult,
     ] = await Promise.all([
       supabaseAdmin
         .from("games")
@@ -132,13 +170,25 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("sumup_refund_attempts")
-        .select("id,refund_request_id,status,error_message,created_at,updated_at")
+        .select("id,refund_request_id,booking_payment_id,status,error_message,created_at,updated_at")
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("waiting_list")
         .select("id,game_id,user_id,player_name,status,created_at")
         .eq("status", "waiting")
         .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("wallet_transactions")
+        .select("id,game_id,booking_id,payment_id,amount,transaction_type,status,metadata"),
+      supabaseAdmin
+        .from("game_reminder_deliveries")
+        .select("id,game_id"),
+      supabaseAdmin
+        .from("waiting_list")
+        .select("id,game_id"),
+      supabaseAdmin
+        .from("waiting_list_notifications")
+        .select("id,game_id"),
     ]);
 
     const firstError =
@@ -149,7 +199,11 @@ export async function GET(request: NextRequest) {
       walletTransactionsResult.error ||
       refundRequestsResult.error ||
       sumUpRefundAttemptsResult.error ||
-      waitingListResult.error;
+      waitingListResult.error ||
+      walletSummaryTransactionsResult.error ||
+      reminderDeliveriesResult.error ||
+      waitingListSummaryResult.error ||
+      waitingListNotificationsResult.error;
 
     if (firstError) {
       return Response.json({ error: firstError.message }, { status: 500 });
@@ -160,16 +214,92 @@ export async function GET(request: NextRequest) {
     const profiles = profilesResult.data ?? [];
     const bookingPayments = paymentsResult.data ?? [];
     const walletTransactions = walletTransactionsResult.data ?? [];
+    const walletSummaryTransactions = (walletSummaryTransactionsResult.data ?? []) as WalletSummaryTransaction[];
+    const reminderDeliveries = (reminderDeliveriesResult.data ?? []) as ReminderDelivery[];
+    const waitingListSummary = (waitingListSummaryResult.data ?? []) as WaitingListSummaryEntry[];
+    const waitingListNotifications = (waitingListNotificationsResult.data ?? []) as WaitingListSummaryEntry[];
     const profileById = new Map((profiles as Profile[]).map((profile) => [profile.id, profile]));
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
     const bookingById = new Map((bookings as Booking[]).map((booking) => [booking.id, booking]));
     const paymentById = new Map((bookingPayments as Payment[]).map((payment) => [payment.id, payment]));
+    const refundRequestGameById = new Map<number, number>();
     const latestAttemptByRequestId = new Map<number, SumUpRefundAttempt>();
+    const bookingsByGame = new Map<number, number>();
+    const paymentRecordsByGame = new Map<number, number>();
+    const paidPaymentsByGame = new Map<number, number>();
+    const walletBookingsByGame = new Map<number, number>();
+    const walletRecordsByGame = new Map<number, number>();
+    const waitingListByGame = new Map<number, number>();
+    const cancellationCreditsByGame = new Map<number, number>();
+    const pendingRefundRequestsByGame = new Map<number, number>();
+    const completedRefundsByGame = new Map<number, number>();
+    const unresolvedRefundAttemptsByGame = new Map<number, number>();
+    const refundAttemptsByGame = new Map<number, number>();
+    const reminderDeliveriesByGame = new Map<number, number>();
+    const waitingListNotificationsByGame = new Map<number, number>();
 
     ((sumUpRefundAttemptsResult.data ?? []) as SumUpRefundAttempt[]).forEach((attempt) => {
       if (!latestAttemptByRequestId.has(attempt.refund_request_id)) {
         latestAttemptByRequestId.set(attempt.refund_request_id, attempt);
       }
+    });
+
+    (bookings as Booking[]).forEach((booking) => increment(bookingsByGame, booking.game_id));
+
+    (bookingPayments as Payment[]).forEach((payment) => increment(paymentRecordsByGame, payment.game_id));
+
+    (bookingPayments as Payment[])
+      .filter((payment) => payment.payment_status?.toLowerCase() === "paid" && Number(payment.amount ?? 0) > 0)
+      .forEach((payment) => increment(paidPaymentsByGame, payment.game_id));
+
+    waitingListSummary.forEach((entry) => increment(waitingListByGame, entry.game_id));
+    waitingListNotifications.forEach((entry) => increment(waitingListNotificationsByGame, entry.game_id));
+
+    reminderDeliveries.forEach((delivery) => increment(reminderDeliveriesByGame, delivery.game_id));
+
+    walletSummaryTransactions.forEach((transaction) => {
+      increment(walletRecordsByGame, transaction.game_id ?? getMetadataNumber(transaction.metadata, "original_game_id"));
+
+      if (
+        transaction.transaction_type === "wallet_booking_payment" &&
+        transaction.status === "completed" &&
+        Number(transaction.amount ?? 0) < 0
+      ) {
+        increment(walletBookingsByGame, transaction.game_id);
+      }
+
+      if (transaction.transaction_type === "game_cancelled_credit" && transaction.status === "completed") {
+        increment(
+          cancellationCreditsByGame,
+          transaction.game_id ?? getMetadataNumber(transaction.metadata, "original_game_id")
+        );
+      }
+    });
+
+    ((refundRequestsResult.data ?? []) as RefundRequest[]).forEach((request) => {
+      const originalGameId = getMetadataNumber(request.metadata, "original_game_id");
+
+      if (originalGameId) {
+        refundRequestGameById.set(request.id, originalGameId);
+      }
+
+      if (request.status === "pending" && originalGameId) {
+        increment(pendingRefundRequestsByGame, originalGameId);
+      }
+    });
+
+    walletSummaryTransactions.forEach((transaction) => {
+      if (transaction.transaction_type !== "refund_completed" || transaction.status !== "completed") {
+        return;
+      }
+
+      const refundRequestId = getMetadataNumber(transaction.metadata, "refund_request_id");
+      increment(
+        completedRefundsByGame,
+        (refundRequestId ? refundRequestGameById.get(refundRequestId) : null) ??
+          getMetadataNumber(transaction.metadata, "original_game_id") ??
+          transaction.game_id
+      );
     });
 
     const refundRequests = ((refundRequestsResult.data ?? []) as RefundRequest[])
@@ -205,8 +335,45 @@ export async function GET(request: NextRequest) {
     });
     const waitingList = waitingListResult.data ?? [];
 
+    ((sumUpRefundAttemptsResult.data ?? []) as SumUpRefundAttempt[]).forEach((attempt) => {
+      const paymentGameId = attempt.booking_payment_id
+        ? paymentById.get(attempt.booking_payment_id)?.game_id
+        : null;
+      const refundRequestGameId = refundRequestGameById.get(attempt.refund_request_id);
+
+      increment(refundAttemptsByGame, refundRequestGameId ?? paymentGameId);
+
+      if (attempt.status !== "processing" && attempt.status !== "unknown") {
+        return;
+      }
+
+      increment(unresolvedRefundAttemptsByGame, refundRequestGameId ?? paymentGameId);
+    });
+
+    const gamesWithSafetySummaries = (games as Game[]).map((game) => ({
+      ...game,
+      admin_safety: buildAdminGameSafetySummary(
+        {
+          bookings_count: bookingsByGame.get(game.id) ?? 0,
+          payment_records_count: paymentRecordsByGame.get(game.id) ?? 0,
+          paid_sumup_payments_count: paidPaymentsByGame.get(game.id) ?? 0,
+          wallet_transactions_count: walletRecordsByGame.get(game.id) ?? 0,
+          wallet_bookings_count: walletBookingsByGame.get(game.id) ?? 0,
+          waiting_list_count: waitingListByGame.get(game.id) ?? 0,
+          cancellation_credits_count: cancellationCreditsByGame.get(game.id) ?? 0,
+          pending_refund_requests_count: pendingRefundRequestsByGame.get(game.id) ?? 0,
+          completed_refunds_count: completedRefundsByGame.get(game.id) ?? 0,
+          unresolved_refund_attempts_count: unresolvedRefundAttemptsByGame.get(game.id) ?? 0,
+          refund_attempts_count: refundAttemptsByGame.get(game.id) ?? 0,
+          reminder_deliveries_count: reminderDeliveriesByGame.get(game.id) ?? 0,
+          waiting_list_notifications_count: waitingListNotificationsByGame.get(game.id) ?? 0,
+        },
+        game.max_players ?? 0
+      ),
+    }));
+
     return Response.json({
-      games,
+      games: gamesWithSafetySummaries,
       bookings,
       profiles,
       booking_payments: bookingPayments,
