@@ -1,14 +1,18 @@
 import { NextRequest } from "next/server";
 import { buildAdminGameSafetySummary } from "@/lib/adminGameSafety";
+import { buildAdminRefundCandidates } from "@/lib/adminRefundCandidates";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getAutomaticSumUpRefundCapabilities } from "@/lib/sumupRefundCapabilities";
 
 type Payment = {
   id: number;
+  user_id?: string | null;
   game_id?: number | null;
+  booking_id?: number | null;
   payment_status: string | null;
   amount: number | string | null;
+  currency?: string | null;
   checkout_reference?: string | null;
   transaction_code?: string | null;
 };
@@ -55,13 +59,16 @@ type SumUpRefundAttempt = {
 
 type WalletSummaryTransaction = {
   id: number;
+  user_id?: string | null;
   game_id: number | null;
   booking_id?: number | null;
   payment_id?: number | null;
   amount: number | string | null;
+  currency?: string | null;
   transaction_type: string | null;
   status: string | null;
   metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
 };
 
 type ReminderDelivery = {
@@ -179,7 +186,7 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("wallet_transactions")
-        .select("id,game_id,booking_id,payment_id,amount,transaction_type,status,metadata"),
+        .select("id,user_id,game_id,booking_id,payment_id,amount,currency,transaction_type,status,metadata,created_at"),
       supabaseAdmin
         .from("game_reminder_deliveries")
         .select("id,game_id"),
@@ -350,8 +357,30 @@ export async function GET(request: NextRequest) {
       increment(unresolvedRefundAttemptsByGame, refundRequestGameId ?? paymentGameId);
     });
 
+    const refundCandidates = buildAdminRefundCandidates({
+      games: games as Game[],
+      bookings: bookings as Booking[],
+      profiles: profiles as Profile[],
+      bookingPayments: bookingPayments as Payment[],
+      walletTransactions: walletSummaryTransactions,
+      sumUpRefundAttempts: (sumUpRefundAttemptsResult.data ?? []) as SumUpRefundAttempt[],
+    });
+    const refundCandidatesByGame = new Map<number, typeof refundCandidates>();
+
+    refundCandidates.forEach((candidate) => {
+      if (!candidate.game_id) {
+        return;
+      }
+
+      refundCandidatesByGame.set(candidate.game_id, [
+        ...(refundCandidatesByGame.get(candidate.game_id) ?? []),
+        candidate,
+      ]);
+    });
+
     const gamesWithSafetySummaries = (games as Game[]).map((game) => ({
       ...game,
+      refund_candidates: refundCandidatesByGame.get(game.id) ?? [],
       admin_safety: buildAdminGameSafetySummary(
         {
           bookings_count: bookingsByGame.get(game.id) ?? 0,

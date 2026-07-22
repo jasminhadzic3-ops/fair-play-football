@@ -23,6 +23,7 @@ interface Game {
   cancelled_by?: string | null;
   cancellation_reason?: string | null;
   admin_safety?: AdminGameSafetySummary | null;
+  refund_candidates?: AdminRefundCandidate[];
 }
 
 interface Booking {
@@ -78,6 +79,34 @@ interface RefundRequest {
   created_at?: string | null;
 }
 
+type AdminRefundCandidateStatus =
+  | "eligible"
+  | "requested"
+  | "processing"
+  | "needs_review"
+  | "completed"
+  | "failed"
+  | "not_eligible";
+
+interface AdminRefundCandidate {
+  source_wallet_transaction_id: number;
+  game_id: number | null;
+  booking_id: number | null;
+  payment_id: number | null;
+  user_id?: string | null;
+  player_name?: string | null;
+  amount: number;
+  currency: string;
+  original_payment_method?: string | null;
+  refund_status: AdminRefundCandidateStatus;
+  refund_eligible: boolean;
+  safe_reason: string;
+  refund_request_id?: number | null;
+  refund_request_status?: string | null;
+  sumup_refund_attempt_id?: number | null;
+  sumup_refund_attempt_status?: string | null;
+}
+
 type BookingPaymentDisplay = {
   payment_status?: string | null;
   amount?: number | string | null;
@@ -113,6 +142,15 @@ interface AdminDashboardData {
   automaticSumUpRefundMode?: "disabled" | "test_mock" | "local_sandbox_real" | "production_real";
   summary: AdminSummary;
 }
+
+type AdminRefundCandidateResponse = {
+  refund_candidate?: AdminRefundCandidate | null;
+  automatic_refund?: {
+    status?: string | null;
+    message?: string | null;
+  } | null;
+  error?: string;
+};
 
 interface CancelGameResponse {
   game?: Game;
@@ -238,6 +276,7 @@ export default function AdminPage() {
   const [editingGameId, setEditingGameId] = useState<number | null>(null);
   const [cancellingGameId, setCancellingGameId] = useState<number | null>(null);
   const [processingRefundRequestId, setProcessingRefundRequestId] = useState<number | null>(null);
+  const [processingAdminRefundSourceId, setProcessingAdminRefundSourceId] = useState<number | null>(null);
   const [summary, setSummary] = useState<AdminSummary>({
     games_count: 0,
     bookings_count: 0,
@@ -712,6 +751,70 @@ export default function AdminPage() {
     }
   };
 
+  const processAdminRefundCandidate = async (game: Game, candidate: AdminRefundCandidate) => {
+    if (processingAdminRefundSourceId || !candidate.refund_eligible) {
+      return;
+    }
+
+    const amount = formatAdminRefundCandidateAmount(candidate);
+    const confirmed = window.confirm(
+      [
+        `Refund ${candidate.player_name || "this player"} for ${game.title}?`,
+        "",
+        `Amount: ${amount}`,
+        `Original payment method: ${candidate.original_payment_method || "SumUp"}`,
+        "",
+        "This will create or reserve the existing wallet refund request, then attempt one real SumUp card refund if live refunds are enabled.",
+        "Do not retry if SumUp returns an unknown outcome; use Recheck SumUp in the Refund Requests queue.",
+      ].join("\n")
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setProcessingAdminRefundSourceId(candidate.source_wallet_transaction_id);
+
+    try {
+      const response = await fetch("/api/admin/refund-requests", {
+        method: "POST",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({
+          source_wallet_transaction_id: candidate.source_wallet_transaction_id,
+        }),
+      });
+      const result = (await response.json().catch(() => null)) as AdminRefundCandidateResponse | null;
+
+      if (!response.ok) {
+        alert(result?.error || "Unable to create admin refund.");
+        return;
+      }
+
+      if (result?.refund_candidate) {
+        setGames((currentGames) =>
+          currentGames.map((currentGame) =>
+            currentGame.id === game.id
+              ? {
+                  ...currentGame,
+                  refund_candidates: (currentGame.refund_candidates ?? []).map((currentCandidate) =>
+                    currentCandidate.source_wallet_transaction_id === candidate.source_wallet_transaction_id
+                      ? result.refund_candidate!
+                      : currentCandidate
+                  ),
+                }
+              : currentGame
+          )
+        );
+      }
+
+      alert(result?.automatic_refund?.message || "Refund request updated.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to create admin refund.");
+    } finally {
+      setProcessingAdminRefundSourceId(null);
+    }
+  };
+
   const getBookingCount = (gameId: number) =>
     bookings.filter((booking) => booking.game_id === gameId).length;
 
@@ -820,6 +923,35 @@ export default function AdminPage() {
     }
 
     return `${request.currency === "GBP" || !request.currency ? "£" : `${request.currency} `}${amount.toFixed(2)}`;
+  };
+
+  const formatAdminRefundCandidateAmount = (candidate: AdminRefundCandidate) => {
+    const amount = Number(candidate.amount);
+
+    if (Number.isNaN(amount)) {
+      return "—";
+    }
+
+    return `${candidate.currency === "GBP" || !candidate.currency ? "£" : `${candidate.currency} `}${amount.toFixed(2)}`;
+  };
+
+  const getAdminRefundCandidateStatusLabel = (candidate: AdminRefundCandidate) => {
+    switch (candidate.refund_status) {
+      case "eligible":
+        return "Eligible";
+      case "requested":
+        return "Requested";
+      case "processing":
+        return "Processing";
+      case "needs_review":
+        return "Needs review";
+      case "completed":
+        return "Completed";
+      case "failed":
+        return "Failed";
+      default:
+        return "Not eligible";
+    }
   };
 
   const formatRefundRequestSource = (request: RefundRequest) => {
@@ -1145,6 +1277,61 @@ export default function AdminPage() {
                         </button>
                       </div>
                     </div>
+
+                    {game.refund_candidates && game.refund_candidates.length > 0 ? (
+                      <details className="mt-5 border-t border-zinc-800 pt-4" open={gameFilter === "has_refunds"}>
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Refunds / cancellation credits
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          {game.refund_candidates.map((candidate) => (
+                            <div
+                              key={candidate.source_wallet_transaction_id}
+                              className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 md:grid-cols-[1fr_auto_auto] md:items-center"
+                            >
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-semibold text-white">
+                                    {candidate.player_name || "Unknown player"}
+                                  </p>
+                                  <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-300">
+                                    {getAdminRefundCandidateStatusLabel(candidate)}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-sm text-zinc-400">
+                                  {formatAdminRefundCandidateAmount(candidate)} •{" "}
+                                  {candidate.original_payment_method === "sumup" ? "SumUp" : "Wallet"} cancellation credit
+                                </p>
+                                <p className="mt-1 text-xs text-zinc-500">{candidate.safe_reason}</p>
+                              </div>
+
+                              <div className="text-sm font-semibold text-zinc-300 md:text-right">
+                                Credit {candidate.source_wallet_transaction_id}
+                              </div>
+
+                              {candidate.refund_eligible ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void processAdminRefundCandidate(game, candidate)}
+                                  disabled={
+                                    processingAdminRefundSourceId === candidate.source_wallet_transaction_id
+                                  }
+                                  className="w-full rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                                >
+                                  {processingAdminRefundSourceId === candidate.source_wallet_transaction_id
+                                    ? "Processing..."
+                                    : "Refund via SumUp"}
+                                </button>
+                              ) : (
+                                <p className="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-center text-sm font-semibold text-zinc-400">
+                                  No action
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
 
                     <div className="mt-5 border-t border-zinc-800 pt-4">
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">

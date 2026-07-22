@@ -119,6 +119,7 @@ beforeEach(() => {
     {
       id: 100,
       game_id: 10,
+      user_id: "user-1",
       player_name: "Booked Player",
     },
   ];
@@ -132,9 +133,12 @@ beforeEach(() => {
   state.booking_payments = [
     {
       id: 200,
+      user_id: "user-1",
       game_id: 10,
       payment_status: "paid",
+      booking_id: 100,
       amount: 8,
+      currency: "GBP",
       checkout_reference: "checkout-reference-1",
       transaction_code: "TXN-1",
     },
@@ -398,5 +402,122 @@ describe("admin dashboard refund requests", () => {
     expect(body.automaticSumUpRefundMockEnabled).toBe(false);
     expect(body.automaticSumUpRefundEnabled).toBe(true);
     expect(body.automaticSumUpRefundMode).toBe("production_real");
+  });
+
+  it("includes sanitized eligible admin refund candidates for SumUp cancellation credits", async () => {
+    state.games = [
+      {
+        id: 10,
+        title: "Cancelled Football",
+        location: "Pitch 1",
+        time: "15 Jul 2026, 20:30",
+        starts_at: "2026-07-15T19:30:00.000Z",
+        max_players: 12,
+        status: "cancelled",
+      },
+    ];
+    state.wallet_transactions = [
+      {
+        id: 900,
+        user_id: "user-1",
+        game_id: 10,
+        booking_id: 100,
+        payment_id: 200,
+        amount: 8,
+        currency: "GBP",
+        transaction_type: "game_cancelled_credit",
+        status: "completed",
+        metadata: {
+          original_payment_method: "sumup",
+          original_payment_id: 200,
+          original_game_id: 10,
+          original_booking_id: 100,
+        },
+        created_at: "2026-07-01T10:00:00.000Z",
+      },
+    ];
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.games[0].refund_candidates).toEqual([
+      expect.objectContaining({
+        source_wallet_transaction_id: 900,
+        game_id: 10,
+        booking_id: 100,
+        payment_id: 200,
+        user_id: "user-1",
+        player_name: "Refund Player",
+        amount: 8,
+        currency: "GBP",
+        original_payment_method: "sumup",
+        refund_status: "eligible",
+        refund_eligible: true,
+        safe_reason: "Eligible for full SumUp refund.",
+      }),
+    ]);
+    expect(body.games[0].refund_candidates[0]).not.toHaveProperty("transaction_code");
+    expect(body.games[0].refund_candidates[0]).not.toHaveProperty("sumup_transaction_id");
+    expect(body.games[0].refund_candidates[0]).not.toHaveProperty("raw_checkout");
+    expect(body.games[0].refund_candidates[0]).not.toHaveProperty("metadata");
+  });
+
+  it("marks wallet cancellation credits as not eligible for Admin SumUp refunds", async () => {
+    state.games = [
+      {
+        id: 10,
+        title: "Cancelled Football",
+        location: "Pitch 1",
+        time: "15 Jul 2026, 20:30",
+        starts_at: "2026-07-15T19:30:00.000Z",
+        max_players: 12,
+        status: "cancelled",
+      },
+    ];
+    state.wallet_transactions = [
+      {
+        id: 901,
+        user_id: "user-1",
+        game_id: 10,
+        booking_id: 100,
+        payment_id: null,
+        amount: 8,
+        currency: "GBP",
+        transaction_type: "game_cancelled_credit",
+        status: "completed",
+        metadata: {
+          original_payment_method: "wallet",
+          original_game_id: 10,
+          original_booking_id: 100,
+        },
+        created_at: "2026-07-01T10:00:00.000Z",
+      },
+    ];
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.games[0].refund_candidates).toEqual([
+      expect.objectContaining({
+        source_wallet_transaction_id: 901,
+        refund_status: "not_eligible",
+        refund_eligible: false,
+        safe_reason: "Only SumUp cancellation credits can be refunded to card.",
+      }),
+    ]);
   });
 });
