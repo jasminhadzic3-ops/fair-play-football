@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  getAutomaticSumUpRefundDiagnostics,
-  getAutomaticSumUpRefundMode,
-} from "@/lib/sumupRefundCapabilities";
+import { getAutomaticSumUpRefundMode } from "@/lib/sumupRefundCapabilities";
 
 function configureProductionRealCandidate() {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bpvbkndywnvfvxxzzaes.supabase.co";
@@ -50,15 +47,6 @@ describe("getAutomaticSumUpRefundMode", () => {
     configureProductionRealCandidate();
 
     expect(getAutomaticSumUpRefundMode()).toBe("production_real");
-    expect(getAutomaticSumUpRefundDiagnostics()).toEqual({
-      isProductionProject: true,
-      productionRuntime: true,
-      realRefundsExplicitlyEnabled: true,
-      hasRequiredSumUpRefundConfig: true,
-      mockOrTestFlagPresent: false,
-      sandboxRefundsExplicitlyEnabled: false,
-      mode: "production_real",
-    });
   });
 
   it("keeps production disabled when the real refund flag is false or unset", () => {
