@@ -10,6 +10,7 @@ const requiredEnvVars = [
   "SUMUP_CURRENCY",
 ];
 const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
+const archivedGameMessage = "This game has been archived and is no longer available for booking.";
 
 function getMissingEnvVars() {
   return requiredEnvVars.filter((name) => !process.env[name]);
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const { data: game, error: gameError } = await supabaseAdmin
       .from("games")
-      .select("id,title,location,time,price,status")
+      .select("id,title,location,time,price,status,archived_at")
       .eq("id", gameId)
       .single();
 
@@ -58,6 +59,10 @@ export async function POST(request: NextRequest) {
 
     if (game.status === "cancelled") {
       return Response.json({ error: cancelledGameMessage }, { status: 409 });
+    }
+
+    if (game.archived_at) {
+      return Response.json({ error: archivedGameMessage }, { status: 409 });
     }
 
     const { data: existingBooking } = await supabaseAdmin

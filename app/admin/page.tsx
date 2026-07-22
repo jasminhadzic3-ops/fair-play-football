@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AdminGameFilter,
+  AdminGameLifecycle,
   AdminGameSafetySummary,
   getAdminGameLifecycle,
   isValidAdminMoveDestination,
@@ -16,6 +17,8 @@ interface Game {
   location: string;
   time: string;
   starts_at?: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
   price: number;
   max_players: number;
   status?: "active" | "cancelled" | null;
@@ -24,6 +27,7 @@ interface Game {
   cancellation_reason?: string | null;
   admin_safety?: AdminGameSafetySummary | null;
   refund_candidates?: AdminRefundCandidate[];
+  financial_records?: AdminFinancialRecord[];
 }
 
 interface Booking {
@@ -107,6 +111,26 @@ interface AdminRefundCandidate {
   sumup_refund_attempt_status?: string | null;
 }
 
+type AdminFinancialRecord = {
+  record_type:
+    | "paid_sumup_payment"
+    | "other_booking_payment"
+    | "wallet_booking_payment"
+    | "cancellation_credit"
+    | "refund_request"
+    | "refund_completed"
+    | "sumup_refund_attempt"
+    | "waiting_list"
+    | "waiting_list_notification"
+    | "reminder_delivery";
+  player_name?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  category: string;
+};
+
 type BookingPaymentDisplay = {
   payment_status?: string | null;
   amount?: number | string | null;
@@ -189,6 +213,7 @@ const gameFilters: Array<{ value: AdminGameFilter; label: string }> = [
   { value: "has_financial_history", label: "Has Financial History" },
   { value: "has_refunds", label: "Has Refunds" },
   { value: "safe_to_delete", label: "Safe to Delete" },
+  { value: "archived", label: "Archived" },
   { value: "all", label: "All" },
 ];
 
@@ -344,16 +369,20 @@ export default function AdminPage() {
       const bookingsCount = bookings.filter((booking) => booking.game_id === game.id).length;
       const safety = game.admin_safety ?? getFallbackGameSafety(game, bookingsCount);
       const lifecycle = getAdminGameLifecycle(game, now);
+      const archived = lifecycle === "archived";
       const matchesSearch =
         !query ||
-        game.title.toLowerCase().includes(query) ||
-        game.location.toLowerCase().includes(query);
+        game.title?.toLowerCase().includes(query) ||
+        game.location?.toLowerCase().includes(query);
       const matchesFilter =
-        gameFilter === "all" ||
-        lifecycle === gameFilter ||
-        (gameFilter === "has_financial_history" && safety.has_financial_history) ||
-        (gameFilter === "has_refunds" && safety.has_refunds) ||
-        (gameFilter === "safe_to_delete" && safety.safe_to_delete);
+        gameFilter === "archived"
+          ? archived
+          : !archived &&
+            (gameFilter === "all" ||
+              lifecycle === gameFilter ||
+              (gameFilter === "has_financial_history" && safety.has_financial_history) ||
+              (gameFilter === "has_refunds" && safety.has_refunds) ||
+              (gameFilter === "safe_to_delete" && safety.safe_to_delete));
 
       return matchesSearch && matchesFilter;
     });
@@ -541,6 +570,41 @@ export default function AdminPage() {
     await fetchAdminData();
   };
 
+  const archiveGame = async (game: Game, action: "archive" | "unarchive") => {
+    const confirmed = window.confirm(
+      action === "archive"
+        ? [
+            `Archive "${game.title}"?`,
+            "",
+            "It will disappear from normal Admin filters and public booking.",
+            "No payment, wallet, refund, booking, or cancellation history will be deleted.",
+            "It remains available under Archived and can be restored later.",
+          ].join("\n")
+        : `Unarchive "${game.title}"? It will return to the normal Admin filters for its current status and kickoff.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/games/${game.id}`, {
+        method: "PATCH",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({ action }),
+      });
+
+      if (!response.ok) {
+        alert(await readApiError(response));
+        return;
+      }
+
+      await fetchAdminData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to update archive state.");
+    }
+  };
+
   const cancelGame = async (game: Game) => {
     if (cancellingGameId) {
       return;
@@ -634,7 +698,7 @@ export default function AdminPage() {
     }
 
     const confirmed = window.confirm(
-      "This only moves the player booking. It does not change payment, refund, or credit."
+      "This moves the player booking and current payment linkage to the destination. It does not refund payment or edit historical refund/credit records."
     );
 
     if (!confirmed) {
@@ -935,6 +999,115 @@ export default function AdminPage() {
     return `${candidate.currency === "GBP" || !candidate.currency ? "£" : `${candidate.currency} `}${amount.toFixed(2)}`;
   };
 
+  const formatFinancialRecordAmount = (record: AdminFinancialRecord) => {
+    if (record.amount === null || record.amount === undefined) {
+      return "—";
+    }
+
+    const amount = Number(record.amount);
+
+    if (Number.isNaN(amount)) {
+      return "—";
+    }
+
+    return `${record.currency === "GBP" || !record.currency ? "£" : `${record.currency} `}${amount.toFixed(2)}`;
+  };
+
+  const formatFinancialRecordDate = (record: AdminFinancialRecord) =>
+    formatJoinedDate(record.created_at);
+
+  const formatArchiveDate = (archivedAt: string | null | undefined) => {
+    if (!archivedAt) {
+      return "Archive date unavailable";
+    }
+
+    const date = new Date(archivedAt);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Archive date unavailable";
+    }
+
+    return `Archived on ${date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}`;
+  };
+
+  const getLifecycleLabel = (game: Game, lifecycle: AdminGameLifecycle) => {
+    if (lifecycle === "archived") {
+      const unarchivedLifecycle = getAdminGameLifecycle({ ...game, archived_at: null });
+
+      return unarchivedLifecycle === "cancelled"
+        ? "Cancelled"
+        : unarchivedLifecycle === "active_upcoming"
+          ? "Active"
+          : "Past / Legacy";
+    }
+
+    return lifecycle === "cancelled"
+      ? "Cancelled"
+      : lifecycle === "active_upcoming"
+        ? "Active"
+        : "Past / Legacy";
+  };
+
+  const getFinancialSummary = (safety: AdminGameSafetySummary, financialRecords: AdminFinancialRecord[]) => {
+    const totalPaidSumUpAmount = financialRecords
+      .filter((record) => record.record_type === "paid_sumup_payment")
+      .reduce((total, record) => total + Number(record.amount ?? 0), 0);
+    const totalRefundedAmount = financialRecords
+      .filter((record) => record.record_type === "refund_completed")
+      .reduce((total, record) => total + Number(record.amount ?? 0), 0);
+
+    return {
+      bookingsCount: safety.bookings_count,
+      totalPaidSumUpAmount,
+      totalRefundedAmount,
+      paymentCount: safety.payment_records_count,
+      cancellationCreditCount: safety.cancellation_credits_count,
+      completedRefundCount: safety.completed_refunds_count,
+    };
+  };
+
+  const canArchiveGame = (lifecycle: AdminGameLifecycle) =>
+    lifecycle === "cancelled" || lifecycle === "past_legacy";
+
+  const renderFinancialRecordsPanel = (financialRecords: AdminFinancialRecord[]) =>
+    financialRecords.length > 0 ? (
+      <details className="mt-5 border-t border-zinc-800 pt-4">
+        <summary className="cursor-pointer text-xs uppercase tracking-[0.3em] text-zinc-500">
+          Financial records
+        </summary>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+              <tr>
+                <th className="py-2 pr-4 font-semibold">Type</th>
+                <th className="py-2 pr-4 font-semibold">Player</th>
+                <th className="py-2 pr-4 font-semibold">Amount</th>
+                <th className="py-2 pr-4 font-semibold">Status</th>
+                <th className="py-2 pr-4 font-semibold">Date</th>
+                <th className="py-2 font-semibold">Category</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800 text-zinc-300">
+              {financialRecords.map((record, index) => (
+                <tr key={`${record.record_type}-${record.created_at ?? "unknown"}-${index}`}>
+                  <td className="py-3 pr-4 font-semibold text-white">{record.record_type.replaceAll("_", " ")}</td>
+                  <td className="py-3 pr-4">{record.player_name?.trim() || "Unknown player"}</td>
+                  <td className="py-3 pr-4">{formatFinancialRecordAmount(record)}</td>
+                  <td className="py-3 pr-4">{record.status || "unknown"}</td>
+                  <td className="py-3 pr-4">{formatFinancialRecordDate(record)}</td>
+                  <td className="py-3">{record.category}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    ) : null;
+
   const getAdminRefundCandidateStatusLabel = (candidate: AdminRefundCandidate) => {
     switch (candidate.refund_status) {
       case "eligible":
@@ -1157,11 +1330,125 @@ export default function AdminPage() {
                 const gameBookings = getGameBookings(game.id);
                 const safety = game.admin_safety ?? getFallbackGameSafety(game, gameBookings.length);
                 const lifecycle = getAdminGameLifecycle(game);
+                const isArchived = lifecycle === "archived";
+                const financialRecords = game.financial_records ?? [];
+                const financialSummary = getFinancialSummary(safety, financialRecords);
+
+                if (isArchived) {
+                  return (
+                    <div
+                      key={game.id}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                    >
+                      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-lg font-bold text-white">{game.title}</h3>
+                            <span className="rounded-full border border-zinc-600 bg-zinc-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-300">
+                              Archived
+                            </span>
+                            <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-xs font-semibold text-zinc-300">
+                              {getLifecycleLabel(game, lifecycle)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            {formatArchiveDate(game.archived_at)} • {formatLondonKickoff(game.starts_at)} • {game.location}
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                            <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                              {financialSummary.bookingsCount} bookings
+                            </span>
+                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+                              £{financialSummary.totalPaidSumUpAmount.toFixed(2)} paid SumUp
+                            </span>
+                            <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-200">
+                              £{financialSummary.totalRefundedAmount.toFixed(2)} refunded
+                            </span>
+                            <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                              {financialSummary.paymentCount} payments
+                            </span>
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
+                              {financialSummary.cancellationCreditCount} credits
+                            </span>
+                            <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                              {financialSummary.completedRefundCount} completed refunds
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => void archiveGame(game, "unarchive")}
+                          className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400"
+                        >
+                          Restore
+                        </button>
+                      </div>
+
+                      <details className="mt-4 border-t border-zinc-800 pt-3">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Expand
+                        </summary>
+
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                          <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                            {safety.spaces_remaining} spaces
+                          </span>
+                          <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                            {safety.wallet_bookings_count} wallet bookings
+                          </span>
+                          <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                            {safety.waiting_list_count} waiting
+                          </span>
+                          <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                            {safety.refund_attempts_count} refund attempts
+                          </span>
+                          <span className="rounded-full border border-zinc-700 bg-black px-3 py-1 text-zinc-300">
+                            {safety.reminder_deliveries_count} reminders
+                          </span>
+                        </div>
+
+                        {!safety.safe_to_delete ? (
+                          <p className="mt-3 text-sm text-amber-100">
+                            Delete is blocked by {safety.delete_block_reasons.join(", ")}.
+                          </p>
+                        ) : (
+                          <p className="mt-3 text-sm text-emerald-200">Safe to delete.</p>
+                        )}
+
+                        {renderFinancialRecordsPanel(financialRecords)}
+
+                        {gameBookings.length > 0 ? (
+                          <details className="mt-5 border-t border-zinc-800 pt-4">
+                            <summary className="cursor-pointer text-xs uppercase tracking-[0.3em] text-zinc-500">
+                              Booked-player history
+                            </summary>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {gameBookings.map((booking) => (
+                                <span
+                                  key={booking.id}
+                                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-black px-3 py-2 text-sm font-medium text-zinc-200"
+                                >
+                                  <span>{booking.player_name?.trim() || "Unnamed player"}</span>
+                                  <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs uppercase tracking-[0.18em] text-zinc-400">
+                                    {getPaymentStatusForBooking(booking)}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
+                      </details>
+                    </div>
+                  );
+                }
 
                 return (
                   <div
                     key={game.id}
-                    className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                    className={`rounded-3xl border p-5 ${
+                      isArchived ? "border-zinc-800 bg-zinc-950" : "border-zinc-800 bg-zinc-900"
+                    }`}
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
@@ -1169,14 +1456,18 @@ export default function AdminPage() {
                           <h3 className="text-xl font-bold text-white">{game.title}</h3>
                           <span
                             className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
-                              game.status === "cancelled"
+                              isArchived
+                                ? "border-zinc-600 bg-zinc-950 text-zinc-300"
+                                : game.status === "cancelled"
                                 ? "border-red-500/30 bg-red-500/10 text-red-200"
                                 : lifecycle === "active_upcoming"
                                   ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
                                   : "border-zinc-600 bg-zinc-950 text-zinc-300"
                             }`}
                           >
-                            {game.status === "cancelled"
+                            {isArchived
+                              ? "Archived"
+                              : game.status === "cancelled"
                               ? "Cancelled"
                               : lifecycle === "active_upcoming"
                                 ? "Active"
@@ -1258,7 +1549,25 @@ export default function AdminPage() {
                         >
                           Edit
                         </button>
-                        {game.status !== "cancelled" ? (
+                        {!isArchived && canArchiveGame(lifecycle) ? (
+                          <button
+                            type="button"
+                            onClick={() => void archiveGame(game, "archive")}
+                            className="rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-white/20"
+                          >
+                            Archive
+                          </button>
+                        ) : null}
+                        {isArchived ? (
+                          <button
+                            type="button"
+                            onClick={() => void archiveGame(game, "unarchive")}
+                            className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400"
+                          >
+                            Unarchive
+                          </button>
+                        ) : null}
+                        {!isArchived && game.status !== "cancelled" ? (
                           <button
                             type="button"
                             onClick={() => cancelGame(game)}
@@ -1277,6 +1586,8 @@ export default function AdminPage() {
                         </button>
                       </div>
                     </div>
+
+                    {renderFinancialRecordsPanel(financialRecords)}
 
                     {game.refund_candidates && game.refund_candidates.length > 0 ? (
                       <details className="mt-5 border-t border-zinc-800 pt-4" open={gameFilter === "has_refunds"}>
@@ -1333,10 +1644,10 @@ export default function AdminPage() {
                       </details>
                     ) : null}
 
-                    <div className="mt-5 border-t border-zinc-800 pt-4">
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    <details className="mt-5 border-t border-zinc-800 pt-4" open={!isArchived}>
+                      <summary className="cursor-pointer text-xs uppercase tracking-[0.3em] text-zinc-500">
                         Booked players
-                      </p>
+                      </summary>
 
                       {gameBookings.length === 0 ? (
                         <p className="mt-3 text-sm text-zinc-500">No players booked yet.</p>
@@ -1362,7 +1673,7 @@ export default function AdminPage() {
                           ))}
                         </div>
                       )}
-                    </div>
+                    </details>
                   </div>
                 );
               })}

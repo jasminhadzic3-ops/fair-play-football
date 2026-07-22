@@ -211,10 +211,43 @@ describe("admin dashboard refund requests", () => {
         source_game_title: "Friday Football",
         source_booking_player_name: "Booked Player",
         source_payment_status: "paid",
-        source_payment_checkout_reference: "checkout-reference-1",
-        source_payment_transaction_code: "TXN-1",
+        source_payment_checkout_reference: null,
+        source_payment_transaction_code: null,
       }),
     ]);
+    expect(body.booking_payments[0]).not.toHaveProperty("checkout_reference");
+    expect(body.booking_payments[0]).not.toHaveProperty("transaction_code");
+    expect(body.booking_payments[0]).not.toHaveProperty("sumup_transaction_id");
+    expect(body.games[0].financial_records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          record_type: "paid_sumup_payment",
+          player_name: "Booked Player",
+          amount: 8,
+          currency: "GBP",
+          status: "paid",
+          category: "Paid SumUp payment",
+        }),
+        expect.objectContaining({
+          record_type: "wallet_booking_payment",
+          player_name: "Booked Player",
+          amount: 8,
+          currency: "GBP",
+          status: "completed",
+          category: "Wallet booking payment",
+        }),
+        expect.objectContaining({
+          record_type: "refund_request",
+          player_name: "Booked Player",
+          amount: 8,
+          currency: "GBP",
+          status: "pending",
+          category: "Refund request",
+        }),
+      ])
+    );
+    expect(JSON.stringify(body.games[0].financial_records)).not.toContain("TXN-1");
+    expect(JSON.stringify(body.games[0].financial_records)).not.toContain("checkout-reference-1");
     expect(body.wallet_transactions).toEqual([
       expect.objectContaining({
         id: 502,

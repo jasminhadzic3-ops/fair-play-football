@@ -1,5 +1,46 @@
--- Atomic admin booking moves.
--- Run this manually in Supabase before deploying app code that calls move_booking_if_space.
+-- Game archive foundation.
+-- Run manually in Supabase before deploying app code that reads or writes games.archived_at.
+-- Archiving is separate from active/cancelled lifecycle status and must never
+-- delete, rewrite, or hide financial/history records from Admin recovery views.
+
+alter table public.games
+add column if not exists archived_at timestamptz;
+
+alter table public.games
+add column if not exists archived_by uuid references auth.users(id) on delete set null;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'games_archived_by_fkey'
+      and conrelid = 'public.games'::regclass
+  ) then
+    alter table public.games
+    add constraint games_archived_by_fkey
+    foreign key (archived_by) references auth.users(id) on delete set null;
+  end if;
+end $$;
+
+comment on column public.games.archived_at is
+'Canonical archive flag. Archive is separate from active/cancelled lifecycle status and must never delete or rewrite financial/history records.';
+
+comment on column public.games.archived_by is
+'Admin user who archived the game when available; archiving must never delete or rewrite financial/history records.';
+
+create index if not exists games_archived_at_idx
+on public.games(archived_at)
+where archived_at is not null;
+
+create index if not exists games_active_unarchived_starts_at_idx
+on public.games(starts_at)
+where status = 'active'
+  and archived_at is null;
+
+create index if not exists games_archived_lookup_idx
+on public.games(archived_at, id)
+where archived_at is not null;
 
 create or replace function public.move_booking_if_space(
   p_booking_id bigint,

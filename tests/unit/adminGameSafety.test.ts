@@ -32,6 +32,65 @@ describe("admin game safety helpers", () => {
     ).toBe("cancelled");
   });
 
+  it("classifies archived games separately from lifecycle status", () => {
+    expect(
+      getAdminGameLifecycle(
+        {
+          status: "cancelled",
+          starts_at: "2026-07-23T18:00:00.000Z",
+          archived_at: "2026-07-24T10:00:00.000Z",
+        },
+        now
+      )
+    ).toBe("archived");
+  });
+
+  it("does not archive cancelled or past legacy games unless archived_at is set", () => {
+    expect(
+      getAdminGameLifecycle(
+        {
+          status: "cancelled",
+          starts_at: "2026-07-23T18:00:00.000Z",
+          archived_at: null,
+        },
+        now
+      )
+    ).toBe("cancelled");
+    expect(
+      getAdminGameLifecycle(
+        {
+          status: "active",
+          starts_at: "2026-07-21T18:00:00.000Z",
+          archived_at: null,
+        },
+        now
+      )
+    ).toBe("past_legacy");
+  });
+
+  it("restores games to their lifecycle classification when archived_at is cleared", () => {
+    expect(
+      getAdminGameLifecycle(
+        {
+          status: "cancelled",
+          starts_at: "2026-07-23T18:00:00.000Z",
+          archived_at: null,
+        },
+        now
+      )
+    ).toBe("cancelled");
+    expect(
+      getAdminGameLifecycle(
+        {
+          status: "active",
+          starts_at: "2026-07-23T18:00:00.000Z",
+          archived_at: null,
+        },
+        now
+      )
+    ).toBe("active_upcoming");
+  });
+
   it("classifies past and legacy active games as past legacy", () => {
     expect(getAdminGameLifecycle({ status: "active", starts_at: "2026-07-21T18:00:00.000Z" }, now)).toBe(
       "past_legacy"
@@ -61,6 +120,20 @@ describe("admin game safety helpers", () => {
         { id: 2, status: "active", starts_at: "2026-07-23T18:00:00.000Z", max_players: 12 },
         1,
         12,
+        now
+      )
+    ).toBe(false);
+    expect(
+      isValidAdminMoveDestination(
+        {
+          id: 2,
+          status: "active",
+          starts_at: "2026-07-23T18:00:00.000Z",
+          archived_at: "2026-07-22T18:00:00.000Z",
+          max_players: 12,
+        },
+        1,
+        0,
         now
       )
     ).toBe(false);

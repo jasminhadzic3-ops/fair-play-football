@@ -26,9 +26,11 @@ type GamePayload = Record<string, unknown>;
 const state: {
   insertPayload: GamePayload | null;
   updatePayload: GamePayload | null;
+  selectedGame: GamePayload | null;
 } = {
   insertPayload: null,
   updatePayload: null,
+  selectedGame: null,
 };
 
 class MockSupabaseQuery {
@@ -58,6 +60,7 @@ class MockSupabaseQuery {
     return {
       data: {
         id: 123,
+        ...(state.selectedGame ?? {}),
         ...(state.insertPayload ?? state.updatePayload),
       } as T,
       error: null,
@@ -83,6 +86,7 @@ beforeEach(() => {
   supabaseFromMock.mockImplementation((table: string) => new MockSupabaseQuery(table));
   state.insertPayload = null;
   state.updatePayload = null;
+  state.selectedGame = null;
 });
 
 describe("admin game structured kickoff handling", () => {
@@ -163,5 +167,61 @@ describe("admin game structured kickoff handling", () => {
       max_players: 12,
     });
     expect(state.updatePayload).not.toHaveProperty("starts_at");
+  });
+
+  it("archives only past, cancelled or legacy games with the archive fields", async () => {
+    state.selectedGame = {
+      id: 123,
+      status: "active",
+      starts_at: "2026-07-21T18:00:00.000Z",
+    };
+
+    const response = await PATCH(
+      adminRequest({ action: "archive" }) as Parameters<typeof PATCH>[0],
+      { params: Promise.resolve({ id: "123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.updatePayload).toEqual({
+      archived_at: expect.any(String),
+      archived_by: "admin-1",
+    });
+  });
+
+  it("rejects archive for active future games without updating gameplay fields", async () => {
+    state.selectedGame = {
+      id: 123,
+      status: "active",
+      starts_at: "2999-07-21T18:00:00.000Z",
+    };
+
+    const response = await PATCH(
+      adminRequest({ action: "archive" }) as Parameters<typeof PATCH>[0],
+      { params: Promise.resolve({ id: "123" }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("Active future games cannot be archived");
+    expect(state.updatePayload).toBeNull();
+  });
+
+  it("unarchives by clearing only archive fields", async () => {
+    state.selectedGame = {
+      id: 123,
+      status: "cancelled",
+      starts_at: "2026-07-21T18:00:00.000Z",
+    };
+
+    const response = await PATCH(
+      adminRequest({ action: "unarchive" }) as Parameters<typeof PATCH>[0],
+      { params: Promise.resolve({ id: "123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.updatePayload).toEqual({
+      archived_at: null,
+      archived_by: null,
+    });
   });
 });

@@ -85,6 +85,7 @@ describe("admin move booking route", () => {
   it.each([
     ["same_game", "already in the selected game"],
     ["target_game_cancelled", "cancelled"],
+    ["target_game_archived", "archived games"],
     ["target_game_not_active", "active games"],
     ["target_game_missing_starts_at", "structured kickoff"],
     ["target_game_past", "past games"],

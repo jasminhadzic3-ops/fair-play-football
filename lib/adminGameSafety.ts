@@ -1,9 +1,10 @@
-export type AdminGameLifecycle = "active_upcoming" | "cancelled" | "past_legacy";
+export type AdminGameLifecycle = "active_upcoming" | "cancelled" | "past_legacy" | "archived";
 
 export type AdminGameSafetyGame = {
   id: number;
   status?: string | null;
   starts_at?: string | null;
+  archived_at?: string | null;
   max_players?: number | null;
 };
 
@@ -35,12 +36,17 @@ export type AdminGameFilter =
   | "has_financial_history"
   | "has_refunds"
   | "safe_to_delete"
+  | "archived"
   | "all";
 
 export function getAdminGameLifecycle(
-  game: Pick<AdminGameSafetyGame, "status" | "starts_at">,
+  game: Pick<AdminGameSafetyGame, "status" | "starts_at" | "archived_at">,
   now = new Date()
 ): AdminGameLifecycle {
+  if (game.archived_at) {
+    return "archived";
+  }
+
   if (game.status === "cancelled") {
     return "cancelled";
   }
@@ -69,6 +75,10 @@ export function isValidAdminMoveDestination(
   now = new Date()
 ) {
   if (game.id === currentGameId) {
+    return false;
+  }
+
+  if (game.archived_at) {
     return false;
   }
 

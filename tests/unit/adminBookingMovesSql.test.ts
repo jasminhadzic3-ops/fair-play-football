@@ -33,12 +33,14 @@ describe("admin booking moves SQL", () => {
       "booking_missing_game",
       "same_game",
       "target_game_not_found",
+      "target_game_archived",
       "target_game_cancelled",
       "target_game_not_active",
       "target_game_missing_starts_at",
       "target_game_past",
       "target_game_full",
     ].forEach((reason) => expect(sql).toContain(`'${reason}'`));
+    expect(sql).toContain("if v_target_game.archived_at is not null then");
   });
 
   it("blocks bookings with cancellation or refund history", () => {

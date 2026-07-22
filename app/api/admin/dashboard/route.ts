@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { buildAdminFinancialRecordsByGame } from "@/lib/adminFinancialRecords";
 import { buildAdminGameSafetySummary } from "@/lib/adminGameSafety";
 import { buildAdminRefundCandidates } from "@/lib/adminRefundCandidates";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
@@ -10,22 +11,27 @@ type Payment = {
   user_id?: string | null;
   game_id?: number | null;
   booking_id?: number | null;
+  player_name?: string | null;
   payment_status: string | null;
   amount: number | string | null;
   currency?: string | null;
-  checkout_reference?: string | null;
   transaction_code?: string | null;
+  sumup_transaction_id?: string | null;
+  created_at?: string | null;
 };
 
 type Game = {
   id: number;
   title: string | null;
   max_players?: number | null;
+  status?: string | null;
+  archived_at?: string | null;
 };
 
 type Booking = {
   id: number;
   game_id?: number | null;
+  user_id?: string | null;
   player_name: string | null;
 };
 
@@ -74,11 +80,20 @@ type WalletSummaryTransaction = {
 type ReminderDelivery = {
   id: number;
   game_id: number | null;
+  booking_id?: number | null;
+  user_id?: string | null;
+  status?: string | null;
+  attempts?: number | null;
+  created_at?: string | null;
 };
 
 type WaitingListSummaryEntry = {
   id: number;
   game_id: number | null;
+  user_id?: string | null;
+  player_name?: string | null;
+  status?: string | null;
+  created_at?: string | null;
 };
 
 function countPaymentsByStatus(payments: Payment[]) {
@@ -148,7 +163,7 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       supabaseAdmin
         .from("games")
-        .select("id,title,location,time,starts_at,price,max_players,status,cancelled_at,cancelled_by,cancellation_reason")
+        .select("id,title,location,time,starts_at,price,max_players,status,cancelled_at,cancelled_by,cancellation_reason,archived_at,archived_by")
         .order("id", { ascending: true }),
       supabaseAdmin
         .from("bookings")
@@ -160,7 +175,7 @@ export async function GET(request: NextRequest) {
       supabaseAdmin
         .from("booking_payments")
         .select(
-          "id,user_id,game_id,player_name,checkout_id,checkout_reference,payment_status,booking_id,hosted_checkout_url,amount,currency,transaction_code,raw_checkout,created_at,updated_at"
+          "id,user_id,game_id,player_name,payment_status,booking_id,amount,currency,transaction_code,sumup_transaction_id,created_at,updated_at"
         )
         .order("created_at", { ascending: false }),
       supabaseAdmin
@@ -189,13 +204,13 @@ export async function GET(request: NextRequest) {
         .select("id,user_id,game_id,booking_id,payment_id,amount,currency,transaction_type,status,metadata,created_at"),
       supabaseAdmin
         .from("game_reminder_deliveries")
-        .select("id,game_id"),
+        .select("id,game_id,booking_id,user_id,status,attempts,created_at"),
       supabaseAdmin
         .from("waiting_list")
-        .select("id,game_id"),
+        .select("id,game_id,user_id,player_name,status,created_at"),
       supabaseAdmin
         .from("waiting_list_notifications")
-        .select("id,game_id"),
+        .select("id,game_id,user_id,player_name,status,created_at"),
     ]);
 
     const firstError =
@@ -220,6 +235,17 @@ export async function GET(request: NextRequest) {
     const bookings = bookingsResult.data ?? [];
     const profiles = profilesResult.data ?? [];
     const bookingPayments = paymentsResult.data ?? [];
+    const safeBookingPayments = (bookingPayments as Payment[]).map((payment) => ({
+      id: payment.id,
+      user_id: payment.user_id ?? null,
+      game_id: payment.game_id ?? null,
+      player_name: payment.player_name ?? null,
+      payment_status: payment.payment_status ?? null,
+      booking_id: payment.booking_id ?? null,
+      amount: payment.amount ?? null,
+      currency: payment.currency ?? null,
+      created_at: payment.created_at ?? null,
+    }));
     const walletTransactions = walletTransactionsResult.data ?? [];
     const walletSummaryTransactions = (walletSummaryTransactionsResult.data ?? []) as WalletSummaryTransaction[];
     const reminderDeliveries = (reminderDeliveriesResult.data ?? []) as ReminderDelivery[];
@@ -333,8 +359,8 @@ export async function GET(request: NextRequest) {
         source_game_title: originalGame?.title ?? null,
         source_booking_player_name: originalBooking?.player_name ?? null,
         source_payment_status: originalPayment?.payment_status ?? null,
-        source_payment_checkout_reference: originalPayment?.checkout_reference ?? null,
-        source_payment_transaction_code: originalPayment?.transaction_code ?? null,
+        source_payment_checkout_reference: null,
+        source_payment_transaction_code: null,
         sumup_refund_attempt_id: sumUpRefundAttempt?.id ?? null,
         sumup_refund_attempt_status: sumUpRefundAttempt?.status ?? null,
         sumup_refund_attempt_error: sumUpRefundAttempt?.error_message ?? null,
@@ -366,6 +392,16 @@ export async function GET(request: NextRequest) {
       sumUpRefundAttempts: (sumUpRefundAttemptsResult.data ?? []) as SumUpRefundAttempt[],
     });
     const refundCandidatesByGame = new Map<number, typeof refundCandidates>();
+    const financialRecordsByGame = buildAdminFinancialRecordsByGame({
+      games: games as Game[],
+      bookings: bookings as Booking[],
+      bookingPayments: bookingPayments as Payment[],
+      walletTransactions: walletSummaryTransactions,
+      sumUpRefundAttempts: (sumUpRefundAttemptsResult.data ?? []) as SumUpRefundAttempt[],
+      waitingList: waitingListSummary,
+      waitingListNotifications,
+      reminderDeliveries,
+    });
 
     refundCandidates.forEach((candidate) => {
       if (!candidate.game_id) {
@@ -381,6 +417,7 @@ export async function GET(request: NextRequest) {
     const gamesWithSafetySummaries = (games as Game[]).map((game) => ({
       ...game,
       refund_candidates: refundCandidatesByGame.get(game.id) ?? [],
+      financial_records: financialRecordsByGame.get(game.id) ?? [],
       admin_safety: buildAdminGameSafetySummary(
         {
           bookings_count: bookingsByGame.get(game.id) ?? 0,
@@ -405,7 +442,7 @@ export async function GET(request: NextRequest) {
       games: gamesWithSafetySummaries,
       bookings,
       profiles,
-      booking_payments: bookingPayments,
+      booking_payments: safeBookingPayments,
       wallet_transactions: walletTransactions,
       refund_requests: refundRequests,
       waiting_list: waitingList,

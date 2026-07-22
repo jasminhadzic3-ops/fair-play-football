@@ -94,7 +94,8 @@ export default function Home() {
     const { data: gamesData } = await supabase
       .from("games")
       .select("*")
-      .eq("status", "active");
+      .eq("status", "active")
+      .is("archived_at", null);
     const bookingsResponse = await fetch("/api/bookings");
     const bookingsResult = await bookingsResponse.json().catch(() => null);
 

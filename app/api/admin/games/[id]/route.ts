@@ -69,6 +69,32 @@ function isRetryCancellationEmailsPayload(body: GamePayload | null): body is Gam
   return body?.action === "retry_cancellation_emails";
 }
 
+function isArchiveGamePayload(body: GamePayload | null): body is GamePayload {
+  return body?.action === "archive";
+}
+
+function isUnarchiveGamePayload(body: GamePayload | null): body is GamePayload {
+  return body?.action === "unarchive";
+}
+
+function canArchiveGame(game: { status?: string | null; starts_at?: string | null }) {
+  if (game.status === "cancelled") {
+    return true;
+  }
+
+  if (game.status !== "active") {
+    return true;
+  }
+
+  if (!game.starts_at) {
+    return true;
+  }
+
+  const startsAt = new Date(game.starts_at);
+
+  return Number.isNaN(startsAt.getTime()) || startsAt <= new Date();
+}
+
 function parseCancellationReason(body: GamePayload | null) {
   return typeof body?.cancellation_reason === "string" ? body.cancellation_reason.trim() || null : null;
 }
@@ -145,6 +171,42 @@ export async function PATCH(
         ok: true,
         ...(emailWarning ? { email_warning: emailWarning } : {}),
       });
+    }
+
+    if (isArchiveGamePayload(body) || isUnarchiveGamePayload(body)) {
+      const { data: game, error: gameError } = await supabaseAdmin
+        .from("games")
+        .select("id,status,starts_at")
+        .eq("id", gameId)
+        .single();
+
+      if (gameError || !game) {
+        return Response.json({ error: gameError?.message || "Game not found." }, { status: gameError ? 500 : 404 });
+      }
+
+      if (isArchiveGamePayload(body) && !canArchiveGame(game)) {
+        return Response.json(
+          { error: "Active future games cannot be archived. Cancel or edit the game first." },
+          { status: 409 }
+        );
+      }
+
+      const archivePayload = isArchiveGamePayload(body)
+        ? { archived_at: new Date().toISOString(), archived_by: adminUser.id }
+        : { archived_at: null, archived_by: null };
+
+      const { data, error } = await supabaseAdmin
+        .from("games")
+        .update(archivePayload)
+        .eq("id", gameId)
+        .select("*")
+        .single();
+
+      if (error) {
+        return Response.json({ error: error.message }, { status: 500 });
+      }
+
+      return Response.json({ game: data });
     }
 
     const payload = parseGamePayload(body);

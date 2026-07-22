@@ -31,6 +31,8 @@ function getMoveBookingErrorMessage(reason: string | null) {
       return "Target game not found.";
     case "target_game_cancelled":
       return "Bookings cannot be moved into a cancelled game.";
+    case "target_game_archived":
+      return "Bookings cannot be moved into archived games.";
     case "target_game_not_active":
       return "Bookings can only be moved into active games.";
     case "target_game_missing_starts_at":

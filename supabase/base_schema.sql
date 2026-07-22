@@ -27,7 +27,9 @@ create table if not exists public.games (
   status text not null default 'active',
   cancelled_at timestamptz,
   cancelled_by uuid,
-  cancellation_reason text
+  cancellation_reason text,
+  archived_at timestamptz,
+  archived_by uuid
 );
 
 comment on column public.games.starts_at is
@@ -35,6 +37,12 @@ comment on column public.games.starts_at is
 
 comment on column public.games.time is
 'Legacy display compatibility field during the starts_at transition; do not use for reminder scheduling.';
+
+comment on column public.games.archived_at is
+'Canonical archive flag. Archive is separate from active/cancelled lifecycle status and must never delete or rewrite financial/history records.';
+
+comment on column public.games.archived_by is
+'Admin user who archived the game when available; archiving must never delete or rewrite financial/history records.';
 
 create table if not exists public.bookings (
   id bigint not null,
@@ -133,6 +141,16 @@ begin
 
   if not exists (
     select 1 from pg_constraint
+    where conname = 'games_archived_by_fkey'
+      and conrelid = 'public.games'::regclass
+  ) then
+    alter table public.games
+    add constraint games_archived_by_fkey
+    foreign key (archived_by) references auth.users(id) on delete set null;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
     where conname = 'games_status_check'
       and conrelid = 'public.games'::regclass
   ) then
@@ -144,6 +162,19 @@ end $$;
 
 create index if not exists games_status_idx
 on public.games(status);
+
+create index if not exists games_archived_at_idx
+on public.games(archived_at)
+where archived_at is not null;
+
+create index if not exists games_active_unarchived_starts_at_idx
+on public.games(starts_at)
+where status = 'active'
+  and archived_at is null;
+
+create index if not exists games_archived_lookup_idx
+on public.games(archived_at, id)
+where archived_at is not null;
 
 grant all on table public.profiles to anon;
 grant all on table public.profiles to authenticated;
