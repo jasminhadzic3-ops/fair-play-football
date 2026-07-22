@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AdminGameFilter,
@@ -281,6 +281,11 @@ function getFallbackGameSafety(game: Game, bookingsCount: number): AdminGameSafe
 
 export default function AdminPage() {
   const router = useRouter();
+  const formSectionRef = useRef<HTMLElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const gameCardRefs = useRef(new Map<number, HTMLDivElement>());
+  const formHighlightTimeoutRef = useRef<number | null>(null);
+  const gameHighlightTimeoutRef = useRef<number | null>(null);
   const [games, setGames] = useState<Game[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingPayments, setBookingPayments] = useState<BookingPayment[]>([]);
@@ -299,6 +304,10 @@ export default function AdminPage() {
   const [maxPlayers, setMaxPlayers] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingGameId, setEditingGameId] = useState<number | null>(null);
+  const [formHighlighted, setFormHighlighted] = useState(false);
+  const [highlightedGameId, setHighlightedGameId] = useState<number | null>(null);
+  const [pendingScrollGameId, setPendingScrollGameId] = useState<number | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [cancellingGameId, setCancellingGameId] = useState<number | null>(null);
   const [processingRefundRequestId, setProcessingRefundRequestId] = useState<number | null>(null);
   const [processingAdminRefundSourceId, setProcessingAdminRefundSourceId] = useState<number | null>(null);
@@ -361,6 +370,19 @@ export default function AdminPage() {
     return () => window.clearTimeout(timeout);
   }, [fetchAdminData]);
 
+  useEffect(
+    () => () => {
+      if (formHighlightTimeoutRef.current) {
+        window.clearTimeout(formHighlightTimeoutRef.current);
+      }
+
+      if (gameHighlightTimeoutRef.current) {
+        window.clearTimeout(gameHighlightTimeoutRef.current);
+      }
+    },
+    []
+  );
+
   const visibleGames = useMemo(() => {
     const query = gameSearch.trim().toLowerCase();
     const now = new Date();
@@ -388,6 +410,116 @@ export default function AdminPage() {
     });
   }, [gameFilter, gameSearch, games, bookings]);
 
+  const editingGame = editingGameId
+    ? games.find((game) => game.id === editingGameId) ?? null
+    : null;
+
+  const prefersReducedMotion = () =>
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+
+  const getScrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? "auto" : "smooth");
+
+  const scrollToElement = (element: Element | null) => {
+    element?.scrollIntoView({
+      behavior: getScrollBehavior(),
+      block: "start",
+    });
+  };
+
+  const highlightForm = () => {
+    setFormHighlighted(true);
+
+    if (formHighlightTimeoutRef.current) {
+      window.clearTimeout(formHighlightTimeoutRef.current);
+    }
+
+    formHighlightTimeoutRef.current = window.setTimeout(() => {
+      setFormHighlighted(false);
+      formHighlightTimeoutRef.current = null;
+    }, 1600);
+  };
+
+  const highlightGameCard = (gameId: number) => {
+    setHighlightedGameId(gameId);
+
+    if (gameHighlightTimeoutRef.current) {
+      window.clearTimeout(gameHighlightTimeoutRef.current);
+    }
+
+    gameHighlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedGameId(null);
+      gameHighlightTimeoutRef.current = null;
+    }, 2200);
+  };
+
+  const focusTitleAfterScroll = () => {
+    window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus({ preventScroll: true });
+    });
+  };
+
+  useEffect(() => {
+    if (!pendingScrollGameId) {
+      return;
+    }
+
+    const pendingGame = games.find((game) => game.id === pendingScrollGameId);
+
+    if (!pendingGame) {
+      setPendingScrollGameId(null);
+      return;
+    }
+
+    if (!visibleGames.some((game) => game.id === pendingScrollGameId)) {
+      setSaveSuccessMessage(
+        `"${pendingGame.title}" was updated. It is hidden by the current search or filter.`
+      );
+      setPendingScrollGameId(null);
+      return;
+    }
+
+    const targetCard = gameCardRefs.current.get(pendingScrollGameId);
+
+    if (!targetCard) {
+      return;
+    }
+
+    scrollToElement(targetCard);
+    highlightGameCard(pendingScrollGameId);
+    setPendingScrollGameId(null);
+  }, [games, pendingScrollGameId, visibleGames]);
+
+  const setGameCardRef = (gameId: number) => (node: HTMLDivElement | null) => {
+    if (node) {
+      gameCardRefs.current.set(gameId, node);
+    } else {
+      gameCardRefs.current.delete(gameId);
+    }
+  };
+
+  const operationalSummary = useMemo(() => {
+    const now = new Date();
+    const upcomingGamesCount = games.filter((game) => getAdminGameLifecycle(game, now) === "active_upcoming").length;
+    const archivedGamesCount = games.filter((game) => getAdminGameLifecycle(game, now) === "archived").length;
+    const activeUpcomingGameIds = new Set(
+      games
+        .filter((game) => getAdminGameLifecycle(game, now) === "active_upcoming")
+        .map((game) => game.id)
+    );
+    const currentBookingsCount = bookings.filter((booking) => activeUpcomingGameIds.has(booking.game_id)).length;
+
+    return {
+      upcomingGamesCount,
+      archivedGamesCount,
+      currentBookingsCount,
+      registeredUsersCount: summary.profiles_count,
+      paidPaymentsAmount: summary.paid_payments_amount_total,
+      refundsNeedingAttentionCount: refundRequests.length,
+      waitingListCount: waitingList.length,
+    };
+  }, [bookings, games, refundRequests.length, summary.paid_payments_amount_total, summary.profiles_count, waitingList.length]);
+
   const getValidMoveDestinations = useCallback(
     (booking: Booking) => {
       const now = new Date();
@@ -412,7 +544,7 @@ export default function AdminPage() {
     [games, bookings]
   );
 
-  const resetForm = () => {
+  const resetForm = ({ clearSuccessMessage = true }: { clearSuccessMessage?: boolean } = {}) => {
     setTitle("");
     setLocation("");
     setKickoffDate("");
@@ -421,13 +553,10 @@ export default function AdminPage() {
     setPrice("");
     setMaxPlayers("");
     setEditingGameId(null);
-  };
 
-  const refreshAdminDataAfterSave = () => {
-    void fetchAdminData().catch((error) => {
-      console.warn("Unable to refresh admin dashboard after saving game:", error);
-      alert("Game saved, but the dashboard refresh failed. Please refresh the page if the list looks outdated.");
-    });
+    if (clearSuccessMessage) {
+      setSaveSuccessMessage(null);
+    }
   };
 
   const readApiError = async (response: Response) => {
@@ -457,6 +586,10 @@ export default function AdminPage() {
 
   const saveGame = async () => {
     if (isSubmitting) return;
+
+    const savedEditingGameId = editingGameId;
+    const wasEditing = savedEditingGameId !== null;
+    const savedTitle = title.trim();
 
     const numericPrice = Number(price);
     const numericMaxPlayers = Number(maxPlayers);
@@ -513,16 +646,19 @@ export default function AdminPage() {
       );
 
       if (!response.ok) {
-        setIsSubmitting(false);
         alertAfterPaint(await readApiError(response));
       } else {
-        setIsSubmitting(false);
-        alertAfterPaint(editingGameId ? "Game updated!" : "Game created!");
-        resetForm();
-        refreshAdminDataAfterSave();
+        setSaveSuccessMessage(wasEditing ? `"${savedTitle}" updated.` : `"${savedTitle}" created.`);
+        resetForm({ clearSuccessMessage: false });
+        await fetchAdminData();
+
+        if (wasEditing && savedEditingGameId) {
+          setPendingScrollGameId(savedEditingGameId);
+        } else {
+          highlightForm();
+        }
       }
     } catch (error) {
-      setIsSubmitting(false);
       alertAfterPaint(error instanceof Error ? error.message : "Unable to save game.");
     } finally {
       setIsSubmitting(false);
@@ -530,6 +666,7 @@ export default function AdminPage() {
   };
 
   const editGame = (game: Game) => {
+    setSaveSuccessMessage(null);
     setEditingGameId(game.id);
     setTitle(game.title);
     setLocation(game.location);
@@ -539,6 +676,9 @@ export default function AdminPage() {
     setKickoffTime(formValues.kickoffTime);
     setPrice(String(game.price));
     setMaxPlayers(String(game.max_players));
+    highlightForm();
+    scrollToElement(formSectionRef.current);
+    focusTitleAfterScroll();
   };
 
   const deleteGame = async (game: Game) => {
@@ -1170,15 +1310,20 @@ export default function AdminPage() {
     request.sumup_refund_attempt_status === "unknown" &&
     Boolean(request.sumup_refund_attempt_id);
 
-  const summaryCards = [
-    { label: "Total games", value: summary.games_count },
-    { label: "Total bookings", value: summary.bookings_count },
-    { label: "Total players", value: summary.players_count },
-    { label: "Total registered users", value: summary.profiles_count },
+  const primarySummaryCards = [
+    { label: "Upcoming games", value: operationalSummary.upcomingGamesCount },
+    { label: "Current bookings", value: operationalSummary.currentBookingsCount },
+    { label: "Registered users", value: operationalSummary.registeredUsersCount },
     {
       label: "Paid payments amount",
-      value: `£${summary.paid_payments_amount_total.toFixed(2)}`,
+      value: `£${operationalSummary.paidPaymentsAmount.toFixed(2)}`,
     },
+    { label: "Refund attention", value: operationalSummary.refundsNeedingAttentionCount },
+  ];
+
+  const secondarySummaryCards = [
+    { label: "Archived games", value: operationalSummary.archivedGamesCount },
+    { label: "Waiting list", value: operationalSummary.waitingListCount },
   ];
 
   return (
@@ -1194,8 +1339,8 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-4">
-          {summaryCards.map((card) => (
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {primarySummaryCards.map((card) => (
             <div
               key={card.label}
               className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
@@ -1208,76 +1353,153 @@ export default function AdminPage() {
           ))}
         </div>
 
-        <div className="space-y-6">
-          <input
-            placeholder="Game Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
-          />
+        <div className="mb-8 grid gap-3 sm:grid-cols-2">
+          {secondarySummaryCards.map((card) => (
+            <div
+              key={card.label}
+              className="rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-4"
+            >
+              <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">{card.label}</p>
+              <p className="mt-2 text-xl font-bold text-white">{card.value}</p>
+            </div>
+          ))}
+        </div>
 
-          <input
-            placeholder="Location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
-          />
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <input
-              aria-label="Kickoff date"
-              type="date"
-              value={kickoffDate}
-              onChange={(e) => setKickoffDate(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
-            />
-
-            <input
-              aria-label="Kickoff time"
-              type="time"
-              value={kickoffTime}
-              onChange={(e) => setKickoffTime(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
-            />
+        <section
+          ref={formSectionRef}
+          aria-labelledby="game-management-heading"
+          className={`rounded-3xl border bg-zinc-900 p-5 transition-shadow duration-500 ${
+            formHighlighted
+              ? "border-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.25)]"
+              : "border-zinc-800"
+          }`}
+        >
+          <div className="mb-6">
+            <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">Game Management</p>
+            <h2 id="game-management-heading" className="mt-2 text-2xl font-bold text-white">
+              {editingGameId ? "Editing Game" : "Create Game"}
+            </h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              {editingGame
+                ? `Editing ${editingGame.title}.`
+                : "Create a new game or select Edit on an existing game."}
+            </p>
+            {saveSuccessMessage ? (
+              <p
+                role="status"
+                className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200"
+              >
+                {saveSuccessMessage}
+              </p>
+            ) : null}
           </div>
 
-          <input
-            placeholder="Price"
-            type="number"
-            inputMode="numeric"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
-          />
+          <div className="space-y-5">
+            <div>
+              <label htmlFor="admin-game-title" className="mb-2 block text-sm font-semibold text-zinc-200">
+                Game title
+              </label>
+              <input
+                id="admin-game-title"
+                ref={titleInputRef}
+                placeholder="Game Title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              />
+            </div>
 
-          <input
-            placeholder="Max Players (12 for 6v6, 14 for 7v7, 16 for 8v8)"
-            type="number"
-            inputMode="numeric"
-            value={maxPlayers}
-            onChange={(e) => setMaxPlayers(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
-          />
+            <div>
+              <label htmlFor="admin-game-location" className="mb-2 block text-sm font-semibold text-zinc-200">
+                Location
+              </label>
+              <input
+                id="admin-game-location"
+                placeholder="Location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              />
+            </div>
 
-          <button
-            type="button"
-            onClick={saveGame}
-            disabled={isSubmitting}
-            className="w-full bg-green-500 hover:bg-green-400 transition duration-300 py-4 rounded-2xl font-bold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Saving..." : editingGameId ? "Update Game" : "Create Game"}
-          </button>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="admin-game-kickoff-date" className="mb-2 block text-sm font-semibold text-zinc-200">
+                  Kickoff date
+                </label>
+                <input
+                  id="admin-game-kickoff-date"
+                  type="date"
+                  value={kickoffDate}
+                  onChange={(e) => setKickoffDate(e.target.value)}
+                  className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                />
+              </div>
 
-          {editingGameId ? (
+              <div>
+                <label htmlFor="admin-game-kickoff-time" className="mb-2 block text-sm font-semibold text-zinc-200">
+                  Kickoff time
+                </label>
+                <input
+                  id="admin-game-kickoff-time"
+                  type="time"
+                  value={kickoffTime}
+                  onChange={(e) => setKickoffTime(e.target.value)}
+                  className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="admin-game-price" className="mb-2 block text-sm font-semibold text-zinc-200">
+                Price
+              </label>
+              <input
+                id="admin-game-price"
+                placeholder="Price"
+                type="number"
+                inputMode="numeric"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="admin-game-max-players" className="mb-2 block text-sm font-semibold text-zinc-200">
+                Max players
+              </label>
+              <input
+                id="admin-game-max-players"
+                placeholder="Max Players (12 for 6v6, 14 for 7v7, 16 for 8v8)"
+                type="number"
+                inputMode="numeric"
+                value={maxPlayers}
+                onChange={(e) => setMaxPlayers(e.target.value)}
+                className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
+              />
+            </div>
+
             <button
               type="button"
-              onClick={resetForm}
-              className="w-full border border-zinc-700 bg-zinc-900 hover:border-white/20 transition duration-300 py-4 rounded-2xl font-bold text-white"
+              onClick={saveGame}
+              disabled={isSubmitting}
+              className="w-full rounded-2xl bg-green-500 py-4 font-bold text-black transition duration-300 hover:bg-green-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Cancel Edit
+              {isSubmitting ? (editingGameId ? "Updating..." : "Creating...") : editingGameId ? "Update Game" : "Create Game"}
             </button>
-          ) : null}
-        </div>
+
+            {editingGameId ? (
+              <button
+                type="button"
+                onClick={() => resetForm()}
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 py-4 font-bold text-white transition duration-300 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-zinc-900"
+              >
+                Cancel Editing
+              </button>
+            ) : null}
+          </div>
+        </section>
 
         <div className="mt-12 space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -1338,7 +1560,12 @@ export default function AdminPage() {
                   return (
                     <div
                       key={game.id}
-                      className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                      ref={setGameCardRef(game.id)}
+                      className={`rounded-2xl border p-4 transition-shadow duration-500 ${
+                        highlightedGameId === game.id
+                          ? "border-emerald-400 bg-zinc-950 shadow-[0_0_0_3px_rgba(52,211,153,0.25)]"
+                          : "border-zinc-800 bg-zinc-950"
+                      }`}
                     >
                       <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
                         <div className="min-w-0">
@@ -1446,8 +1673,11 @@ export default function AdminPage() {
                 return (
                   <div
                     key={game.id}
-                    className={`rounded-3xl border p-5 ${
-                      isArchived ? "border-zinc-800 bg-zinc-950" : "border-zinc-800 bg-zinc-900"
+                    ref={setGameCardRef(game.id)}
+                    className={`rounded-3xl border p-5 transition-shadow duration-500 ${
+                      highlightedGameId === game.id
+                        ? "border-emerald-400 bg-zinc-900 shadow-[0_0_0_3px_rgba(52,211,153,0.25)]"
+                        : "border-zinc-800 bg-zinc-900"
                     }`}
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
