@@ -5,6 +5,7 @@ import {
   GameCancellationError,
   retryGameCancellationEmails,
 } from "@/lib/gameCancellation";
+import { parseLondonKickoff } from "@/lib/londonKickoff";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type GamePayload = {
@@ -13,6 +14,8 @@ type GamePayload = {
   title?: unknown;
   location?: unknown;
   time?: unknown;
+  kickoff_date?: unknown;
+  kickoff_time?: unknown;
   price?: unknown;
   max_players?: unknown;
 };
@@ -20,14 +23,20 @@ type GamePayload = {
 function parseGamePayload(body: GamePayload | null) {
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const location = typeof body?.location === "string" ? body.location.trim() : "";
-  const time = typeof body?.time === "string" ? body.time.trim() : "";
+  const legacyTime = typeof body?.time === "string" ? body.time.trim() : "";
+  const hasKickoffDate = typeof body?.kickoff_date === "string" && body.kickoff_date.trim() !== "";
+  const hasKickoffTime = typeof body?.kickoff_time === "string" && body.kickoff_time.trim() !== "";
+  const hasStructuredKickoff = hasKickoffDate || hasKickoffTime;
+  const kickoff = hasStructuredKickoff
+    ? parseLondonKickoff(body?.kickoff_date, body?.kickoff_time)
+    : null;
   const price = Number(body?.price);
   const maxPlayers = Number(body?.max_players);
 
   if (
     !title ||
     !location ||
-    !time ||
+    (hasStructuredKickoff ? !kickoff : !legacyTime) ||
     Number.isNaN(price) ||
     Number.isNaN(maxPlayers) ||
     ![12, 14, 16].includes(maxPlayers)
@@ -38,7 +47,8 @@ function parseGamePayload(body: GamePayload | null) {
   return {
     title,
     location,
-    time,
+    time: kickoff?.displayTime ?? legacyTime,
+    ...(kickoff ? { starts_at: kickoff.startsAtIso } : {}),
     price,
     max_players: maxPlayers,
   };
@@ -105,7 +115,7 @@ export async function PATCH(
 
     if (!payload) {
       return Response.json(
-        { error: "Please fill in all fields. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8)." },
+        { error: "Please fill in all fields with a valid London kickoff date and time. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8)." },
         { status: 400 }
       );
     }

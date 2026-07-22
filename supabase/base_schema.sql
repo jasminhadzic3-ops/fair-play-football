@@ -20,6 +20,7 @@ create table if not exists public.games (
   time text,
   price bigint,
   spots_left bigint,
+  starts_at timestamptz,
   created_at timestamptz default now(),
   id bigint not null,
   max_players integer default 16,
@@ -28,6 +29,12 @@ create table if not exists public.games (
   cancelled_by uuid,
   cancellation_reason text
 );
+
+comment on column public.games.starts_at is
+'Canonical timezone-aware kickoff timestamp for scheduling and reminder logic.';
+
+comment on column public.games.time is
+'Legacy display compatibility field during the starts_at transition; do not use for reminder scheduling.';
 
 create table if not exists public.bookings (
   id bigint not null,

@@ -9,6 +9,7 @@ interface Game {
   title: string;
   location: string;
   time: string;
+  starts_at?: string | null;
   price: number;
   max_players: number;
   status?: "active" | "cancelled" | null;
@@ -116,6 +117,45 @@ interface CancelGameResponse {
   error?: string;
 }
 
+const londonFormFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+function getLondonKickoffFormValues(startsAt: string | null | undefined) {
+  if (!startsAt) {
+    return { kickoffDate: "", kickoffTime: "" };
+  }
+
+  const date = new Date(startsAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return { kickoffDate: "", kickoffTime: "" };
+  }
+
+  const parts = londonFormFormatter.formatToParts(date);
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+  const year = valueByType.get("year");
+  const month = valueByType.get("month");
+  const day = valueByType.get("day");
+  const hour = valueByType.get("hour");
+  const minute = valueByType.get("minute");
+
+  if (!year || !month || !day || !hour || !minute) {
+    return { kickoffDate: "", kickoffTime: "" };
+  }
+
+  return {
+    kickoffDate: `${year}-${month}-${day}`,
+    kickoffTime: `${hour}:${minute}`,
+  };
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [games, setGames] = useState<Game[]>([]);
@@ -127,7 +167,9 @@ export default function AdminPage() {
   const [automaticSumUpRefundEnabled, setAutomaticSumUpRefundEnabled] = useState(false);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
-  const [time, setTime] = useState("");
+  const [kickoffDate, setKickoffDate] = useState("");
+  const [kickoffTime, setKickoffTime] = useState("");
+  const [legacyDisplayTime, setLegacyDisplayTime] = useState("");
   const [price, setPrice] = useState("");
   const [maxPlayers, setMaxPlayers] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -196,7 +238,9 @@ export default function AdminPage() {
   const resetForm = () => {
     setTitle("");
     setLocation("");
-    setTime("");
+    setKickoffDate("");
+    setKickoffTime("");
+    setLegacyDisplayTime("");
     setPrice("");
     setMaxPlayers("");
     setEditingGameId(null);
@@ -239,16 +283,19 @@ export default function AdminPage() {
 
     const numericPrice = Number(price);
     const numericMaxPlayers = Number(maxPlayers);
+    const hasStructuredKickoff = Boolean(kickoffDate && kickoffTime);
+    const hasPartialKickoff = Boolean(kickoffDate || kickoffTime);
 
     if (
       !title.trim() ||
       !location.trim() ||
-      !time.trim() ||
+      (!hasStructuredKickoff && (!editingGameId || !legacyDisplayTime.trim())) ||
+      (hasPartialKickoff && !hasStructuredKickoff) ||
       Number.isNaN(numericPrice) ||
       Number.isNaN(numericMaxPlayers) ||
       ![12, 14, 16].includes(numericMaxPlayers)
     ) {
-      alert("Please fill in all fields. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8).");
+      alert("Please fill in all fields with a valid kickoff date and time. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8).");
       return;
     }
 
@@ -267,7 +314,14 @@ export default function AdminPage() {
       const payload = {
         title,
         location,
-        time,
+        ...(hasStructuredKickoff
+          ? {
+              kickoff_date: kickoffDate,
+              kickoff_time: kickoffTime,
+            }
+          : {
+              time: legacyDisplayTime,
+            }),
         price: numericPrice,
         max_players: numericMaxPlayers,
       };
@@ -302,7 +356,10 @@ export default function AdminPage() {
     setEditingGameId(game.id);
     setTitle(game.title);
     setLocation(game.location);
-    setTime(game.time);
+    setLegacyDisplayTime(game.time);
+    const formValues = getLondonKickoffFormValues(game.starts_at);
+    setKickoffDate(formValues.kickoffDate);
+    setKickoffTime(formValues.kickoffTime);
     setPrice(String(game.price));
     setMaxPlayers(String(game.max_players));
   };
@@ -752,12 +809,23 @@ export default function AdminPage() {
             className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
           />
 
-          <input
-            placeholder="Time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
-          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <input
+              aria-label="Kickoff date"
+              type="date"
+              value={kickoffDate}
+              onChange={(e) => setKickoffDate(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
+            />
+
+            <input
+              aria-label="Kickoff time"
+              type="time"
+              value={kickoffTime}
+              onChange={(e) => setKickoffTime(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-6 py-4"
+            />
+          </div>
 
           <input
             placeholder="Price"
