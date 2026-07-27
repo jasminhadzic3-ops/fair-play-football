@@ -280,6 +280,45 @@ async function createWalletPaidBooking(
   return booking;
 }
 
+async function createSumUpPaidBooking(
+  supabase: SupabaseClient,
+  seed: QaSeed,
+  game: SeededGame,
+  user: SeededUser
+) {
+  const booking = await createBooking(supabase, seed, game.id, {
+    userId: user.id,
+    playerName: user.username,
+  });
+
+  await insertSingle(
+    supabase
+      .from("booking_payments")
+      .insert({
+        user_id: user.id,
+        game_id: game.id,
+        player_name: user.username,
+        checkout_id: `${seed.runId}_${booking.id}_checkout`,
+        checkout_reference: `${seed.runId}_${booking.id}_reference`,
+        payment_status: "paid",
+        booking_id: booking.id,
+        hosted_checkout_url: "https://example.test/e2e-checkout",
+        amount: game.price,
+        currency: "GBP",
+        transaction_code: `${seed.runId}_${booking.id}_txn_code`,
+        sumup_transaction_id: `${seed.runId}_${booking.id}_txn_id`,
+        raw_checkout: {
+          e2e_run_id: seed.runId,
+        },
+      })
+      .select("id")
+      .single(),
+    "insert QA SumUp booking payment"
+  );
+
+  return booking;
+}
+
 async function fillGameToCapacity(
   supabase: SupabaseClient,
   seed: QaSeed,
@@ -314,6 +353,9 @@ async function cleanupQaSeed(supabase: SupabaseClient, seed: QaSeed) {
   const userIds = seed.users.map((user) => user.id);
 
   if (gameIds.length > 0) {
+    await runCleanup("delete player booking cancellations", () =>
+      supabase.from("player_booking_cancellations").delete().in("game_id", gameIds)
+    );
     await runCleanup("delete reminder deliveries", () =>
       supabase.from("game_reminder_deliveries").delete().in("game_id", gameIds)
     );
@@ -433,6 +475,20 @@ test.describe("TEST-only launch QA flows", () => {
         "TEST Supabase is missing the game reminder/archive foundation columns required by the current app.",
         "Run the approved SQL migrations on the TEST project before this QA suite: supabase/game_reminder_foundation.sql and supabase/game_archiving.sql.",
         `Supabase reported: ${error.message}`,
+      ].join(" ");
+      return;
+    }
+
+    const { error: cancellationSchemaError } = await supabase
+      .from("player_booking_cancellations")
+      .select("id")
+      .limit(1);
+
+    if (cancellationSchemaError) {
+      qaSchemaSkipReason = [
+        "TEST Supabase is missing the player self-cancellation foundation required by the current app.",
+        "Run the approved SQL migration on the TEST project before this QA suite: supabase/player_booking_cancellations.sql.",
+        `Supabase reported: ${cancellationSchemaError.message}`,
       ].join(" ");
       return;
     }
@@ -826,5 +882,481 @@ test.describe("TEST-only launch QA flows", () => {
 
       return Boolean(data);
     }).toBe(true);
+  });
+
+  test("player cancellation for an eligible SumUp booking creates a reserved card refund without calling SumUp", async ({
+    page,
+  }) => {
+    test.skip(!qaSchemaReady, qaSchemaSkipReason);
+
+    const seed = createQaSeed();
+    seeds.push(seed);
+    const player = await createConfirmedUser(supabase, seed, { label: "sumup_cancel_player" });
+    const game = await createGame(supabase, seed, {
+      title: `E2E QA SumUp Cancel ${seed.runId}`,
+      price: 5,
+      maxPlayers: 12,
+    });
+    const booking = await createSumUpPaidBooking(supabase, seed, game, player);
+
+    await signInWithEmail(page, player.email, player.password);
+    const token = await getBrowserAccessToken(page);
+    expect(token).toBeTruthy();
+
+    const cancelResult = await page.evaluate(
+      async ({ accessToken, bookingId }) => {
+        const response = await fetch(`/api/bookings/${bookingId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        return {
+          status: response.status,
+          body: await response.json(),
+        };
+      },
+      { accessToken: token, bookingId: booking.id }
+    );
+
+    expect(cancelResult.status).toBe(200);
+    expect(cancelResult.body).toMatchObject({
+      ok: true,
+      released: true,
+      refund_eligible: true,
+      payment_method: "sumup",
+      refund_policy: "eligible_24h",
+      automatic_refund: {
+        status: "disabled",
+      },
+    });
+
+    await expect.poll(async () => {
+      const { count, error } = await supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("id", booking.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return count ?? 0;
+    }).toBe(0);
+
+    const { data: cancellations, error: cancellationError } = await supabase
+      .from("player_booking_cancellations")
+      .select("id,payment_method,refund_policy,status,amount")
+      .eq("booking_id", booking.id)
+      .eq("user_id", player.id);
+
+    if (cancellationError) {
+      throw new Error(cancellationError.message);
+    }
+
+    expect(cancellations).toHaveLength(1);
+    expect(cancellations?.[0]).toMatchObject({
+      payment_method: "sumup",
+      refund_policy: "eligible_24h",
+      status: "released",
+    });
+    expect(Number(cancellations?.[0].amount)).toBe(5);
+
+    const { data: walletRows, error: walletError } = await supabase
+      .from("wallet_transactions")
+      .select("id,amount,status,transaction_type,metadata")
+      .eq("user_id", player.id)
+      .filter("metadata->>original_booking_id", "eq", String(booking.id));
+
+    if (walletError) {
+      throw new Error(walletError.message);
+    }
+
+    expect(walletRows?.filter((row) => row.transaction_type === "player_cancelled_credit")).toHaveLength(1);
+    expect(walletRows?.filter((row) => row.transaction_type === "refund_requested")).toHaveLength(1);
+    await expect.poll(async () => getWalletBalanceBreakdown(supabase, player.id)).toEqual({
+      completedBalance: 5,
+      reservedRefundAmount: 5,
+      availableBalance: 0,
+    });
+
+    const { count: attemptCount, error: attemptError } = await supabase
+      .from("sumup_refund_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("refund_request_id", Number(cancelResult.body.refund_request_id));
+
+    if (attemptError) {
+      throw new Error(attemptError.message);
+    }
+
+    expect(attemptCount ?? 0).toBe(0);
+  });
+
+  test("player cancellation for an eligible wallet booking restores the original wallet debit once", async ({
+    page,
+  }) => {
+    test.skip(!qaSchemaReady, qaSchemaSkipReason);
+
+    const seed = createQaSeed();
+    seeds.push(seed);
+    const player = await createConfirmedUser(supabase, seed, { label: "wallet_cancel_player" });
+    const game = await createGame(supabase, seed, {
+      title: `E2E QA Wallet Cancel ${seed.runId}`,
+      price: 5,
+      maxPlayers: 12,
+    });
+    await createWalletCredit(supabase, seed, player.id, 5);
+    const booking = await createWalletPaidBooking(supabase, seed, game, player);
+
+    await expect.poll(async () => getWalletBalanceBreakdown(supabase, player.id)).toEqual({
+      completedBalance: 0,
+      reservedRefundAmount: 0,
+      availableBalance: 0,
+    });
+
+    await signInWithEmail(page, player.email, player.password);
+    const token = await getBrowserAccessToken(page);
+    expect(token).toBeTruthy();
+
+    const cancelResult = await page.evaluate(
+      async ({ accessToken, bookingId }) => {
+        const response = await fetch(`/api/bookings/${bookingId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        return {
+          status: response.status,
+          body: await response.json(),
+        };
+      },
+      { accessToken: token, bookingId: booking.id }
+    );
+
+    expect(cancelResult.status).toBe(200);
+    expect(cancelResult.body).toMatchObject({
+      ok: true,
+      released: true,
+      refund_eligible: true,
+      payment_method: "wallet",
+      refund_policy: "eligible_24h",
+      refund_request_id: null,
+    });
+
+    const { data: walletRestorations, error: walletError } = await supabase
+      .from("wallet_transactions")
+      .select("id,amount,status,transaction_type,metadata")
+      .eq("user_id", player.id)
+      .eq("transaction_type", "player_cancelled_credit")
+      .filter("metadata->>original_booking_id", "eq", String(booking.id));
+
+    if (walletError) {
+      throw new Error(walletError.message);
+    }
+
+    expect(walletRestorations).toHaveLength(1);
+    expect(Number(walletRestorations?.[0].amount)).toBe(5);
+    await expect.poll(async () => getWalletBalanceBreakdown(supabase, player.id)).toEqual({
+      completedBalance: 5,
+      reservedRefundAmount: 0,
+      availableBalance: 5,
+    });
+  });
+
+  test("duplicate player cancellation requests return the same durable result without duplicate refund rows", async ({
+    page,
+  }) => {
+    test.skip(!qaSchemaReady, qaSchemaSkipReason);
+
+    const seed = createQaSeed();
+    seeds.push(seed);
+    const player = await createConfirmedUser(supabase, seed, { label: "duplicate_cancel_player" });
+    const game = await createGame(supabase, seed, {
+      title: `E2E QA Duplicate Cancel ${seed.runId}`,
+      price: 5,
+      maxPlayers: 12,
+    });
+    const booking = await createSumUpPaidBooking(supabase, seed, game, player);
+
+    await signInWithEmail(page, player.email, player.password);
+    const token = await getBrowserAccessToken(page);
+    expect(token).toBeTruthy();
+
+    const results = await page.evaluate(
+      async ({ accessToken, bookingId }) => {
+        const request = () =>
+          fetch(`/api/bookings/${bookingId}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }).then(async (response) => ({
+            status: response.status,
+            body: await response.json(),
+          }));
+
+        return Promise.all([request(), request()]);
+      },
+      { accessToken: token, bookingId: booking.id }
+    );
+
+    expect(results.every((result) => result.status === 200)).toBe(true);
+    expect(new Set(results.map((result) => result.body.refund_request_id)).size).toBe(1);
+
+    const { count: cancellationCount, error: cancellationError } = await supabase
+      .from("player_booking_cancellations")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", booking.id)
+      .eq("user_id", player.id);
+
+    if (cancellationError) {
+      throw new Error(cancellationError.message);
+    }
+
+    expect(cancellationCount ?? 0).toBe(1);
+
+    const { data: walletRows, error: walletError } = await supabase
+      .from("wallet_transactions")
+      .select("id,transaction_type")
+      .eq("user_id", player.id)
+      .filter("metadata->>original_booking_id", "eq", String(booking.id));
+
+    if (walletError) {
+      throw new Error(walletError.message);
+    }
+
+    expect(walletRows?.filter((row) => row.transaction_type === "player_cancelled_credit")).toHaveLength(1);
+    expect(walletRows?.filter((row) => row.transaction_type === "refund_requested")).toHaveLength(1);
+    await expect.poll(async () => {
+      const { count, error } = await supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("id", booking.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return count ?? 0;
+    }).toBe(0);
+  });
+
+  test("waiting-list notification is created only after a successful cancellation release", async ({
+    page,
+  }) => {
+    test.skip(!qaSchemaReady, qaSchemaSkipReason);
+
+    const seed = createQaSeed();
+    seeds.push(seed);
+    const player = await createConfirmedUser(supabase, seed, { label: "notify_cancel_player" });
+    const waitingPlayer = await createConfirmedUser(supabase, seed, { label: "notify_waiting_player" });
+    const game = await createGame(supabase, seed, {
+      title: `E2E QA Notify Cancel ${seed.runId}`,
+      price: 5,
+      maxPlayers: 1,
+    });
+    await createWalletCredit(supabase, seed, player.id, 5);
+    const booking = await createWalletPaidBooking(supabase, seed, game, player);
+    const waitingRow = await insertSingle<{ id: number }>(
+      supabase
+        .from("waiting_list")
+        .insert({
+          game_id: game.id,
+          user_id: waitingPlayer.id,
+          player_name: waitingPlayer.username,
+          status: "waiting",
+        })
+        .select("id")
+        .single(),
+      "insert QA waiting-list row for cancellation notification"
+    );
+    seed.waitingList.push({
+      id: waitingRow.id,
+      gameId: game.id,
+      userId: waitingPlayer.id,
+    });
+
+    await signInWithEmail(page, player.email, player.password);
+    const token = await getBrowserAccessToken(page);
+    expect(token).toBeTruthy();
+
+    const cancelResult = await page.evaluate(
+      async ({ accessToken, bookingId }) => {
+        const response = await fetch(`/api/bookings/${bookingId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        return {
+          status: response.status,
+          body: await response.json(),
+        };
+      },
+      { accessToken: token, bookingId: booking.id }
+    );
+
+    expect(cancelResult.status).toBe(200);
+    expect(cancelResult.body).toMatchObject({
+      released: true,
+      waiting_list_notified: true,
+    });
+
+    await expect.poll(async () => {
+      const { count, error } = await supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("id", booking.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return count ?? 0;
+    }).toBe(0);
+
+    await expect.poll(async () => {
+      const { count, error } = await supabase
+        .from("waiting_list_notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("game_id", game.id)
+        .eq("waiting_list_id", waitingRow.id)
+        .eq("user_id", waitingPlayer.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return count ?? 0;
+    }).toBe(1);
+  });
+
+  test("player cancellation within 24 hours releases the booking without a refund", async ({
+    page,
+  }) => {
+    test.skip(!qaSchemaReady, qaSchemaSkipReason);
+
+    const seed = createQaSeed();
+    seeds.push(seed);
+    const player = await createConfirmedUser(supabase, seed, { label: "late_cancel_player" });
+    const startsAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString();
+    const game = await createGame(supabase, seed, {
+      title: `E2E QA Late Cancel ${seed.runId}`,
+      startsAt,
+      price: 5,
+      maxPlayers: 12,
+    });
+    await createWalletCredit(supabase, seed, player.id, 5);
+    const booking = await createWalletPaidBooking(supabase, seed, game, player);
+
+    await signInWithEmail(page, player.email, player.password);
+    const token = await getBrowserAccessToken(page);
+    expect(token).toBeTruthy();
+
+    const cancelResult = await page.evaluate(
+      async ({ accessToken, bookingId }) => {
+        const response = await fetch(`/api/bookings/${bookingId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        return {
+          status: response.status,
+          body: await response.json(),
+        };
+      },
+      { accessToken: token, bookingId: booking.id }
+    );
+
+    expect(cancelResult.status).toBe(200);
+    expect(cancelResult.body).toMatchObject({
+      ok: true,
+      released: true,
+      refund_eligible: false,
+      refund_policy: "ineligible_within_24h",
+      wallet_restoration_transaction_id: null,
+    });
+
+    const { count: creditCount, error: creditError } = await supabase
+      .from("wallet_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", player.id)
+      .eq("transaction_type", "player_cancelled_credit")
+      .filter("metadata->>original_booking_id", "eq", String(booking.id));
+
+    if (creditError) {
+      throw new Error(creditError.message);
+    }
+
+    expect(creditCount ?? 0).toBe(0);
+    await expect.poll(async () => getWalletBalanceBreakdown(supabase, player.id)).toEqual({
+      completedBalance: 0,
+      reservedRefundAmount: 0,
+      availableBalance: 0,
+    });
+  });
+
+  test("player cancellation for missing structured kickoff fails closed and keeps the booking", async ({
+    page,
+  }) => {
+    test.skip(!qaSchemaReady, qaSchemaSkipReason);
+
+    const seed = createQaSeed();
+    seeds.push(seed);
+    const player = await createConfirmedUser(supabase, seed, { label: "legacy_cancel_player" });
+    const game = await createGame(supabase, seed, {
+      title: `E2E QA Legacy Cancel ${seed.runId}`,
+      startsAt: null,
+      time: "Legacy time",
+      price: 5,
+      maxPlayers: 12,
+    });
+    await createWalletCredit(supabase, seed, player.id, 5);
+    const booking = await createWalletPaidBooking(supabase, seed, game, player);
+
+    await signInWithEmail(page, player.email, player.password);
+    const token = await getBrowserAccessToken(page);
+    expect(token).toBeTruthy();
+
+    const cancelResult = await page.evaluate(
+      async ({ accessToken, bookingId }) => {
+        const response = await fetch(`/api/bookings/${bookingId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        return {
+          status: response.status,
+          body: await response.json(),
+        };
+      },
+      { accessToken: token, bookingId: booking.id }
+    );
+
+    expect(cancelResult.status).toBe(409);
+    expect(cancelResult.body).toMatchObject({
+      reason: "missing_starts_at",
+    });
+
+    await expect.poll(async () => {
+      const { count, error } = await supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("id", booking.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return count ?? 0;
+    }).toBe(1);
   });
 });

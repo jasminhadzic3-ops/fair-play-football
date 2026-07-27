@@ -27,6 +27,11 @@ describe("homepage about section source", () => {
     expect(homePageSource).toContain("Find a game");
     expect(homePageSource).toContain("Book and pay");
     expect(homePageSource).toContain("Turn up and play");
+    expect(homePageSource).toContain("Our Venues");
+    expect(homePageSource).toContain("high-quality 3G artificial grass pitches across North London");
+    expect(homePageSource).toContain("Whittington Park");
+    expect(homePageSource).toContain("Cantelowes Gardens");
+    expect(homePageSource).toContain("Barnard Park");
     expect(homePageSource).toContain("Fresh bibs and footballs are provided.");
     expect(homePageSource).toContain("No slide tackles.");
     expect(homePageSource).toContain("North London locations");
@@ -34,13 +39,14 @@ describe("homepage about section source", () => {
     expect(homePageSource).toContain("What do I need to bring?");
   });
 
-  it("uses the current goalkeeper rule and conservative refund wording", () => {
+  it("uses the current goalkeeper rule and approved refund wording", () => {
     expect(gameDetailsSource).toContain("Goalkeeper rotates every 8 minutes");
     expect(homePageSource).toContain("Goalkeeper rotates every 8 minutes.");
-    expect(homePageSource).toContain("If Fair Play Football cancels a game");
-    expect(homePageSource).toContain("including because not enough players are confirmed");
-    expect(homePageSource).toContain("Player cancellation refund eligibility is handled in the app");
-    expect(homePageSource).not.toContain("cancel your booking at least 24 hours before kick-off");
+    expect(homePageSource).toContain("Refund Policy");
+    expect(homePageSource).toContain("Cancel your booking at least 24 hours before kick-off");
+    expect(homePageSource).toContain("If you cancel within 24 hours of kick-off, no refund is available.");
+    expect(homePageSource).toContain("If Fair Play Football cancels a game, all booked players receive a full refund.");
+    expect(homePageSource).toContain("minimum number of players is not reached");
   });
 
   it("shows Find Games and signed-out Sign Up CTAs", () => {

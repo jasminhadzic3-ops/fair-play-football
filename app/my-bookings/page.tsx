@@ -27,6 +27,8 @@ export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<JoinedBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [leavingBookingId, setLeavingBookingId] = useState<number | null>(null);
+  const [leaveMessage, setLeaveMessage] = useState<string | null>(null);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
   const fetchBookings = async () => {
@@ -120,11 +122,14 @@ export default function MyBookingsPage() {
     if (leavingBookingId) return;
 
     setLeavingBookingId(bookingId);
+    setLeaveMessage(null);
+    setLeaveError(null);
 
     const session = (await supabase.auth.getSession()).data.session;
 
     if (!session?.access_token) {
       console.error("Unable to leave game: missing session.");
+      setLeaveError("Please sign in again before cancelling this booking.");
       setLeavingBookingId(null);
       return;
     }
@@ -140,7 +145,9 @@ export default function MyBookingsPage() {
 
     if (!response.ok) {
       console.error("Unable to leave game:", result?.error || "Unknown error");
+      setLeaveError(result?.error || "Unable to cancel this booking.");
     } else {
+      setLeaveMessage(result?.message || "Booking cancelled.");
       await fetchBookings();
     }
 
@@ -180,6 +187,18 @@ export default function MyBookingsPage() {
         {userId && !isLoading && bookings.length === 0 ? (
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-400">
             You have not joined any games yet.
+          </div>
+        ) : null}
+
+        {leaveMessage ? (
+          <div className="mb-5 rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-100">
+            {leaveMessage}
+          </div>
+        ) : null}
+
+        {leaveError ? (
+          <div className="mb-5 rounded-3xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm font-semibold text-rose-100">
+            {leaveError}
           </div>
         ) : null}
 

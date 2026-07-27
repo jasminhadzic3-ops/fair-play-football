@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { cancelPlayerBookingWithRefundPolicy } from "@/lib/playerBookingCancellation";
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmin";
 import { notifyWaitingListForOpenSpace } from "@/lib/waitingListNotifications";
 
@@ -44,78 +45,49 @@ export async function DELETE(
       return Response.json({ error: "Invalid booking id." }, { status: 400 });
     }
 
-    const { data: booking, error: bookingError } = await supabaseAdmin
-      .from("bookings")
-      .select("id,game_id,user_id")
-      .eq("id", bookingId)
-      .maybeSingle();
+    const result = await cancelPlayerBookingWithRefundPolicy({
+      bookingId,
+      userId: user.id,
+    });
 
-    if (bookingError) {
-      return Response.json({ error: bookingError.message }, { status: 500 });
+    if (!result.success) {
+      return Response.json(
+        {
+          error: result.message,
+          reason: result.reason,
+        },
+        { status: result.status }
+      );
     }
 
-    if (!booking || booking.user_id !== user.id) {
-      return Response.json({ error: "Booking not found." }, { status: 404 });
+    if (result.released && result.shouldNotifyWaitingList && result.gameId) {
+      await notifyWaitingListForOpenSpace(result.gameId).catch((notificationError) => {
+        console.warn("Unable to notify waiting list after player cancelled booking:", notificationError);
+      });
     }
 
-    const { data: game, error: gameError } = await supabaseAdmin
-      .from("games")
-      .select("id,max_players")
-      .eq("id", booking.game_id)
-      .maybeSingle();
-
-    if (gameError) {
-      return Response.json({ error: gameError.message }, { status: 500 });
-    }
-
-    const { count: bookingCountBeforeRemove, error: countBeforeError } = await supabaseAdmin
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("game_id", booking.game_id);
-
-    if (countBeforeError) {
-      return Response.json({ error: countBeforeError.message }, { status: 500 });
-    }
-
-    const wasFullBeforeRemove =
-      game ? (bookingCountBeforeRemove ?? 0) >= game.max_players : false;
-
-    const { data: deletedBooking, error: deleteError } = await supabaseAdmin
-      .from("bookings")
-      .delete()
-      .eq("id", bookingId)
-      .eq("user_id", user.id)
-      .select("id")
-      .single();
-
-    if (deleteError) {
-      return Response.json({ error: deleteError.message }, { status: 500 });
-    }
-
-    if (!deletedBooking) {
-      return Response.json({ error: "Booking not found." }, { status: 404 });
-    }
-
-    if (game && wasFullBeforeRemove) {
-      const { count: bookingCountAfterRemove, error: countAfterError } = await supabaseAdmin
-        .from("bookings")
-        .select("id", { count: "exact", head: true })
-        .eq("game_id", booking.game_id);
-
-      if (countAfterError) {
-        return Response.json({ error: countAfterError.message }, { status: 500 });
-      }
-
-      if ((bookingCountAfterRemove ?? 0) < game.max_players) {
-        await notifyWaitingListForOpenSpace(booking.game_id).catch((notificationError) => {
-          console.warn("Unable to notify waiting list after player left booking:", notificationError);
-        });
-      }
-    }
-
-    return Response.json({ ok: true });
+    return Response.json({
+      ok: true,
+      message: result.message,
+      booking_id: result.bookingId,
+      game_id: result.gameId,
+      released: result.released,
+      refund_eligible: result.refundEligible,
+      refund_policy: result.refundPolicy,
+      payment_method: result.paymentMethod,
+      amount: result.amount,
+      currency: result.currency,
+      source_credit_transaction_id: result.sourceCreditTransactionId,
+      refund_request_id: result.refundRequestId,
+      wallet_restoration_transaction_id: result.walletRestorationTransactionId,
+      automatic_refund: result.automaticRefund,
+      waiting_list_notified: result.released && result.shouldNotifyWaitingList,
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to leave booking.";
-    return Response.json({ error: message }, { status: 500 });
+    console.error("Unable to cancel booking:", error);
+    return Response.json(
+      { error: "Unable to cancel this booking. Please contact Fair Play Football." },
+      { status: 500 }
+    );
   }
 }

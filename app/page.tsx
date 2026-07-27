@@ -575,10 +575,12 @@ export default function Home() {
 
     if (!response.ok) {
       console.error("Unable to leave game:", result?.error || "Unknown error");
+      window.alert(result?.error || "Unable to cancel this booking.");
       return;
     }
 
     await fetchGames();
+    window.alert(result?.message || "Booking cancelled.");
   };
 
   const handleSignOut = async () => {
@@ -1276,6 +1278,79 @@ export default function Home() {
             ))}
           </div>
 
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+            <h3 className="text-xl font-bold text-white">Our Venues</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
+              We play on high-quality 3G artificial grass pitches across North London.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              {[
+                {
+                  name: "Whittington Park",
+                  address: ["Archway", "London", "N19 4RS"],
+                  features: [
+                    "High-quality 3G artificial grass pitch",
+                    "Outdoor pitch",
+                    "Easy access from Archway Underground",
+                    "Modern facilities",
+                  ],
+                },
+                {
+                  name: "Cantelowes Gardens",
+                  address: ["Talacre Community Sports Centre", "London", "NW5 2AU"],
+                  features: [
+                    "High-quality 3G artificial grass pitch",
+                    "Outdoor pitch",
+                    "Modern football facilities",
+                  ],
+                },
+                {
+                  name: "Barnard Park",
+                  address: ["Copenhagen Street", "Islington", "London", "N1 0ER"],
+                  features: [
+                    "High-quality 3G artificial grass pitch",
+                    "Outdoor pitch",
+                    "Central Islington location",
+                  ],
+                },
+              ].map((venue) => (
+                <div key={venue.name} className="rounded-xl border border-zinc-800 bg-black/40 p-4">
+                  <h4 className="text-base font-bold text-white">{venue.name}</h4>
+                  <div className="mt-2 text-sm leading-6 text-zinc-400">
+                    {venue.address.map((line) => (
+                      <p key={line}>{line}</p>
+                    ))}
+                  </div>
+                  <div className="mt-4 grid gap-2 text-sm text-zinc-300">
+                    {venue.features.map((feature) => (
+                      <div key={feature} className="flex gap-2">
+                        <span className="text-stone-300" aria-hidden="true">✓</span>
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+            <h3 className="text-xl font-bold text-white">Refund Policy</h3>
+            <div className="mt-4 grid gap-3 text-sm leading-6 text-zinc-300">
+              {[
+                "Cancel your booking at least 24 hours before kick-off and you'll receive a full refund.",
+                "If you cancel within 24 hours of kick-off, no refund is available.",
+                "If Fair Play Football cancels a game, all booked players receive a full refund.",
+                "If a game is cancelled because the minimum number of players is not reached, all booked players receive a full refund.",
+              ].map((item) => (
+                <div key={item} className="flex gap-3 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5">
+                  <span className="mt-0.5 text-stone-300" aria-hidden="true">•</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
               <h3 className="text-xl font-bold text-white">What to expect</h3>
@@ -1342,7 +1417,7 @@ export default function Home() {
                   },
                   {
                     question: "How do cancellations and refunds work?",
-                    answer: "If Fair Play Football cancels a game, including because not enough players are confirmed, players receive the full amount back. Player cancellation refund eligibility is handled in the app and may depend on timing and payment method.",
+                    answer: "Cancel at least 24 hours before kick-off for a full refund. Within 24 hours, no refund is available. If Fair Play Football cancels, including when the minimum player number is not reached, booked players receive a full refund.",
                   },
                 ].map((item) => (
                   <details key={item.question} className="group rounded-xl border border-zinc-800 bg-black/40 px-4 py-3">

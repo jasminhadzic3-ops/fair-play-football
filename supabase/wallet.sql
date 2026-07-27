@@ -13,6 +13,7 @@ create table if not exists public.wallet_transactions (
     check (
       transaction_type in (
         'game_cancelled_credit',
+        'player_cancelled_credit',
         'wallet_booking_payment',
         'refund_requested',
         'refund_completed',
@@ -1185,6 +1186,7 @@ begin
 
   if p_transaction_type not in (
     'game_cancelled_credit',
+    'player_cancelled_credit',
     'refund_requested',
     'admin_credit',
     'promotion_bonus'

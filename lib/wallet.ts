@@ -4,6 +4,7 @@ import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmi
 
 export type WalletTransactionType =
   | "game_cancelled_credit"
+  | "player_cancelled_credit"
   | "wallet_booking_payment"
   | "refund_requested"
   | "refund_completed"
