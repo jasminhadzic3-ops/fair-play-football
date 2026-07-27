@@ -243,8 +243,8 @@ begin
   set
     game_id = p_target_game_id,
     updated_at = now()
-  where booking_id = v_booking.id
-    and payment_status = 'paid';
+  where booking_payments.booking_id = v_booking.id
+    and booking_payments.payment_status = 'paid';
 
   update public.wallet_transactions
   set
@@ -255,10 +255,10 @@ begin
         'moved_to_game_id', p_target_game_id,
         'moved_at', now()
       )
-  where booking_id = v_booking.id
-    and transaction_type = 'wallet_booking_payment'
-    and status = 'completed'
-    and amount < 0;
+  where wallet_transactions.booking_id = v_booking.id
+    and wallet_transactions.transaction_type = 'wallet_booking_payment'
+    and wallet_transactions.status = 'completed'
+    and wallet_transactions.amount < 0;
 
   if v_booking.user_id is not null then
     update public.waiting_list

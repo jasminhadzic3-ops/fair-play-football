@@ -3,6 +3,29 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const sql = readFileSync(join(process.cwd(), "supabase/admin_booking_moves.sql"), "utf8");
+const archiveSql = readFileSync(join(process.cwd(), "supabase/game_archiving.sql"), "utf8");
+
+function extractMoveFunction(source: string) {
+  const start = source.indexOf("create or replace function public.move_booking_if_space");
+  const end = source.indexOf("revoke all on function public.move_booking_if_space", start);
+
+  if (start < 0 || end < 0) {
+    throw new Error("move_booking_if_space function body not found.");
+  }
+
+  return source.slice(start, end);
+}
+
+function extractBlock(source: string, startMarker: string, endMarker: string) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+
+  if (start < 0 || end < 0) {
+    throw new Error(`SQL block not found: ${startMarker}`);
+  }
+
+  return source.slice(start, end);
+}
 
 describe("admin booking moves SQL", () => {
   it("defines a service-role-only atomic move RPC", () => {
@@ -77,7 +100,7 @@ describe("admin booking moves SQL", () => {
     expect(sql).toContain("v_paid_booking_payment_count > 1");
     expect(sql).toContain("v_non_paid_booking_payment_count > 0");
     expect(sql).toContain("where booking_payments.booking_id = v_booking.id\n    and booking_payments.payment_status = 'paid'");
-    expect(sql).toContain("where booking_id = v_booking.id\n    and payment_status = 'paid'");
+    expect(sql).toContain("where booking_payments.booking_id = v_booking.id\n    and booking_payments.payment_status = 'paid'");
   });
 
   it("allows a single completed negative wallet booking debit and blocks ambiguous wallet rows", () => {
@@ -86,7 +109,7 @@ describe("admin booking moves SQL", () => {
     expect(sql).toContain("v_ambiguous_wallet_booking_payment_count > 0");
     expect(sql).toContain("wallet_transactions.status = 'completed'\n    and wallet_transactions.amount < 0");
     expect(sql).toContain("and not (\n      wallet_transactions.status = 'completed'\n      and wallet_transactions.amount < 0\n    )");
-    expect(sql).toContain("and transaction_type = 'wallet_booking_payment'\n    and status = 'completed'\n    and amount < 0");
+    expect(sql).toContain("and wallet_transactions.transaction_type = 'wallet_booking_payment'\n    and wallet_transactions.status = 'completed'\n    and wallet_transactions.amount < 0");
   });
 
   it("blocks mixed SumUp and wallet booking payment history", () => {
@@ -97,16 +120,46 @@ describe("admin booking moves SQL", () => {
     expect(sql).toContain("update public.bookings");
     expect(sql).toContain("set game_id = p_target_game_id");
     expect(sql).toContain("update public.booking_payments");
-    expect(sql).toContain("where booking_id = v_booking.id");
-    expect(sql).toContain("and payment_status = 'paid'");
+    expect(sql).toContain("where booking_payments.booking_id = v_booking.id");
+    expect(sql).toContain("and booking_payments.payment_status = 'paid'");
     expect(sql).toContain("update public.wallet_transactions");
-    expect(sql).toContain("transaction_type = 'wallet_booking_payment'");
-    expect(sql).toContain("and status = 'completed'");
-    expect(sql).toContain("and amount < 0");
+    expect(sql).toContain("wallet_transactions.transaction_type = 'wallet_booking_payment'");
+    expect(sql).toContain("and wallet_transactions.status = 'completed'");
+    expect(sql).toContain("and wallet_transactions.amount < 0");
     expect(sql).toContain("'moved_from_game_id'");
     expect(sql).toContain("'moved_to_game_id'");
     expect(sql).toContain("'moved_at'");
     expect(sql).not.toContain("transaction_type = 'game_cancelled_credit'\n    set");
     expect(sql).not.toContain("update public.sumup_refund_attempts");
+  });
+
+  it("keeps successful update predicates qualified to avoid output-column ambiguity", () => {
+    [sql, archiveSql].forEach((source) => {
+      const functionBody = extractMoveFunction(source);
+      const bookingPaymentUpdate = extractBlock(
+        functionBody,
+        "update public.booking_payments",
+        "update public.wallet_transactions"
+      );
+      const walletBookingUpdate = extractBlock(
+        functionBody,
+        "update public.wallet_transactions",
+        "if v_booking.user_id is not null then"
+      );
+
+      expect(bookingPaymentUpdate).not.toMatch(/\bwhere\s+booking_id\s*=\s*v_booking\.id\b/i);
+      expect(bookingPaymentUpdate).not.toMatch(/\band\s+payment_status\s*=\s*'paid'\b/i);
+      expect(bookingPaymentUpdate).toContain("where booking_payments.booking_id = v_booking.id");
+      expect(bookingPaymentUpdate).toContain("and booking_payments.payment_status = 'paid'");
+
+      expect(walletBookingUpdate).not.toMatch(/\bwhere\s+booking_id\s*=\s*v_booking\.id\b/i);
+      expect(walletBookingUpdate).not.toMatch(/\band\s+transaction_type\s*=\s*'wallet_booking_payment'\b/i);
+      expect(walletBookingUpdate).not.toMatch(/\band\s+status\s*=\s*'completed'\b/i);
+      expect(walletBookingUpdate).not.toMatch(/\band\s+amount\s*<\s*0\b/i);
+      expect(walletBookingUpdate).toContain("where wallet_transactions.booking_id = v_booking.id");
+      expect(walletBookingUpdate).toContain("and wallet_transactions.transaction_type = 'wallet_booking_payment'");
+      expect(walletBookingUpdate).toContain("and wallet_transactions.status = 'completed'");
+      expect(walletBookingUpdate).toContain("and wallet_transactions.amount < 0");
+    });
   });
 });

@@ -19,15 +19,22 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "npm run dev",
+    command:
+      "EMAIL_ENABLE_NEW_GAME=false EMAIL_ENABLE_GAME_CANCELLED=false EMAIL_ENABLE_GAME_HALF_FULL=false EMAIL_ENABLE_GAME_REMINDER=false EMAIL_DRY_RUN=true npm run dev",
     url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [
     {
-      name: "chromium",
+      name: "desktop-chromium",
+      testIgnore: /mobile\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-chromium",
+      testMatch: /mobile\.spec\.ts/,
+      use: { ...devices["iPhone 13"], browserName: "chromium" },
     },
   ],
 });

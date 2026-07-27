@@ -1,4 +1,5 @@
 const defaultSupabaseUrl = "https://bpvbkndywnvfvxxzzaes.supabase.co";
+const testSupabaseRef = "gtrpegnxhawmkbhyqedh";
 
 export type E2ESupabaseMutationEnv = {
   supabaseUrl: string;
@@ -35,9 +36,15 @@ export function requireDatabaseMutationE2EEnv(): E2ESupabaseMutationEnv {
     throw new Error("DB-mutating E2E tests require SUPABASE_SERVICE_ROLE_KEY.");
   }
 
-  if (supabaseUrl === defaultSupabaseUrl && process.env.E2E_ALLOW_DEFAULT_SUPABASE_URL !== "true") {
+  if (supabaseUrl === defaultSupabaseUrl) {
     throw new Error(
-      "DB-mutating E2E tests require a non-default NEXT_PUBLIC_SUPABASE_URL, or E2E_ALLOW_DEFAULT_SUPABASE_URL=true."
+      "DB-mutating E2E tests must not run against the production Supabase project."
+    );
+  }
+
+  if (!supabaseUrl.includes(`${testSupabaseRef}.supabase.co`)) {
+    throw new Error(
+      `DB-mutating E2E tests require the TEST Supabase project (${testSupabaseRef}).`
     );
   }
 
