@@ -1079,21 +1079,13 @@ export default function Home() {
             </div>
           ) : null}
 
-          <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.18)] sm:p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-zinc-500">
-                  Weekly calendar
-                </p>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Pick a date to filter the games below.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
+          <div className="mb-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-[0_12px_34px_rgba(0,0,0,0.16)]">
+            <div className="flex flex-wrap items-center justify-end gap-3 border-b border-zinc-800/80 px-3 py-2.5 sm:px-4">
+              <div className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-black p-1">
                 <button
                   type="button"
                   onClick={() => setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, -7))}
-                  className="min-h-10 rounded-full border border-zinc-700 bg-zinc-950 px-4 text-sm font-semibold text-zinc-200 transition-colors hover:border-stone-200/30 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                  className="min-h-9 rounded-full px-3 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
                   aria-label="Show previous week"
                 >
                   Previous
@@ -1104,14 +1096,14 @@ export default function Home() {
                     setSelectedGameDateKey(todayDateKey);
                     setVisibleWeekStartKey(todayDateKey);
                   }}
-                  className="min-h-10 rounded-full border border-stone-200/25 bg-stone-200 px-4 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                  className="min-h-9 rounded-full bg-stone-200 px-3.5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
                 >
                   Today
                 </button>
                 <button
                   type="button"
                   onClick={() => setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, 7))}
-                  className="min-h-10 rounded-full border border-zinc-700 bg-zinc-950 px-4 text-sm font-semibold text-zinc-200 transition-colors hover:border-stone-200/30 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                  className="min-h-9 rounded-full px-3 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
                   aria-label="Show next week"
                 >
                   Next
@@ -1119,8 +1111,8 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="-mx-3 overflow-x-auto scroll-smooth px-3 pb-1 [scroll-snap-type:x_mandatory] sm:mx-0 sm:px-0">
-              <div className="flex min-w-max gap-2">
+            <div className="overflow-x-auto scroll-smooth px-3 py-2.5 [scroll-snap-type:x_mandatory] sm:px-4">
+              <div className="flex min-w-max gap-2.5">
                 {weekDateKeys.map((dateKey) => {
                   const gameCount = gamesByDateKey.get(dateKey)?.length ?? 0;
                   const isSelected = dateKey === fallbackSelectedDateKey;
@@ -1135,33 +1127,35 @@ export default function Home() {
                       aria-pressed={isSelected}
                       aria-label={`${formatCalendarDateLabel(dateKey)}, ${gameCount} ${gameCount === 1 ? "game" : "games"}${hasUserBooking ? ", you have a booking" : ""}${isToday ? ", today" : ""}`}
                       onClick={() => setSelectedGameDateKey(dateKey)}
-                      className={`min-h-[4.75rem] w-[5.15rem] snap-start rounded-2xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-stone-200/50 ${
+                      className={`min-h-[4.25rem] w-[6.6rem] snap-start rounded-xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-stone-200/50 ${
                         isSelected
-                          ? "border-stone-200/50 bg-stone-200 text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.14)]"
-                          : "border-zinc-800 bg-zinc-950/90 text-zinc-300 hover:border-stone-200/25 hover:bg-zinc-900 hover:text-white"
+                          ? "border-stone-200/60 bg-stone-200 text-zinc-950"
+                          : "border-zinc-800 bg-zinc-900/45 text-zinc-300 hover:border-stone-200/25 hover:bg-zinc-900 hover:text-white"
                       }`}
                     >
-                      <span className={`block text-[0.68rem] font-bold uppercase tracking-[0.22em] ${isSelected ? "text-zinc-700" : "text-zinc-500"}`}>
+                      <span className={`block text-[0.68rem] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-zinc-700" : "text-zinc-500"}`}>
                         {weekdayLabel}
                       </span>
-                      <span className="mt-0.5 block text-[1.55rem] font-black leading-none">
-                        {formatCalendarDayNumber(dateKey)}
-                      </span>
-                      <span className={`mt-1.5 flex items-center justify-between gap-2 text-[0.68rem] font-semibold ${isSelected ? "text-zinc-700" : "text-zinc-400"}`}>
-                        <span className={`rounded-full border px-2 py-0.5 ${isSelected ? "border-zinc-950/10 bg-zinc-950/5" : "border-zinc-700 bg-white/[0.03]"}`}>
-                          {gameCount}
+                      <span className="mt-1 flex items-end justify-between gap-3">
+                        <span className="block text-[1.55rem] font-black leading-none">
+                          {formatCalendarDayNumber(dateKey)}
                         </span>
-                        {hasUserBooking ? (
-                          <span
-                            aria-hidden="true"
-                            className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[0.65rem] font-black ${isSelected ? "border-zinc-950/20 bg-zinc-950/10 text-zinc-900" : "border-stone-200/25 bg-stone-200/10 text-stone-200"}`}
-                          >
-                            ✓
+                        <span className="flex items-center gap-1.5">
+                          <span className={`rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold leading-none ${isSelected ? "border-zinc-950/10 bg-zinc-950/5 text-zinc-700" : "border-zinc-700 bg-white/[0.03] text-zinc-400"}`}>
+                            {gameCount}
                           </span>
-                        ) : null}
+                          {hasUserBooking ? (
+                            <span
+                              aria-hidden="true"
+                              className={`inline-flex h-[1.125rem] w-[1.125rem] items-center justify-center rounded-full text-[0.62rem] font-black ${isSelected ? "bg-zinc-950/10 text-zinc-900" : "bg-stone-200/10 text-stone-200"}`}
+                            >
+                              ✓
+                            </span>
+                          ) : null}
+                        </span>
                       </span>
                       {isToday ? (
-                        <span className={`mt-2 block h-1 w-7 rounded-full ${isSelected ? "bg-zinc-950/35" : "bg-stone-200/45"}`} aria-hidden="true" />
+                        <span className={`mt-2 block h-1 w-8 rounded-full ${isSelected ? "bg-zinc-950/35" : "bg-stone-200/45"}`} aria-hidden="true" />
                       ) : null}
                     </button>
                   );
@@ -1172,11 +1166,13 @@ export default function Home() {
 
           <div className="space-y-6">
             {selectedDatedGames.length === 0 ? (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 px-5 py-7 text-center shadow-[0_12px_34px_rgba(0,0,0,0.16)]">
-                <p className="text-base font-semibold text-white">No games on this date.</p>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Pick another day or jump to the next available match.
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">No games on this date.</p>
+                  <p className="mt-0.5 text-sm text-zinc-400">
+                    Pick another day or jump to the next available match.
+                  </p>
+                </div>
                 {nextAvailableDateKey ? (
                   <button
                     type="button"
@@ -1184,7 +1180,7 @@ export default function Home() {
                       setSelectedGameDateKey(nextAvailableDateKey);
                       setVisibleWeekStartKey(nextAvailableDateKey);
                     }}
-                    className="mt-4 min-h-10 rounded-full border border-stone-200/30 bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                    className="min-h-9 rounded-full border border-stone-200/30 bg-stone-200 px-4 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
                   >
                     Next available game
                   </button>

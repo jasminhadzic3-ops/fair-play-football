@@ -7,9 +7,9 @@ const gameCardSource = readFileSync(join(process.cwd(), "components/games/GameCa
 
 describe("homepage game calendar source", () => {
   it("adds a weekly calendar strip without changing GameCard source", () => {
-    expect(homePageSource).toContain("Weekly calendar");
     expect(homePageSource).toContain("weekDateKeys.map");
     expect(homePageSource).toContain("aria-pressed={isSelected}");
+    expect(homePageSource).toContain("[scroll-snap-type:x_mandatory]");
     expect(homePageSource).toContain("Show previous week");
     expect(homePageSource).toContain("Today");
     expect(homePageSource).toContain("Show next week");
