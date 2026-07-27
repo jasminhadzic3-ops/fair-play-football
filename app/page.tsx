@@ -9,6 +9,16 @@ import Navbar from "@/components/shared/layout/Navbar";
 import Hero from "@/components/shared/layout/Hero";
 import Modal from "@/components/shared/ui/Modal";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
+import {
+  addDaysToDateKey,
+  formatCalendarDateLabel,
+  formatCalendarDayNumber,
+  getDefaultSelectedDateKey,
+  getGameLondonDateKey,
+  getTodayLondonDateKey,
+  getWeekDateKeys,
+  sortGamesByStartsAt,
+} from "@/lib/gameCalendar";
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 
@@ -40,9 +50,49 @@ export default function Home() {
   const [openDetailsGameId, setOpenDetailsGameId] = useState<number | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedGameDateKey, setSelectedGameDateKey] = useState<string | null>(null);
+  const [visibleWeekStartKey, setVisibleWeekStartKey] = useState<string | null>(null);
   const returnPollingReference = useRef<string | null>(null);
   const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
   const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
+  const todayDateKey = getTodayLondonDateKey();
+  const fallbackSelectedDateKey = selectedGameDateKey ?? getDefaultSelectedDateKey(games);
+  const fallbackWeekStartKey = visibleWeekStartKey ?? fallbackSelectedDateKey;
+  const weekDateKeys = getWeekDateKeys(fallbackWeekStartKey);
+  const calendarGames = games.filter((game) => getGameLondonDateKey(game));
+  const legacyGames = games.filter((game) => !getGameLondonDateKey(game));
+  const gamesByDateKey = calendarGames.reduce<Map<string, any[]>>((map, game) => {
+    const dateKey = getGameLondonDateKey(game);
+
+    if (!dateKey) {
+      return map;
+    }
+
+    map.set(dateKey, [...(map.get(dateKey) ?? []), game]);
+    return map;
+  }, new Map<string, any[]>());
+  const userBookedDateKeys = new Set(
+    bookings
+      .filter((booking) => user?.id && booking.user_id === user.id)
+      .map((booking) => games.find((game) => game.id === booking.game_id))
+      .map((game) => game ? getGameLondonDateKey(game) : null)
+      .filter((dateKey): dateKey is string => Boolean(dateKey))
+  );
+  const selectedDatedGames = sortGamesByStartsAt(gamesByDateKey.get(fallbackSelectedDateKey) ?? []);
+  const nextAvailableDateKey: string | null =
+    Array.from(gamesByDateKey.keys()).sort().find((dateKey) => dateKey >= todayDateKey) ??
+    Array.from(gamesByDateKey.keys()).sort()[0] ??
+    null;
+
+  useEffect(() => {
+    if (games.length === 0 || selectedGameDateKey) {
+      return;
+    }
+
+    const defaultDateKey = getDefaultSelectedDateKey(games);
+    setSelectedGameDateKey(defaultDateKey);
+    setVisibleWeekStartKey(defaultDateKey);
+  }, [games, selectedGameDateKey]);
 
   async function fetchProfile(userId: string) {
     const { data, error } = await supabase
@@ -151,6 +201,58 @@ export default function Home() {
 
     setUnreadNotificationCount(count ?? 0);
   }
+
+  const renderGameCard = (game: any) => (
+    <GameCard
+      key={game.id}
+      game={game}
+      bookings={bookings}
+      successGameId={successGameId}
+      user={user}
+      profile={profile}
+      onPlayerNameChange={(gameId, playerName) => {
+        setGames((prevGames) =>
+          prevGames.map((g) =>
+            g.id === gameId
+              ? {
+                  ...g,
+                  playerName: playerName,
+                }
+              : g
+          )
+        );
+      }}
+      onLeaveGame={leaveGame}
+      onRefreshProfile={async () => {
+        const currentUser = user ?? (await supabase.auth.getUser()).data.user;
+        if (currentUser) {
+          await loadOrCreateProfile(currentUser);
+        }
+      }}
+      onPaymentComplete={async () => {
+        setSuccessGameId(game.id);
+        await fetchGames();
+        setPendingCheckoutId(null);
+        setPendingCheckoutReference(null);
+        clearSumUpCheckoutReferenceFromUrl();
+        localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
+        scrollToGames();
+        setTimeout(() => {
+          setSuccessGameId(null);
+        }, 5000);
+      }}
+      onSignOut={handleSignOut}
+      pendingCheckoutId={checkoutGameId === game.id ? pendingCheckoutId : null}
+      pendingCheckoutReference={checkoutGameId === game.id ? pendingCheckoutReference : null}
+      onContinueToPaymentHandled={() => {
+        setCheckoutGameId(null);
+        setPendingCheckoutId(null);
+        setPendingCheckoutReference(null);
+      }}
+      openDetails={openDetailsGameId === game.id}
+      onOpenDetailsHandled={() => setOpenDetailsGameId(null)}
+    />
+  );
 
   async function refreshAdminStatus(accessToken?: string | null) {
     if (!accessToken) {
@@ -977,58 +1079,134 @@ export default function Home() {
             </div>
           ) : null}
 
-          <div className="space-y-6">
-            {games.map((game) => (
-              <GameCard
-                key={game.id}
-                game={game}
-                bookings={bookings}
-                successGameId={successGameId}
-                user={user}
-                profile={profile}
-                onPlayerNameChange={(gameId, playerName) => {
-                  setGames((prevGames) =>
-                    prevGames.map((g) =>
-                      g.id === gameId
-                        ? {
-                            ...g,
-                            playerName: playerName,
-                          }
-                        : g
-                    )
+          <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.18)] sm:p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-zinc-500">
+                  Weekly calendar
+                </p>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Pick a date to filter the games below.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, -7))}
+                  className="min-h-10 rounded-full border border-zinc-700 bg-zinc-950 px-4 text-sm font-semibold text-zinc-200 transition-colors hover:border-stone-200/30 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                  aria-label="Show previous week"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGameDateKey(todayDateKey);
+                    setVisibleWeekStartKey(todayDateKey);
+                  }}
+                  className="min-h-10 rounded-full border border-stone-200/25 bg-stone-200 px-4 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, 7))}
+                  className="min-h-10 rounded-full border border-zinc-700 bg-zinc-950 px-4 text-sm font-semibold text-zinc-200 transition-colors hover:border-stone-200/30 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                  aria-label="Show next week"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+
+            <div className="-mx-3 overflow-x-auto scroll-smooth px-3 pb-1 [scroll-snap-type:x_mandatory] sm:mx-0 sm:px-0">
+              <div className="flex min-w-max gap-2">
+                {weekDateKeys.map((dateKey) => {
+                  const gameCount = gamesByDateKey.get(dateKey)?.length ?? 0;
+                  const isSelected = dateKey === fallbackSelectedDateKey;
+                  const isToday = dateKey === todayDateKey;
+                  const hasUserBooking = userBookedDateKeys.has(dateKey);
+                  const weekdayLabel = formatCalendarDateLabel(dateKey).split(",")[0];
+
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      aria-pressed={isSelected}
+                      aria-label={`${formatCalendarDateLabel(dateKey)}, ${gameCount} ${gameCount === 1 ? "game" : "games"}${hasUserBooking ? ", you have a booking" : ""}${isToday ? ", today" : ""}`}
+                      onClick={() => setSelectedGameDateKey(dateKey)}
+                      className={`min-h-[4.75rem] w-[5.15rem] snap-start rounded-2xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-stone-200/50 ${
+                        isSelected
+                          ? "border-stone-200/50 bg-stone-200 text-zinc-950 shadow-[0_10px_28px_rgba(214,211,209,0.14)]"
+                          : "border-zinc-800 bg-zinc-950/90 text-zinc-300 hover:border-stone-200/25 hover:bg-zinc-900 hover:text-white"
+                      }`}
+                    >
+                      <span className={`block text-[0.68rem] font-bold uppercase tracking-[0.22em] ${isSelected ? "text-zinc-700" : "text-zinc-500"}`}>
+                        {weekdayLabel}
+                      </span>
+                      <span className="mt-0.5 block text-[1.55rem] font-black leading-none">
+                        {formatCalendarDayNumber(dateKey)}
+                      </span>
+                      <span className={`mt-1.5 flex items-center justify-between gap-2 text-[0.68rem] font-semibold ${isSelected ? "text-zinc-700" : "text-zinc-400"}`}>
+                        <span className={`rounded-full border px-2 py-0.5 ${isSelected ? "border-zinc-950/10 bg-zinc-950/5" : "border-zinc-700 bg-white/[0.03]"}`}>
+                          {gameCount}
+                        </span>
+                        {hasUserBooking ? (
+                          <span
+                            aria-hidden="true"
+                            className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[0.65rem] font-black ${isSelected ? "border-zinc-950/20 bg-zinc-950/10 text-zinc-900" : "border-stone-200/25 bg-stone-200/10 text-stone-200"}`}
+                          >
+                            ✓
+                          </span>
+                        ) : null}
+                      </span>
+                      {isToday ? (
+                        <span className={`mt-2 block h-1 w-7 rounded-full ${isSelected ? "bg-zinc-950/35" : "bg-stone-200/45"}`} aria-hidden="true" />
+                      ) : null}
+                    </button>
                   );
-                }}
-                onLeaveGame={leaveGame}
-                onRefreshProfile={async () => {
-                  const currentUser = user ?? (await supabase.auth.getUser()).data.user;
-                  if (currentUser) {
-                    await loadOrCreateProfile(currentUser);
-                  }
-                }}
-                onPaymentComplete={async () => {
-                  setSuccessGameId(game.id);
-                  await fetchGames();
-                  setPendingCheckoutId(null);
-                  setPendingCheckoutReference(null);
-                  clearSumUpCheckoutReferenceFromUrl();
-                  localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
-                  scrollToGames();
-                  setTimeout(() => {
-                    setSuccessGameId(null);
-                  }, 5000);
-                }}
-                onSignOut={handleSignOut}
-                pendingCheckoutId={checkoutGameId === game.id ? pendingCheckoutId : null}
-                pendingCheckoutReference={checkoutGameId === game.id ? pendingCheckoutReference : null}
-                onContinueToPaymentHandled={() => {
-                  setCheckoutGameId(null);
-                  setPendingCheckoutId(null);
-                  setPendingCheckoutReference(null);
-                }}
-                openDetails={openDetailsGameId === game.id}
-                onOpenDetailsHandled={() => setOpenDetailsGameId(null)}
-              />
-            ))}
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {selectedDatedGames.length === 0 ? (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 px-5 py-7 text-center shadow-[0_12px_34px_rgba(0,0,0,0.16)]">
+                <p className="text-base font-semibold text-white">No games on this date.</p>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Pick another day or jump to the next available match.
+                </p>
+                {nextAvailableDateKey ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGameDateKey(nextAvailableDateKey);
+                      setVisibleWeekStartKey(nextAvailableDateKey);
+                    }}
+                    className="mt-4 min-h-10 rounded-full border border-stone-200/30 bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                  >
+                    Next available game
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {selectedDatedGames.map(renderGameCard)}
+
+            {legacyGames.length > 0 ? (
+              <div className="space-y-4 pt-2">
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.28em] text-zinc-500">
+                    Date not available
+                  </p>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    These games do not have a structured kickoff date yet, so they are not counted in the calendar.
+                  </p>
+                </div>
+                {legacyGames.map(renderGameCard)}
+              </div>
+            ) : null}
           </div>
         </div>
       </main>
