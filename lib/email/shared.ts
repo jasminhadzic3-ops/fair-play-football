@@ -6,6 +6,7 @@ type EmailLayoutParams = {
   bodyHtml: string;
   ctaHref?: string;
   ctaLabel?: string;
+  footerText?: string;
 };
 
 export function escapeHtml(value: string) {
@@ -56,6 +57,7 @@ export function renderEmailLayout({
   bodyHtml,
   ctaHref,
   ctaLabel,
+  footerText = "Questions? Reply to this email.",
 }: EmailLayoutParams) {
   const escapedPreviewText = escapeHtml(previewText);
   const escapedTitle = escapeHtml(title);
@@ -93,7 +95,7 @@ export function renderEmailLayout({
 
           <div style="padding:18px 24px;border-top:1px solid #27272a;background:#050505;color:#a1a1aa;font-size:12px;line-height:20px;">
             <p style="margin:0;text-align:center;">
-              Questions? Reply to this email.
+              ${escapeHtml(footerText)}
             </p>
           </div>
         </div>

@@ -36,6 +36,10 @@ function getBroadcastTestRecipient() {
   return process.env.EMAIL_BROADCAST_TEST_RECIPIENT?.trim() || null;
 }
 
+function getGreetingName(playerName: string) {
+  return playerName.trim().split(/\s+/)[0] || "Player";
+}
+
 async function getNewGameRecipients(): Promise<EmailRecipient[]> {
   const testRecipient = getBroadcastTestRecipient();
 
@@ -96,14 +100,15 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
   let sentCount = 0;
 
   for (const recipient of recipients) {
+    const greetingName = getGreetingName(recipient.playerName);
     const text = [
-      `Hi ${recipient.playerName},`,
+      `Hi ${greetingName},`,
       "",
-      "A new game has been added to Fair Play Football.",
+      "A new Fair Play Football game is now available to book.",
       "",
-      `Click "View game" to book your spot if you'd like to join.`,
+      `Click "View Game" below to view the match details and secure your spot.`,
       "",
-      "Places are confirmed on a first paid, first served basis.",
+      "Places are limited and confirmed on a first paid, first served basis.",
       "",
       `Game: ${gameTitle}`,
       `Location: ${gameLocation}`,
@@ -117,19 +122,20 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
       previewText: `A new game has been added to Fair Play Football: ${gameTitle}.`,
       title: "New game available",
       ctaHref: gameUrl,
-      ctaLabel: "View game",
+      ctaLabel: "View Game",
+      footerText: "Questions? Simply reply to this email and we'll be happy to help.",
       bodyHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
-          Hi ${escapeHtml(recipient.playerName)},
+          Hi ${escapeHtml(greetingName)},
         </p>
         <p style="margin:0 0 18px;color:#d4d4d8;">
-          A new game has been added to Fair Play Football.
+          A new Fair Play Football game is now available to book.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          Click <strong style="color:#ffffff;">"View game"</strong> to book your spot if you'd like to join.
+          Click <strong style="color:#ffffff;">"View Game"</strong> below to view the match details and secure your spot.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          Places are confirmed on a <strong style="color:#ffffff;">first paid, first served</strong> basis.
+          Places are limited and confirmed on a <strong style="color:#ffffff;">first paid, first served</strong> basis.
         </p>
 
         <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
