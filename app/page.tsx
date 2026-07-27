@@ -8,6 +8,7 @@ import GameCard from "@/components/games/GameCard";
 import Navbar from "@/components/shared/layout/Navbar";
 import Hero from "@/components/shared/layout/Hero";
 import Modal from "@/components/shared/ui/Modal";
+import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 
@@ -30,6 +31,7 @@ export default function Home() {
   const [navbarAuthAge, setNavbarAuthAge] = useState("");
   const [navbarAuthGender, setNavbarAuthGender] = useState("");
   const [navbarAuthFavouritePosition, setNavbarAuthFavouritePosition] = useState("");
+  const [navbarAgreementAccepted, setNavbarAgreementAccepted] = useState(false);
   const [navbarAuthMode, setNavbarAuthMode] = useState<"signin" | "signup">("signin");
   const [navbarAuthLoading, setNavbarAuthLoading] = useState(false);
   const [navbarAuthError, setNavbarAuthError] = useState<string | null>(null);
@@ -59,8 +61,24 @@ export default function Home() {
 
   async function loadOrCreateProfile(authUser: User) {
     const existingProfile = await fetchProfile(authUser.id);
+    const pendingSignupProfileText = localStorage.getItem(PENDING_SIGNUP_PROFILE_KEY);
+    let pendingSignupProfile: {
+      terms_accepted_at?: string;
+      terms_version?: string;
+    } | null = null;
+
+    if (pendingSignupProfileText) {
+      try {
+        pendingSignupProfile = JSON.parse(pendingSignupProfileText);
+      } catch {
+        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+      }
+    }
 
     if (existingProfile) {
+      if (pendingSignupProfileText) {
+        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+      }
       return existingProfile;
     }
 
@@ -77,6 +95,12 @@ export default function Home() {
         id: authUser.id,
         email: authUser.email,
         username: fallbackName,
+        ...(pendingSignupProfile?.terms_accepted_at
+          ? {
+              terms_accepted_at: pendingSignupProfile.terms_accepted_at,
+              terms_version: pendingSignupProfile.terms_version ?? AGREEMENT_VERSION,
+            }
+          : {}),
       })
       .select("*")
       .single();
@@ -87,6 +111,9 @@ export default function Home() {
     }
 
     setProfile(data);
+    if (pendingSignupProfileText) {
+      localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+    }
     return data;
   }
 
@@ -476,6 +503,7 @@ export default function Home() {
     setNavbarAuthPassword("");
     setNavbarAuthConfirmPassword("");
     setNavbarAuthMode("signin");
+    setNavbarAgreementAccepted(false);
   };
 
   const switchNavbarAuthMode = (mode: "signin" | "signup") => {
@@ -484,6 +512,7 @@ export default function Home() {
     setNavbarAuthStatus(null);
     setNavbarAuthPassword("");
     setNavbarAuthConfirmPassword("");
+    setNavbarAgreementAccepted(false);
   };
 
   const handleNavbarEmailSignIn = async () => {
@@ -530,6 +559,23 @@ export default function Home() {
     setNavbarAuthError(null);
     setNavbarAuthStatus(null);
 
+    if (navbarAuthMode === "signup" && !navbarAgreementAccepted) {
+      setNavbarAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setNavbarAuthLoading(false);
+      return;
+    }
+
+    if (navbarAuthMode === "signup") {
+      localStorage.setItem(
+        PENDING_SIGNUP_PROFILE_KEY,
+        JSON.stringify({
+          email: navbarAuthEmail,
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: AGREEMENT_VERSION,
+        })
+      );
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -554,6 +600,12 @@ export default function Home() {
     setNavbarAuthError(null);
     setNavbarAuthStatus(null);
 
+    if (!navbarAgreementAccepted) {
+      setNavbarAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setNavbarAuthLoading(false);
+      return;
+    }
+
     if (!navbarAuthAge) {
       setNavbarAuthError("Please select your age.");
       setNavbarAuthLoading(false);
@@ -573,6 +625,7 @@ export default function Home() {
     }
 
     try {
+      const termsAcceptedAt = new Date().toISOString();
       const pendingSignupProfile = {
         username: navbarAuthUsername.trim(),
         age: navbarAuthAge,
@@ -580,6 +633,8 @@ export default function Home() {
         favouritePosition: navbarAuthFavouritePosition,
         favourite_position: navbarAuthFavouritePosition,
         email: navbarAuthEmail,
+        terms_accepted_at: termsAcceptedAt,
+        terms_version: AGREEMENT_VERSION,
       };
 
       localStorage.setItem(PENDING_SIGNUP_PROFILE_KEY, JSON.stringify(pendingSignupProfile));
@@ -617,6 +672,8 @@ export default function Home() {
           age: navbarAuthAge,
           gender: navbarAuthGender,
           favourite_position: navbarAuthFavouritePosition,
+          terms_accepted_at: termsAcceptedAt,
+          terms_version: AGREEMENT_VERSION,
         });
         localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
         await loadOrCreateProfile(sessionUser);
@@ -827,6 +884,40 @@ export default function Home() {
                   placeholder="Confirm password"
                 />
               </div>
+            ) : null}
+
+            {navbarAuthMode === "signup" ? (
+              <label className="flex items-start gap-3 rounded-3xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm leading-6 text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={navbarAgreementAccepted}
+                  onChange={(event) => setNavbarAgreementAccepted(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 text-stone-200 focus:ring-2 focus:ring-stone-200/40"
+                  aria-label={SIGNUP_AGREEMENT_LABEL}
+                  required
+                />
+                <span>
+                  I agree to the{" "}
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-stone-200 underline underline-offset-4 hover:text-white"
+                  >
+                    Terms of Service
+                  </a>{" "}
+                  and{" "}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-stone-200 underline underline-offset-4 hover:text-white"
+                  >
+                    Privacy Policy
+                  </a>{" "}
+                  and understand that Fair Play Football will email me important updates about my account, bookings, payments, match reminders, cancellations, waiting-list updates and future football games.
+                </span>
+              </label>
             ) : null}
 
             <button

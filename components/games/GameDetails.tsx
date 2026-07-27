@@ -6,6 +6,7 @@ import Modal from "@/components/shared/ui/Modal";
 import TeamList from "./TeamList";
 import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
 import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
+import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
 
 interface GameDetailsProps {
   isOpen: boolean;
@@ -123,6 +124,7 @@ export default function GameDetails({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
   const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
   const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
 
@@ -297,6 +299,7 @@ export default function GameDetails({
     setShowPaymentModal(false);
     setShowProfileModal(false);
     setConfirmPassword("");
+    setAgreementAccepted(false);
     setIsEditingProfile(false);
     if (authOpenedFromNavbar) {
       setAuthOpenedFromNavbar(false);
@@ -640,6 +643,12 @@ export default function GameDetails({
     setAuthLoading(true);
     clearAuthState();
 
+    if (!agreementAccepted) {
+      setAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setAuthLoading(false);
+      return;
+    }
+
     if (!age) {
       setAuthError("Please select your age.");
       setAuthLoading(false);
@@ -659,6 +668,7 @@ export default function GameDetails({
     }
 
     try {
+      const termsAcceptedAt = new Date().toISOString();
       const pendingSignupProfile = {
         username: username.trim(),
         age,
@@ -666,6 +676,8 @@ export default function GameDetails({
         favouritePosition,
         favourite_position: favouritePosition,
         email,
+        terms_accepted_at: termsAcceptedAt,
+        terms_version: AGREEMENT_VERSION,
       };
 
       localStorage.setItem(
@@ -706,6 +718,8 @@ export default function GameDetails({
           age,
           gender,
           favourite_position: favouritePosition,
+          terms_accepted_at: termsAcceptedAt,
+          terms_version: AGREEMENT_VERSION,
         });
         localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
 
@@ -809,6 +823,23 @@ export default function GameDetails({
   const handleGoogleSignIn = async () => {
     setAuthLoading(true);
     clearAuthState();
+    if (authMode === "signup" && !agreementAccepted) {
+      setAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setAuthLoading(false);
+      return;
+    }
+
+    if (authMode === "signup") {
+      localStorage.setItem(
+        PENDING_SIGNUP_PROFILE_KEY,
+        JSON.stringify({
+          email,
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: AGREEMENT_VERSION,
+        })
+      );
+    }
+
     if (!authOpenedFromNavbar && isGameFull && !alreadyJoined) {
       localStorage.setItem("pendingJoinGameId", String(game.id));
     }
@@ -1262,7 +1293,10 @@ export default function GameDetails({
               </div>
               {!isAuthenticated ? (
                 <button
-                  onClick={() => setAuthMode(authMode === "signup" ? "signin" : "signup")}
+                  onClick={() => {
+                    setAgreementAccepted(false);
+                    setAuthMode(authMode === "signup" ? "signin" : "signup");
+                  }}
                   className="rounded-3xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm text-white transition hover:border-white/20 sm:py-3"
                 >
                   {authMode === "signup" ? "Sign in" : "Create account"}
@@ -1499,6 +1533,39 @@ export default function GameDetails({
                         placeholder="Confirm password"
                       />
                     </div>
+                  ) : null}
+                  {authMode === "signup" ? (
+                    <label className="flex items-start gap-3 rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm leading-6 text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={agreementAccepted}
+                        onChange={(event) => setAgreementAccepted(event.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 text-stone-200 focus:ring-2 focus:ring-stone-200/40"
+                        aria-label={SIGNUP_AGREEMENT_LABEL}
+                        required
+                      />
+                      <span>
+                        I agree to the{" "}
+                        <a
+                          href="/terms"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-stone-200 underline underline-offset-4 hover:text-white"
+                        >
+                          Terms of Service
+                        </a>{" "}
+                        and{" "}
+                        <a
+                          href="/privacy"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-stone-200 underline underline-offset-4 hover:text-white"
+                        >
+                          Privacy Policy
+                        </a>{" "}
+                        and understand that Fair Play Football will email me important updates about my account, bookings, payments, match reminders, cancellations, waiting-list updates and future football games.
+                      </span>
+                    </label>
                   ) : null}
                 </>
               ) : null}

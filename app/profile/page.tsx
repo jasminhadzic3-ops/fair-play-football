@@ -13,6 +13,8 @@ interface Profile {
   gender: string | null;
   favourite_position: string | null;
   avatar_url: string | null;
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
 }
 
 type PendingSignupProfile = {
@@ -22,6 +24,8 @@ type PendingSignupProfile = {
   favouritePosition?: string;
   favourite_position?: string;
   email?: string;
+  terms_accepted_at?: string;
+  terms_version?: string;
 };
 
 interface NotificationGame {
@@ -306,6 +310,14 @@ export default function ProfilePage() {
           getStringValue(userMetadata.favouritePosition) ||
           getStringValue(userMetadata.favourite_position) ||
           null;
+        const completedTermsAcceptedAt =
+          pendingProfile.terms_accepted_at ||
+          getStringValue(userMetadata.terms_accepted_at) ||
+          null;
+        const completedTermsVersion =
+          pendingProfile.terms_version ||
+          getStringValue(userMetadata.terms_version) ||
+          null;
 
         const { data: completedProfile, error: completeError } = await supabase
           .from("profiles")
@@ -316,8 +328,11 @@ export default function ProfilePage() {
             age: completedAge,
             gender: completedGender,
             favourite_position: completedFavouritePosition,
+            ...(completedTermsAcceptedAt
+              ? { terms_accepted_at: completedTermsAcceptedAt, terms_version: completedTermsVersion }
+              : {}),
           })
-          .select("id,email,username,age,gender,favourite_position,avatar_url")
+          .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
           .single();
 
         if (completeError) {
@@ -349,7 +364,7 @@ export default function ProfilePage() {
 
     const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
-      .select("id,email,username,age,gender,favourite_position,avatar_url")
+      .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
       .eq("id", authUser.id)
       .maybeSingle();
 
@@ -380,7 +395,7 @@ export default function ProfilePage() {
         email: authUser.email,
         username: fallbackUsername,
       })
-      .select("id,email,username,age,gender,favourite_position,avatar_url")
+      .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
       .single();
 
     if (createError) {

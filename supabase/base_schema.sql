@@ -11,8 +11,16 @@ create table if not exists public.profiles (
   gender text,
   favourite_position text,
   created_at timestamptz default now(),
-  avatar_url text
+  avatar_url text,
+  terms_accepted_at timestamptz,
+  terms_version text
 );
+
+comment on column public.profiles.terms_accepted_at is
+'Timestamp when the user accepted the Fair Play Football Terms of Service and Privacy Policy during signup. Existing users may be null.';
+
+comment on column public.profiles.terms_version is
+'Terms/Privacy version accepted by the user during signup. Existing users may be null.';
 
 create table if not exists public.games (
   title text not null,
