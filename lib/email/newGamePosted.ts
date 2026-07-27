@@ -40,15 +40,34 @@ function getGreetingName(playerName: string) {
   return playerName.trim().split(/\s+/)[0] || "Player";
 }
 
+async function getTestRecipientProfile(testRecipient: string) {
+  const normalizedEmail = testRecipient.trim().toLowerCase();
+  const { data: profiles, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id,email,username")
+    .ilike("email", normalizedEmail)
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return ((profiles ?? []) as ProfileEmailData[]).find(
+    (profile) => profile.email?.trim().toLowerCase() === normalizedEmail
+  );
+}
+
 async function getNewGameRecipients(): Promise<EmailRecipient[]> {
   const testRecipient = getBroadcastTestRecipient();
 
   if (testRecipient) {
+    const profile = await getTestRecipientProfile(testRecipient);
+
     return [
       {
         idempotencyRecipientKey: testRecipient.toLowerCase(),
         email: testRecipient,
-        playerName: "Player",
+        playerName: profile?.username?.trim() || "Player",
       },
     ];
   }
