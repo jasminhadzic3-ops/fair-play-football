@@ -1223,6 +1223,180 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      <section id="about" className="bg-black px-6 py-14 text-white sm:py-16">
+        <div className="mx-auto max-w-5xl">
+          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
+                About
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+                Friendly games, good vibes and all skill levels welcome.
+              </h2>
+              <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300 md:text-lg">
+                Fair Play Football is a co-ed 18+ football platform that organises friendly games across North
+                London. Whether you play every week or haven't kicked a ball in years, you're welcome to join.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-stone-200/15 bg-stone-200 px-5 py-5 text-zinc-950 shadow-[0_18px_54px_rgba(214,211,209,0.12)]">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-zinc-700">
+                Choose your game
+              </p>
+              <p className="mt-3 text-sm leading-6 text-zinc-800">
+                Some games are casual, while others are more competitive. When a game is competitive, it will be
+                clearly labelled on the game card so you can choose the type of match that suits you.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {[
+              {
+                title: "Find a game",
+                text: "Use the calendar and game cards to pick a North London match that suits your level and schedule.",
+              },
+              {
+                title: "Book and pay",
+                text: "Reserve your spot online. Places are confirmed on a first paid, first served basis.",
+              },
+              {
+                title: "Turn up and play",
+                text: "Arrive 10 minutes early, meet the group, grab a bib and enjoy the game.",
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)]"
+              >
+                <h3 className="text-lg font-bold text-white">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{item.text}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+              <h3 className="text-xl font-bold text-white">What to expect</h3>
+              <div className="mt-4 grid gap-2 text-sm text-zinc-300">
+                {[
+                  "Fresh bibs and footballs are provided.",
+                  "Goalkeeper rotates every 8 minutes.",
+                  "No slide tackles.",
+                  "Arrive 10 minutes early.",
+                  "Respectful behaviour is expected from everyone.",
+                  "Games require enough confirmed players to go ahead.",
+                ].map((item) => (
+                  <div key={item} className="flex gap-3 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5">
+                    <span className="mt-0.5 text-stone-300" aria-hidden="true">✓</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+              <h3 className="text-xl font-bold text-white">FAQ</h3>
+              <div className="mt-4 grid gap-3">
+                {[
+                  {
+                    question: "Are beginners welcome?",
+                    answer: "Yes. Beginners, returning players and regular players are all welcome.",
+                  },
+                  {
+                    question: "Is it co-ed?",
+                    answer: "Yes. Fair Play Football is co-ed and open to everyone aged 18+.",
+                  },
+                  {
+                    question: "What is the age requirement?",
+                    answer: "Players must be 18 or over.",
+                  },
+                  {
+                    question: "What is the difference between casual and competitive games?",
+                    answer: "Casual games are relaxed and social. Competitive games have a sharper tempo while staying respectful.",
+                  },
+                  {
+                    question: "How do I know if a game is competitive?",
+                    answer: "Competitive games are clearly labelled on the game card.",
+                  },
+                  {
+                    question: "Can I join alone?",
+                    answer: "Yes. Most players book individually and teams are balanced on the day.",
+                  },
+                  {
+                    question: "What footwear should I wear?",
+                    answer: "Astros, moulds and football boots are allowed. No metal studs.",
+                  },
+                  {
+                    question: "What happens if it rains?",
+                    answer: "Games usually go ahead in normal rain. If the organiser cancels, players receive the full amount back.",
+                  },
+                  {
+                    question: "What happens if a game is full?",
+                    answer: "You can join the waiting list. If a space opens, you will be notified.",
+                  },
+                  {
+                    question: "What do I need to bring?",
+                    answer: "Bring suitable boots, water and enough time to arrive 10 minutes early.",
+                  },
+                  {
+                    question: "How do cancellations and refunds work?",
+                    answer: "If Fair Play Football cancels a game, including because not enough players are confirmed, players receive the full amount back. Player cancellation refund eligibility is handled in the app and may depend on timing and payment method.",
+                  },
+                ].map((item) => (
+                  <details key={item.question} className="group rounded-xl border border-zinc-800 bg-black/40 px-4 py-3">
+                    <summary className="cursor-pointer list-none text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50">
+                      <span className="inline-flex w-full items-center justify-between gap-3">
+                        {item.question}
+                        <span className="text-zinc-500 transition group-open:rotate-45" aria-hidden="true">+</span>
+                      </span>
+                    </summary>
+                    <p className="mt-2 text-sm leading-6 text-zinc-400">{item.answer}</p>
+                  </details>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+              <h3 className="text-lg font-bold text-white">North London locations</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Games take place at North London venues. Exact pitch and venue details are shown on each game card.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+              <h3 className="text-lg font-bold text-white">Ready to play?</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Find a match that suits you and book your place when you are ready.
+              </p>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href="#games"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                >
+                  Find Games
+                </a>
+                {!user ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNavbarAuthMode("signup");
+                      setNavbarAuthError(null);
+                      setNavbarAuthStatus(null);
+                      setShowNavbarAuthModal(true);
+                    }}
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-5 text-sm font-bold text-stone-200 transition-colors hover:border-stone-200/35 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                  >
+                    Sign Up
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </>
   );
 }
