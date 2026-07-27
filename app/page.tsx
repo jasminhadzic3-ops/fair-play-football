@@ -52,6 +52,7 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedGameDateKey, setSelectedGameDateKey] = useState<string | null>(null);
   const [visibleWeekStartKey, setVisibleWeekStartKey] = useState<string | null>(null);
+  const [weekNavigationDirection, setWeekNavigationDirection] = useState<"previous" | "next" | null>(null);
   const returnPollingReference = useRef<string | null>(null);
   const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
   const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
@@ -83,6 +84,12 @@ export default function Home() {
     Array.from(gamesByDateKey.keys()).sort().find((dateKey) => dateKey >= todayDateKey) ??
     Array.from(gamesByDateKey.keys()).sort()[0] ??
     null;
+  const weekSlideClass =
+    weekNavigationDirection === "next"
+      ? "calendar-week-slide-next"
+      : weekNavigationDirection === "previous"
+        ? "calendar-week-slide-previous"
+        : "";
 
   useEffect(() => {
     if (games.length === 0 || selectedGameDateKey) {
@@ -1084,7 +1091,10 @@ export default function Home() {
               <div className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-black p-1">
                 <button
                   type="button"
-                  onClick={() => setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, -7))}
+                  onClick={() => {
+                    setWeekNavigationDirection("previous");
+                    setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, -7));
+                  }}
                   className="min-h-9 rounded-full px-3 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
                   aria-label="Show previous week"
                 >
@@ -1093,6 +1103,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => {
+                    setWeekNavigationDirection(null);
                     setSelectedGameDateKey(todayDateKey);
                     setVisibleWeekStartKey(todayDateKey);
                   }}
@@ -1102,7 +1113,10 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, 7))}
+                  onClick={() => {
+                    setWeekNavigationDirection("next");
+                    setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, 7));
+                  }}
                   className="min-h-9 rounded-full px-3 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
                   aria-label="Show next week"
                 >
@@ -1112,7 +1126,10 @@ export default function Home() {
             </div>
 
             <div className="overflow-x-auto scroll-smooth px-3 py-2.5 [scroll-snap-type:x_mandatory] sm:px-4">
-              <div className="flex min-w-max gap-2.5">
+              <div
+                key={fallbackWeekStartKey}
+                className={`grid min-w-max grid-cols-7 gap-2.5 md:w-full md:min-w-0 ${weekSlideClass}`}
+              >
                 {weekDateKeys.map((dateKey) => {
                   const gameCount = gamesByDateKey.get(dateKey)?.length ?? 0;
                   const isSelected = dateKey === fallbackSelectedDateKey;
@@ -1127,7 +1144,7 @@ export default function Home() {
                       aria-pressed={isSelected}
                       aria-label={`${formatCalendarDateLabel(dateKey)}, ${gameCount} ${gameCount === 1 ? "game" : "games"}${hasUserBooking ? ", you have a booking" : ""}${isToday ? ", today" : ""}`}
                       onClick={() => setSelectedGameDateKey(dateKey)}
-                      className={`min-h-[4.25rem] w-[6.6rem] snap-start rounded-xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-stone-200/50 ${
+                      className={`min-h-[4.25rem] w-[6.6rem] snap-start rounded-xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-stone-200/50 md:w-full ${
                         isSelected
                           ? "border-stone-200/60 bg-stone-200 text-zinc-950"
                           : "border-zinc-800 bg-zinc-900/45 text-zinc-300 hover:border-stone-200/25 hover:bg-zinc-900 hover:text-white"

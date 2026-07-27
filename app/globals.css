@@ -27,3 +27,40 @@ body {
 html {
   scroll-behavior: smooth;
 }
+
+@keyframes calendar-week-slide-next {
+  from {
+    opacity: 0.92;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes calendar-week-slide-previous {
+  from {
+    opacity: 0.92;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.calendar-week-slide-next {
+  animation: calendar-week-slide-next 220ms ease-out;
+}
+
+.calendar-week-slide-previous {
+  animation: calendar-week-slide-previous 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-week-slide-next,
+  .calendar-week-slide-previous {
+    animation: none;
+  }
+}
