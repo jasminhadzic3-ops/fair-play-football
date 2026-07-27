@@ -1053,14 +1053,14 @@ export default function Home() {
       <Hero />
       <main className="bg-black text-white" id="games">
         <div className="max-w-5xl mx-auto px-6 py-12">
-          <div className="mb-10 text-center">
-            <p className="text-xs uppercase tracking-[0.35em] text-zinc-500 mb-4">
+          <div className="mb-5 text-center">
+            <p className="text-xs uppercase tracking-[0.35em] text-zinc-500 mb-3">
               Find Games
             </p>
             <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
               Browse premium football matches in one clean list.
             </h2>
-            <p className="mt-4 text-base md:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+            <p className="mt-2 text-base md:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
               Discover upcoming games, pick your match, and play when it suits you.
             </p>
           </div>
