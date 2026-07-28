@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sendBookingConfirmedEmail } from "@/lib/email/bookingConfirmed";
+import { sendEmailWithDeliveryTracking } from "@/lib/email/deliveryTracking";
 import { sendGameHalfFullEmails } from "@/lib/email/gameHalfFull";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -42,16 +43,27 @@ export async function runPostBookingActions({
 
   if (bookingConfirmation) {
     try {
-      await sendBookingConfirmedEmail({
+      await sendEmailWithDeliveryTracking({
+        deliveryKey: `booking_confirmed:booking:${bookingId}`,
+        emailType: "booking_confirmation",
+        recipientKey: userId,
         bookingId,
-        paymentId: bookingConfirmation.paymentId,
-        userId,
         gameId,
-        playerName,
-        amount: bookingConfirmation.amount,
-        currency: bookingConfirmation.currency,
-        checkoutId: bookingConfirmation.checkoutId,
-        checkoutReference: bookingConfirmation.checkoutReference,
+        metadata: {
+          payment_id: bookingConfirmation.paymentId,
+        },
+        send: () =>
+          sendBookingConfirmedEmail({
+            bookingId,
+            paymentId: bookingConfirmation.paymentId,
+            userId,
+            gameId,
+            playerName,
+            amount: bookingConfirmation.amount,
+            currency: bookingConfirmation.currency,
+            checkoutId: bookingConfirmation.checkoutId,
+            checkoutReference: bookingConfirmation.checkoutReference,
+          }),
       });
     } catch (emailError) {
       console.error("Unable to send booking confirmation email:", {

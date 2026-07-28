@@ -1,6 +1,9 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { sendEmailWithDeliveryTracking } from "./deliveryTracking";
 import { sendResendEmail } from "./resend";
 import { escapeHtml, formatPrice, getGameUrl, renderEmailLayout } from "./shared";
 
@@ -37,13 +40,17 @@ function getBroadcastTestRecipient() {
   return process.env.EMAIL_BROADCAST_TEST_RECIPIENT?.trim() || null;
 }
 
+function hashRecipientKey(value: string) {
+  return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
+}
+
 async function getGameHalfFullRecipients(): Promise<EmailRecipient[]> {
   const testRecipient = getBroadcastTestRecipient();
 
   if (testRecipient) {
     return [
       {
-        idempotencyRecipientKey: testRecipient.toLowerCase(),
+        idempotencyRecipientKey: `test:${hashRecipientKey(testRecipient)}`,
         email: testRecipient,
         playerName: "Player",
       },
@@ -167,15 +174,29 @@ export async function sendGameHalfFullEmails(params: GameHalfFullEmailParams) {
       `,
     });
 
-    await sendResendEmail({
-      to: recipient.email,
-      subject,
-      html,
-      text,
-      idempotencyKey: `game_half_full:game:${game.id}:recipient:${recipient.idempotencyRecipientKey}`,
+    const idempotencyKey = `game_half_full:game:${game.id}:recipient:${recipient.idempotencyRecipientKey}`;
+
+    const delivery = await sendEmailWithDeliveryTracking({
+      deliveryKey: idempotencyKey,
+      emailType: "game_half_full",
+      recipientKey: recipient.idempotencyRecipientKey,
+      gameId: game.id,
+      metadata: {
+        half_full_threshold: halfFullThreshold,
+      },
+      send: () =>
+        sendResendEmail({
+          to: recipient.email,
+          subject,
+          html,
+          text,
+          idempotencyKey,
+        }),
     });
 
-    sentCount += 1;
+    if (!delivery.skipped) {
+      sentCount += 1;
+    }
   }
 
   return { skipped: false, sentCount };
