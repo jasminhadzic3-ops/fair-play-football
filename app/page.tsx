@@ -1281,13 +1281,17 @@ export default function Home() {
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
             <h3 className="text-xl font-bold text-white">Our Venues</h3>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              We play on high-quality 3G artificial grass pitches across North London.
+              We currently organise games at three high-quality 3G artificial grass venues across North London:
             </p>
+            <div className="mt-3 grid gap-2 text-sm leading-6 text-zinc-300">
+              <p>📍 Whittington Park – Yerbury Road, Archway, London N19 4RS</p>
+              <p>📍 Cantelowes Gardens (Talacre Community Sports Centre) – Dalby Street, Kentish Town, London NW5 3AF</p>
+              <p>📍 Barnard Park – Copenhagen Street, Islington, London N1 0ER</p>
+            </div>
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               {[
                 {
                   name: "Whittington Park",
-                  address: ["Archway", "London", "N19 4RS"],
                   features: [
                     "High-quality 3G artificial grass pitch",
                     "Outdoor pitch",
@@ -1297,7 +1301,6 @@ export default function Home() {
                 },
                 {
                   name: "Cantelowes Gardens",
-                  address: ["Talacre Community Sports Centre", "London", "NW5 2AU"],
                   features: [
                     "High-quality 3G artificial grass pitch",
                     "Outdoor pitch",
@@ -1306,7 +1309,6 @@ export default function Home() {
                 },
                 {
                   name: "Barnard Park",
-                  address: ["Copenhagen Street", "Islington", "London", "N1 0ER"],
                   features: [
                     "High-quality 3G artificial grass pitch",
                     "Outdoor pitch",
@@ -1316,11 +1318,6 @@ export default function Home() {
               ].map((venue) => (
                 <div key={venue.name} className="rounded-xl border border-zinc-800 bg-black/40 p-4">
                   <h4 className="text-base font-bold text-white">{venue.name}</h4>
-                  <div className="mt-2 text-sm leading-6 text-zinc-400">
-                    {venue.address.map((line) => (
-                      <p key={line}>{line}</p>
-                    ))}
-                  </div>
                   <div className="mt-4 grid gap-2 text-sm text-zinc-300">
                     {venue.features.map((feature) => (
                       <div key={feature} className="flex gap-2">

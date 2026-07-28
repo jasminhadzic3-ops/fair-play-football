@@ -28,10 +28,13 @@ describe("homepage about section source", () => {
     expect(homePageSource).toContain("Book and pay");
     expect(homePageSource).toContain("Turn up and play");
     expect(homePageSource).toContain("Our Venues");
-    expect(homePageSource).toContain("high-quality 3G artificial grass pitches across North London");
+    expect(homePageSource).toContain("We currently organise games at three high-quality 3G artificial grass venues across North London:");
     expect(homePageSource).toContain("Whittington Park");
+    expect(homePageSource).toContain("📍 Whittington Park – Yerbury Road, Archway, London N19 4RS");
     expect(homePageSource).toContain("Cantelowes Gardens");
+    expect(homePageSource).toContain("📍 Cantelowes Gardens (Talacre Community Sports Centre) – Dalby Street, Kentish Town, London NW5 3AF");
     expect(homePageSource).toContain("Barnard Park");
+    expect(homePageSource).toContain("📍 Barnard Park – Copenhagen Street, Islington, London N1 0ER");
     expect(homePageSource).toContain("Fresh bibs and footballs are provided.");
     expect(homePageSource).toContain("No slide tackles.");
     expect(homePageSource).toContain("North London locations");
