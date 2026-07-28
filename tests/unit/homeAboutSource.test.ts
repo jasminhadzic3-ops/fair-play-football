@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const homePageSource = readFileSync(join(process.cwd(), "app/page.tsx"), "utf8");
 const gameDetailsSource = readFileSync(join(process.cwd(), "components/games/GameDetails.tsx"), "utf8");
 const navbarSource = readFileSync(join(process.cwd(), "components/shared/layout/Navbar.tsx"), "utf8");
+const footerSource = readFileSync(join(process.cwd(), "components/shared/layout/Footer.tsx"), "utf8");
 
 describe("homepage about section source", () => {
   it("adds a navbar-compatible About section with the approved positioning", () => {
@@ -58,5 +59,14 @@ describe("homepage about section source", () => {
     expect(homePageSource).toContain("setNavbarAuthMode(\"signup\")");
     expect(homePageSource).toContain("Sign Up");
     expect(homePageSource).toContain("{!user ? (");
+  });
+
+  it("adds Contact through the About CTA and shared footer only", () => {
+    expect(homePageSource).toContain("Need more help?");
+    expect(homePageSource).toContain("Contact Support");
+    expect(homePageSource).toContain('href="/contact"');
+    expect(homePageSource).toContain("<Footer />");
+    expect(footerSource).toContain('{ label: "Contact", href: "/contact" }');
+    expect(navbarSource).not.toContain('{ label: "Contact", href: "/contact" }');
   });
 });

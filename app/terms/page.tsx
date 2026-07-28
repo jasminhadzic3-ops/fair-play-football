@@ -1,19 +1,21 @@
 import Link from "next/link";
+import Footer from "@/components/shared/layout/Footer";
 
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-12 text-zinc-100 sm:px-6 lg:px-8">
-      <section className="mx-auto max-w-3xl rounded-[2rem] border border-zinc-800 bg-zinc-900/80 p-6 shadow-2xl shadow-black/30 sm:p-10">
-        <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">
-          Fair Play Football
-        </p>
-        <h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">
-          Terms of Service
-        </h1>
-        <p className="mt-4 text-sm leading-7 text-zinc-400">
-          These terms explain the basic rules for using Fair Play Football to create an account,
-          book football games, join waiting lists, manage wallet credit and receive service updates.
-        </p>
+    <>
+      <main className="min-h-screen bg-zinc-950 px-4 py-12 text-zinc-100 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-3xl rounded-[2rem] border border-zinc-800 bg-zinc-900/80 p-6 shadow-2xl shadow-black/30 sm:p-10">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">
+            Fair Play Football
+          </p>
+          <h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">
+            Terms of Service
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-zinc-400">
+            These terms explain the basic rules for using Fair Play Football to create an account,
+            book football games, join waiting lists, manage wallet credit and receive service updates.
+          </p>
 
         <div className="mt-8 space-y-7 text-sm leading-7 text-zinc-300">
           <section>
@@ -68,7 +70,9 @@ export default function TermsPage() {
           </Link>
           .
         </div>
-      </section>
-    </main>
+        </section>
+      </main>
+      <Footer />
+    </>
   );
 }

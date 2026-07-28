@@ -1,19 +1,21 @@
 import Link from "next/link";
+import Footer from "@/components/shared/layout/Footer";
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-12 text-zinc-100 sm:px-6 lg:px-8">
-      <section className="mx-auto max-w-3xl rounded-[2rem] border border-zinc-800 bg-zinc-900/80 p-6 shadow-2xl shadow-black/30 sm:p-10">
-        <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">
-          Fair Play Football
-        </p>
-        <h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">
-          Privacy Policy
-        </h1>
-        <p className="mt-4 text-sm leading-7 text-zinc-400">
-          This policy explains how Fair Play Football uses the information needed to run accounts,
-          bookings, payments, wallet credit, waiting lists and football updates.
-        </p>
+    <>
+      <main className="min-h-screen bg-zinc-950 px-4 py-12 text-zinc-100 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-3xl rounded-[2rem] border border-zinc-800 bg-zinc-900/80 p-6 shadow-2xl shadow-black/30 sm:p-10">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">
+            Fair Play Football
+          </p>
+          <h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">
+            Privacy Policy
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-zinc-400">
+            This policy explains how Fair Play Football uses the information needed to run accounts,
+            bookings, payments, wallet credit, waiting lists and football updates.
+          </p>
 
         <div className="mt-8 space-y-7 text-sm leading-7 text-zinc-300">
           <section>
@@ -70,7 +72,9 @@ export default function PrivacyPage() {
           </Link>
           .
         </div>
-      </section>
-    </main>
+        </section>
+      </main>
+      <Footer />
+    </>
   );
 }

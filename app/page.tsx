@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 import GameCard from "@/components/games/GameCard";
 import Navbar from "@/components/shared/layout/Navbar";
 import Hero from "@/components/shared/layout/Hero";
+import Footer from "@/components/shared/layout/Footer";
 import Modal from "@/components/shared/ui/Modal";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
 import {
@@ -1467,8 +1469,26 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white">Need more help?</h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  Contact Fair Play Football for booking, payment, refund or general support.
+                </p>
+              </div>
+              <Link
+                href="/contact"
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-5 text-sm font-bold text-stone-200 transition-colors hover:border-stone-200/35 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+              >
+                Contact Support
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
+      <Footer />
     </>
   );
 }
