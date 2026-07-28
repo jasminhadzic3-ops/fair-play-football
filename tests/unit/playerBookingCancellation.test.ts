@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseRpcMock = vi.hoisted(() => vi.fn());
+const supabaseFromMock = vi.hoisted(() => vi.fn());
 const getAutomaticRefundDependencyMock = vi.hoisted(() => vi.fn());
 const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
 const getLatestSumUpRefundAttemptForRequestMock = vi.hoisted(() => vi.fn());
+const sendPlayerBookingCancelledEmailMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabaseAdmin", () => ({
   supabaseAdmin: {
     rpc: supabaseRpcMock,
+    from: supabaseFromMock,
   },
+}));
+
+vi.mock("@/lib/email/playerBookingCancelled", () => ({
+  sendPlayerBookingCancelledEmail: sendPlayerBookingCancelledEmailMock,
 }));
 
 vi.mock("@/lib/sumupRefundDependencies", () => ({
@@ -49,8 +56,20 @@ function rpcResult(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   supabaseRpcMock.mockResolvedValue({ data: [rpcResult()], error: null });
+  supabaseFromMock.mockImplementation((table: string) => {
+    if (table !== "player_booking_cancellations") {
+      throw new Error(`Unexpected table ${table}`);
+    }
+
+    return {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { id: 600 }, error: null }),
+    };
+  });
   getAutomaticRefundDependencyMock.mockReturnValue(null);
   getLatestSumUpRefundAttemptForRequestMock.mockResolvedValue(null);
+  sendPlayerBookingCancelledEmailMock.mockResolvedValue({ id: "email-1" });
   processAutomaticSumUpRefundMock.mockResolvedValue({
     outcome: "completed",
     status: 200,
@@ -91,6 +110,15 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       },
     });
     expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith({
+      cancellationId: 600,
+      bookingId: 100,
+      gameId: 10,
+      userId: "user-1",
+      outcome: "card_refund_pending",
+      amount: 8,
+      currency: "GBP",
+    });
   });
 
   it("processes an eligible SumUp refund only after the RPC returns a refund request", async () => {
@@ -113,6 +141,11 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       refund_transaction_id: 901,
       sumup_refund_attempt_id: 900,
     });
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "card_refund_completed",
+      })
+    );
   });
 
   it("does not call SumUp processing for wallet-paid cancellations", async () => {
@@ -141,6 +174,11 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
         status: "not_applicable",
       },
     });
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "wallet_restored",
+      })
+    );
   });
 
   it("does not call SumUp processing for within-24-hour cancellations", async () => {
@@ -169,6 +207,11 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       refundEligible: false,
       reason: "cancelled_within_24h",
     });
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "no_refund_within_24h",
+      })
+    );
   });
 
   it("fails closed when the RPC blocks missing starts_at", async () => {
@@ -201,6 +244,7 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       message: "This booking needs support to cancel because the kickoff time is not fully confirmed. Please contact Fair Play Football.",
     });
     expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(sendPlayerBookingCancelledEmailMock).not.toHaveBeenCalled();
   });
 
   it("does not immediately retry recent failed SumUp attempts", async () => {
@@ -220,6 +264,92 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
     expect(result.automaticRefund).toEqual({
       status: "cooling_down",
       message: "Card refund could not complete. Please wait before trying again or contact support.",
+    });
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "card_refund_failed",
+      })
+    );
+  });
+
+  it("maps unknown SumUp refund outcomes to manual-review cancellation email", async () => {
+    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+    processAutomaticSumUpRefundMock.mockResolvedValue({
+      outcome: "sumup_unknown",
+      attemptId: 900,
+      refundRequestId: 800,
+      diagnosticCode: "sumup_unknown",
+    });
+
+    const result = await cancelPlayerBookingWithRefundPolicy({
+      bookingId: 100,
+      userId: "user-1",
+    });
+
+    expect(result.automaticRefund.status).toBe("manual_review");
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "card_refund_manual_review",
+      })
+    );
+  });
+
+  it("maps failed SumUp refund outcomes to failed cancellation email", async () => {
+    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+    processAutomaticSumUpRefundMock.mockResolvedValue({
+      outcome: "sumup_failed",
+      attemptId: 900,
+      refundRequestId: 800,
+      diagnosticCode: "sumup_failed",
+    });
+
+    const result = await cancelPlayerBookingWithRefundPolicy({
+      bookingId: 100,
+      userId: "user-1",
+    });
+
+    expect(result.automaticRefund.status).toBe("failed");
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "card_refund_failed",
+      })
+    );
+  });
+
+  it("uses the durable cancellation id for duplicate cancellation email idempotency", async () => {
+    await cancelPlayerBookingWithRefundPolicy({
+      bookingId: 100,
+      userId: "user-1",
+    });
+
+    await cancelPlayerBookingWithRefundPolicy({
+      bookingId: 100,
+      userId: "user-1",
+    });
+
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledTimes(2);
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ cancellationId: 600, outcome: "card_refund_pending" })
+    );
+    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cancellationId: 600, outcome: "card_refund_pending" })
+    );
+  });
+
+  it("does not fail a successful cancellation when the cancellation email fails", async () => {
+    sendPlayerBookingCancelledEmailMock.mockRejectedValue(new Error("resend down"));
+
+    const result = await cancelPlayerBookingWithRefundPolicy({
+      bookingId: 100,
+      userId: "user-1",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      released: true,
+      message: "Card refund requested and reserved; awaiting processing.",
     });
   });
 });

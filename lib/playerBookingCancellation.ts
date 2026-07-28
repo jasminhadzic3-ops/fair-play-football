@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  sendPlayerBookingCancelledEmail,
+  type PlayerBookingCancellationEmailOutcome,
+} from "@/lib/email/playerBookingCancelled";
 import { getAutomaticRefundDependency } from "@/lib/sumupRefundDependencies";
 import { processAutomaticSumUpRefund } from "@/lib/sumupRefundProcessing";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -62,6 +66,10 @@ export type PlayerBookingCancellationResult = {
   reason: string | null;
   shouldNotifyWaitingList: boolean;
   automaticRefund: AutomaticCancellationRefund;
+};
+
+type PlayerBookingCancellationRow = {
+  id: number;
 };
 
 function toNumber(value: number | string | null) {
@@ -218,6 +226,83 @@ function responseFromRpcResult(
   };
 }
 
+function getCancellationEmailOutcome(
+  result: PlayerBookingCancellationResult
+): PlayerBookingCancellationEmailOutcome | null {
+  if (!result.released) {
+    return null;
+  }
+
+  if (result.refundPolicy === "ineligible_within_24h") {
+    return "no_refund_within_24h";
+  }
+
+  if (result.paymentMethod === "wallet" && result.refundPolicy === "eligible_24h") {
+    return "wallet_restored";
+  }
+
+  if (result.paymentMethod !== "sumup" || result.refundPolicy !== "eligible_24h") {
+    return null;
+  }
+
+  switch (result.automaticRefund.status) {
+    case "completed":
+      return "card_refund_completed";
+    case "manual_review":
+      return "card_refund_manual_review";
+    case "failed":
+    case "cooling_down":
+      return "card_refund_failed";
+    case "disabled":
+    case "processing":
+      return "card_refund_pending";
+    default:
+      return null;
+  }
+}
+
+async function loadCancellationId(bookingId: number, userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("player_booking_cancellations")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .eq("user_id", userId)
+    .maybeSingle<PlayerBookingCancellationRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.id ?? null;
+}
+
+async function sendCancellationEmailAfterRelease(
+  result: PlayerBookingCancellationResult,
+  userId: string
+) {
+  const outcome = getCancellationEmailOutcome(result);
+
+  if (!outcome || !result.bookingId || !result.gameId) {
+    return;
+  }
+
+  const cancellationId = await loadCancellationId(result.bookingId, userId);
+
+  if (!cancellationId) {
+    throw new Error("Unable to send cancellation email: cancellation record not found.");
+  }
+
+  await sendPlayerBookingCancelledEmail({
+    cancellationId,
+    bookingId: result.bookingId,
+    gameId: result.gameId,
+    userId,
+    outcome,
+    amount: result.amount,
+    currency: result.currency,
+  });
+}
+
 export async function cancelPlayerBookingWithRefundPolicy({
   bookingId,
   userId,
@@ -291,5 +376,18 @@ export async function cancelPlayerBookingWithRefundPolicy({
     }
   }
 
-  return responseFromRpcResult(rpcResult, automaticRefund);
+  const result = responseFromRpcResult(rpcResult, automaticRefund);
+
+  await sendCancellationEmailAfterRelease(result, userId).catch((emailError) => {
+    console.error("Unable to send player booking cancellation email:", {
+      bookingId: result.bookingId,
+      gameId: result.gameId,
+      userId,
+      reason: result.reason,
+      automaticRefundStatus: result.automaticRefund.status,
+      error: emailError,
+    });
+  });
+
+  return result;
 }
