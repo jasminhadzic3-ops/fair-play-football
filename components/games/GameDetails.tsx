@@ -363,7 +363,18 @@ export default function GameDetails({
       }
 
       if (!response.ok) {
-        throw new Error(checkout?.error || checkout?.message || "Unable to create SumUp checkout.");
+        const message = checkout?.error || checkout?.message || "Unable to create SumUp checkout.";
+
+        if (
+          response.status === 409 &&
+          /already paid|previous refund|manual reconciliation/i.test(message)
+        ) {
+          setPaymentStatus("duplicate_paid");
+          setPaymentMessage(message);
+          return;
+        }
+
+        throw new Error(message);
       }
 
       if (!checkout?.hosted_checkout_url || !checkout?.checkout_id) {

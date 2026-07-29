@@ -38,14 +38,22 @@ type ProfileRow = {
   username: string | null;
 };
 
-type TableRow = GameRow | ProfileRow;
+type BookingRow = {
+  id: number;
+  game_id: number;
+  user_id: string;
+};
+
+type TableRow = GameRow | ProfileRow | BookingRow;
 
 const state: {
   game: GameRow | null;
   profile: ProfileRow | null;
+  bookings: BookingRow[];
 } = {
   game: null,
   profile: null,
+  bookings: [],
 };
 
 function getRowField(row: TableRow, field: string) {
@@ -67,7 +75,12 @@ class MockSupabaseQuery {
   }
 
   async maybeSingle<T>() {
-    const rows = this.table === "games" ? [state.game].filter(Boolean) : [state.profile].filter(Boolean);
+    const rows =
+      this.table === "games"
+        ? [state.game].filter(Boolean)
+        : this.table === "profiles"
+          ? [state.profile].filter(Boolean)
+          : state.bookings;
     const matchedRow = rows.find((row) =>
       this.filters.every((filter) => getRowField(row as TableRow, filter.field) === filter.value)
     );
@@ -103,6 +116,7 @@ beforeEach(() => {
     email: "profile@example.com",
     username: "Profile Player",
   };
+  state.bookings = [];
 });
 
 describe("wallet booking route", () => {
@@ -143,5 +157,71 @@ describe("wallet booking route", () => {
         checkoutReference: null,
       },
     });
+  });
+
+  it("uses a fresh wallet booking idempotency key for each booking cycle", async () => {
+    const requestBody = {
+      gameId: 10,
+      playerName: "Wallet Player",
+    };
+    const firstResponse = await POST(
+      new Request("http://localhost/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      }) as Parameters<typeof POST>[0]
+    );
+    const secondResponse = await POST(
+      new Request("http://localhost/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      }) as Parameters<typeof POST>[0]
+    );
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(bookGameWithWalletMock).toHaveBeenCalledTimes(2);
+    const firstKey = bookGameWithWalletMock.mock.calls[0][0].idempotencyKey;
+    const secondKey = bookGameWithWalletMock.mock.calls[1][0].idempotencyKey;
+
+    expect(firstKey).toMatch(/^wallet_booking_payment:game:10:user:user-1:player:wallet player:request:/);
+    expect(secondKey).toMatch(/^wallet_booking_payment:game:10:user:user-1:player:wallet player:request:/);
+    expect(secondKey).not.toBe(firstKey);
+  });
+
+  it("blocks wallet booking when the user already has an active booking under any player name", async () => {
+    state.bookings = [
+      {
+        id: 321,
+        game_id: 10,
+        user_id: "user-1",
+      },
+    ];
+
+    const response = await POST(
+      new Request("http://localhost/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: 10,
+          playerName: "New Display Name",
+        }),
+      }) as Parameters<typeof POST>[0]
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("You have already joined this game.");
+    expect(bookGameWithWalletMock).not.toHaveBeenCalled();
   });
 });

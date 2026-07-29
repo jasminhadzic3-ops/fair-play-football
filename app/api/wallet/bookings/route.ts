@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import { runPostBookingActions } from "@/lib/postBookingActions";
 import { getAuthenticatedUser } from "@/lib/sumupPayments";
@@ -21,6 +22,10 @@ type GameData = {
 type ProfileData = {
   email: string | null;
   username: string | null;
+};
+
+type ExistingBookingData = {
+  id: number;
 };
 
 function parsePositiveInteger(value: unknown) {
@@ -96,7 +101,11 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Missing game." }, { status: 400 });
     }
 
-    const [{ data: game, error: gameError }, { data: profile, error: profileError }] =
+    const [
+      { data: game, error: gameError },
+      { data: profile, error: profileError },
+      { data: existingBooking, error: existingBookingError },
+    ] =
       await Promise.all([
         supabaseAdmin
           .from("games")
@@ -108,6 +117,12 @@ export async function POST(request: NextRequest) {
           .select("email,username")
           .eq("id", user.id)
           .maybeSingle<ProfileData>(),
+        supabaseAdmin
+          .from("bookings")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("game_id", gameId)
+          .maybeSingle<ExistingBookingData>(),
       ]);
 
     if (gameError) {
@@ -118,12 +133,20 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: profileError.message }, { status: 500 });
     }
 
+    if (existingBookingError) {
+      return Response.json({ error: existingBookingError.message }, { status: 500 });
+    }
+
     if (!game) {
       return Response.json({ error: "Game not found." }, { status: 404 });
     }
 
     if (game.status === "cancelled") {
       return Response.json({ error: cancelledGameMessage }, { status: 409 });
+    }
+
+    if (existingBooking) {
+      return Response.json({ error: "You have already joined this game." }, { status: 409 });
     }
 
     const amount = Number(game.price);
@@ -141,7 +164,7 @@ export async function POST(request: NextRequest) {
       user.email?.trim() ||
       "Player";
     const normalizedPlayerName = normalizePlayerNameForKey(playerName);
-    const idempotencyKey = `wallet_booking_payment:game:${gameId}:user:${user.id}:player:${normalizedPlayerName}`;
+    const idempotencyKey = `wallet_booking_payment:game:${gameId}:user:${user.id}:player:${normalizedPlayerName}:request:${randomUUID()}`;
     const result = await bookGameWithWallet({
       userId: user.id,
       gameId,

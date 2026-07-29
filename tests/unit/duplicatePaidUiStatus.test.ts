@@ -65,4 +65,20 @@ describe("duplicate paid checkout UI status", () => {
     expect(duplicateBranch).not.toContain("Payment confirmed");
     expect(duplicateBranch).not.toContain("still processing");
   });
+
+  it("turns checkout blocking responses into a disabled payment state", () => {
+    const detailsSource = readSource("components/games/GameDetails.tsx");
+    const createCheckoutErrorBranch = extractSection(
+      detailsSource,
+      "if (!response.ok) {",
+      'if (!checkout?.hosted_checkout_url || !checkout?.checkout_id)'
+    );
+
+    expect(createCheckoutErrorBranch).toContain("response.status === 409");
+    expect(createCheckoutErrorBranch).toContain("/already paid|previous refund|manual reconciliation/i");
+    expect(createCheckoutErrorBranch).toContain('setPaymentStatus("duplicate_paid")');
+    expect(createCheckoutErrorBranch).toContain("setPaymentMessage(message)");
+    expect(createCheckoutErrorBranch).toContain("return;");
+    expect(detailsSource).toContain('paymentStatus === "duplicate_paid"');
+  });
 });

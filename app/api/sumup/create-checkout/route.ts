@@ -11,6 +11,7 @@ const requiredEnvVars = [
 ];
 const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
 const archivedGameMessage = "This game has been archived and is no longer available for booking.";
+const activeRefundMessage = "Your previous refund for this game is still being processed. Please wait until it is completed before booking again.";
 
 function getMissingEnvVars() {
   return requiredEnvVars.filter((name) => !process.env[name]);
@@ -70,7 +71,6 @@ export async function POST(request: NextRequest) {
       .select("id")
       .eq("user_id", user.id)
       .eq("game_id", gameId)
-      .eq("player_name", playerName.trim())
       .maybeSingle();
 
     if (existingBooking) {
@@ -79,48 +79,83 @@ export async function POST(request: NextRequest) {
 
     const { data: existingPayments, error: existingPaymentError } = await supabaseAdmin
       .from("booking_payments")
-      .select("checkout_id,checkout_reference,hosted_checkout_url,payment_status")
+      .select("id,booking_id,checkout_id,checkout_reference,hosted_checkout_url,payment_status")
       .eq("user_id", user.id)
       .eq("game_id", gameId)
       .in("payment_status", ["pending", "paid", "paid_no_space", "duplicate_paid"])
       .order("created_at", { ascending: false })
-      .limit(1);
+      .limit(20);
 
     if (existingPaymentError) {
       console.error("Unable to check existing SumUp payments:", existingPaymentError);
       return Response.json({ error: existingPaymentError.message }, { status: 500 });
     }
 
-    const existingPayment = existingPayments?.[0];
+    const activePendingPayment = existingPayments?.find((payment) => payment.payment_status === "pending");
+    const activePaidPayment = existingPayments?.find(
+      (payment) => payment.payment_status === "paid" && payment.booking_id
+    );
+    const activePaidNoSpacePayment = existingPayments?.find(
+      (payment) => payment.payment_status === "paid_no_space"
+    );
+    const activeDuplicatePaidPayment = existingPayments?.find(
+      (payment) => payment.payment_status === "duplicate_paid"
+    );
 
-    if (existingPayment?.payment_status === "pending") {
+    if (activePendingPayment) {
       return Response.json({
-        checkout_id: existingPayment.checkout_id,
-        checkout_reference: existingPayment.checkout_reference,
-        hosted_checkout_url: existingPayment.hosted_checkout_url,
-        payment_status: existingPayment.payment_status,
+        checkout_id: activePendingPayment.checkout_id,
+        checkout_reference: activePendingPayment.checkout_reference,
+        hosted_checkout_url: activePendingPayment.hosted_checkout_url,
+        payment_status: activePendingPayment.payment_status,
       });
     }
 
-    if (existingPayment?.payment_status === "paid") {
+    if (activePaidPayment) {
       return Response.json(
         { error: "You have already paid for this game." },
         { status: 409 }
       );
     }
 
-    if (existingPayment?.payment_status === "paid_no_space") {
+    if (activePaidNoSpacePayment) {
       return Response.json(
         { error: "You have already paid for this game, but no space was available." },
         { status: 409 }
       );
     }
 
-    if (existingPayment?.payment_status === "duplicate_paid") {
+    if (activeDuplicatePaidPayment) {
       return Response.json(
         { error: "A previous payment for this game needs manual reconciliation." },
         { status: 409 }
       );
+    }
+
+    const historicalPaidPaymentIds = (existingPayments ?? [])
+      .filter((payment) => payment.payment_status === "paid" && !payment.booking_id)
+      .map((payment) => payment.id)
+      .filter((paymentId): paymentId is number => typeof paymentId === "number");
+
+    if (historicalPaidPaymentIds.length > 0) {
+      const { data: activeRefundRequests, error: activeRefundRequestError } = await supabaseAdmin
+        .from("wallet_transactions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("game_id", gameId)
+        .eq("transaction_type", "refund_requested")
+        .in("status", ["pending", "processing"])
+        .in("payment_id", historicalPaidPaymentIds)
+        .limit(1);
+
+      if (activeRefundRequestError) {
+        console.error("Unable to check active refund requests:", activeRefundRequestError);
+        return Response.json({ error: activeRefundRequestError.message }, { status: 500 });
+      }
+
+      if ((activeRefundRequests ?? []).length > 0) {
+        return Response.json({ error: activeRefundMessage }, { status: 409 });
+      }
     }
 
     const checkoutReference = randomUUID();
