@@ -1240,7 +1240,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   >
                     ✓
                   </span>
-                  <span>Booked — You&apos;re booked on this date</span>
+                  <span>= Your Booking</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span
@@ -1249,7 +1249,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   >
                     1
                   </span>
-                  <span>Games — Number of games on this date</span>
+                  <span>= Games on This Date</span>
                 </span>
               </div>
               <div className="flex w-full items-center gap-1.5 rounded-full border border-zinc-800 bg-black p-1 md:w-auto">

@@ -264,8 +264,8 @@ test.describe("Games calendar navigation", () => {
       await expect(page.getByTestId(`calendar-booked-tick-${seed.firstDateKey}`)).toBeVisible();
       await expect(page.getByTestId(`calendar-booked-tick-${seed.secondDateKey}`)).toHaveCount(0);
       await expect(emptyDate.locator("[data-testid^='calendar-booked-tick-']")).toHaveCount(0);
-      await expect(page.getByText("Booked — You're booked on this date")).toBeVisible();
-      await expect(page.getByText("Games — Number of games on this date")).toBeVisible();
+      await expect(page.getByText("= Your Booking")).toBeVisible();
+      await expect(page.getByText("= Games on This Date")).toBeVisible();
       await expect(page.getByText(`${titleRunLabel} Cancelled Empty Date`)).toHaveCount(0);
       await expect(page.getByText(`${titleRunLabel} Archived Hidden Date`)).toHaveCount(0);
       await expect(page.getByText(`${titleRunLabel} Past Hidden Date`)).toHaveCount(0);
@@ -330,7 +330,7 @@ test.describe("Games calendar navigation", () => {
       await page.getByRole("link", { name: "Find Games" }).first().click();
       await expect(page.locator("#games")).toBeVisible();
       await expect(page.getByRole("button", { name: "All Games" })).toBeVisible();
-      await expect(page.getByText("Booked — You're booked on this date")).toBeVisible();
+      await expect(page.getByText("= Your Booking")).toBeVisible();
       if (process.env.E2E_CAPTURE_CALENDAR_SCREENSHOTS === "true") {
         await page.locator("#games").screenshot({ path: "/tmp/fair-play-calendar-mobile.png" });
       }

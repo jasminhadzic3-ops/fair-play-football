@@ -59,8 +59,8 @@ describe("homepage game calendar source", () => {
   });
 
   it("explains calendar indicator meanings with a compact legend", () => {
-    expect(homePageSource).toContain("Booked — You&apos;re booked on this date");
-    expect(homePageSource).toContain("Games — Number of games on this date");
+    expect(homePageSource).toContain("= Your Booking");
+    expect(homePageSource).toContain("= Games on This Date");
   });
 
   it("keeps keyboard-accessible buttons for all calendar controls", () => {
