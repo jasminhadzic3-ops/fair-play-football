@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 
 interface Profile {
@@ -20,6 +21,7 @@ interface NavbarProps {
 
 export default function Navbar({ user, profile, isAdmin = false, unreadNotificationCount = 0, onLogout, onSignIn }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const pathname = usePathname();
   const displayName =
     profile?.username?.trim() ||
     user?.user_metadata?.full_name ||
@@ -35,13 +37,16 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
       .map((part: string) => part[0]?.toUpperCase())
       .join("") || "FP";
 
-  const navLinks = [
+  const publicNavLinks = [
     { label: "Home", href: "/" },
     { label: "Games", href: "/#games" },
-    ...(user ? [{ label: "Profile", href: "/profile" }] : []),
-    ...(user ? [{ label: "Wallet", href: "/wallet" }] : []),
-    ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
     { label: "About", href: "/#about" },
+  ];
+
+  const accountNavLinks = [
+    ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
+    ...(user ? [{ label: "Wallet", href: "/wallet" }] : []),
+    ...(user ? [{ label: "Profile", href: "/profile" }] : []),
     ...(isAdmin ? [{ label: "Admin", href: "/admin" }] : []),
   ];
 
@@ -55,9 +60,22 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
     onSignIn();
   };
 
-  const renderNavLinks = (isMobile = false) =>
-    navLinks.map((link) => {
+  const isActiveLink = (href: string) => {
+    if (href === "/") {
+      return pathname === "/";
+    }
+
+    if (href.includes("#")) {
+      return false;
+    }
+
+    return pathname === href;
+  };
+
+  const renderNavLinks = (links: Array<{ label: string; href: string }>, isMobile = false) =>
+    links.map((link) => {
       const showNotificationBadge = link.href === "/profile" && unreadNotificationCount > 0;
+      const isActive = isActiveLink(link.href);
 
       return (
       <Link
@@ -65,9 +83,10 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
         href={link.href}
         className={
           isMobile
-            ? "flex items-center gap-2 text-gray-300 hover:text-white transition font-medium py-2"
-            : "inline-flex items-center gap-2 text-gray-300 hover:text-white transition font-medium text-sm"
+            ? `flex items-center gap-2 py-2 font-medium transition ${isActive ? "text-white" : "text-gray-300 hover:text-white"}`
+            : `inline-flex items-center gap-2 text-sm font-medium transition ${isActive ? "text-white" : "text-gray-300 hover:text-white"}`
         }
+        aria-current={isActive ? "page" : undefined}
         onClick={isMobile ? () => setIsMenuOpen(false) : undefined}
       >
         <span>{link.label}</span>
@@ -80,16 +99,23 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
       );
     });
 
+  const renderMobileNavGroup = (title: string, links: Array<{ label: string; href: string }>) => (
+    <div className="space-y-1">
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-zinc-600">{title}</p>
+      <div className="grid gap-1">{renderNavLinks(links, true)}</div>
+    </div>
+  );
+
   const renderAuthControls = (isMobile = false) =>
     user ? (
       <div
         className={
           isMobile
             ? "flex items-center justify-between gap-3 rounded-3xl border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-200"
-            : "flex items-center gap-3 rounded-full border border-zinc-700 bg-zinc-950/80 px-4 py-2 text-sm text-zinc-200"
+            : "flex min-w-0 items-center gap-3 rounded-full border border-zinc-700 bg-zinc-950/80 px-4 py-2 text-sm text-zinc-200"
         }
       >
-        <span className="inline-flex items-center gap-2 font-semibold text-white">
+        <span className="inline-flex min-w-0 items-center gap-2 font-semibold text-white">
           <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-900 text-[0.65rem] font-bold text-stone-200">
             {profile?.avatar_url ? (
               <img
@@ -101,7 +127,7 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
               initials
             )}
           </span>
-          {displayName}
+          <span className="min-w-0 max-w-[11rem] truncate">{displayName}</span>
           {unreadNotificationCount > 0 ? (
             <span className="inline-flex min-w-5 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-1.5 py-0.5 text-[0.65rem] font-bold leading-none text-stone-200">
               {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
@@ -130,15 +156,26 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
 
   return (
     <nav className="sticky top-0 z-40 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 md:grid md:grid-cols-[minmax(9rem,1fr)_auto_minmax(18rem,1fr)] md:gap-5">
+        <Link href="/" className="flex items-center gap-3 justify-self-start">
           <span className="text-xl font-black text-white tracking-[0.3em]">
             FAIR PLAY
           </span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-10">
-          {renderNavLinks()}
+        <div className="hidden items-center justify-center gap-8 md:flex">
+          {renderNavLinks(publicNavLinks)}
+        </div>
+
+        <div className="hidden min-w-0 items-center justify-end gap-4 md:flex">
+          {accountNavLinks.length > 0 ? (
+            <>
+              <div className="flex items-center gap-4 lg:gap-5">
+                {renderNavLinks(accountNavLinks)}
+              </div>
+              <span className="h-5 w-px bg-zinc-800/80" aria-hidden="true" />
+            </>
+          ) : null}
           {renderAuthControls()}
         </div>
 
@@ -156,8 +193,9 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
       </div>
 
       {isMenuOpen && (
-        <div className="md:hidden bg-black border-t border-zinc-800/60 px-6 py-4 space-y-3">
-          {renderNavLinks(true)}
+        <div className="md:hidden space-y-5 border-t border-zinc-800/60 bg-black px-6 py-4">
+          {renderMobileNavGroup("Browse", publicNavLinks)}
+          {accountNavLinks.length > 0 ? renderMobileNavGroup("Account", accountNavLinks) : null}
           {renderAuthControls(true)}
         </div>
       )}

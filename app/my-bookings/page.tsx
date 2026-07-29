@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 interface Booking {
@@ -24,6 +25,7 @@ interface JoinedBooking {
 }
 
 export default function MyBookingsPage() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<JoinedBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [leavingBookingId, setLeavingBookingId] = useState<number | null>(null);
@@ -154,6 +156,24 @@ export default function MyBookingsPage() {
     setLeavingBookingId(null);
   };
 
+  const openBookingDetails = (gameId: number) => {
+    router.push(`/?open_game_id=${encodeURIComponent(String(gameId))}#games`);
+  };
+
+  const handleBookingCardKeyDown = (event: KeyboardEvent<HTMLDivElement>, gameId: number) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    openBookingDetails(gameId);
+  };
+
+  const handleLeaveClick = (event: MouseEvent<HTMLButtonElement>, bookingId: number) => {
+    event.stopPropagation();
+    void leaveGame(bookingId);
+  };
+
   return (
     <main className="min-h-screen bg-black text-white p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
@@ -207,7 +227,12 @@ export default function MyBookingsPage() {
             {bookings.map(({ booking, game }) => (
               <div
                 key={booking.id}
-                className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.32)] transition hover:border-stone-200/20 hover:shadow-[0_22px_70px_rgba(0,0,0,0.42)] sm:p-6"
+                role="link"
+                tabIndex={0}
+                aria-label={`Open details for ${game.title}`}
+                onClick={() => openBookingDetails(game.id)}
+                onKeyDown={(event) => handleBookingCardKeyDown(event, game.id)}
+                className="cursor-pointer rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.32)] transition hover:border-stone-200/20 hover:shadow-[0_22px_70px_rgba(0,0,0,0.42)] focus:outline-none focus:ring-2 focus:ring-stone-200/35 sm:p-6"
               >
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0 flex-1">
@@ -230,7 +255,8 @@ export default function MyBookingsPage() {
 
                   <button
                     type="button"
-                    onClick={() => leaveGame(booking.id)}
+                    onClick={(event) => handleLeaveClick(event, booking.id)}
+                    onKeyDown={(event) => event.stopPropagation()}
                     disabled={leavingBookingId === booking.id}
                     className="w-full rounded-full border border-stone-300/20 bg-zinc-900 px-5 py-3 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-red-300/40 hover:bg-red-500/10 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
                   >

@@ -2,6 +2,51 @@ import { expect, test } from "@playwright/test";
 
 test.use({ baseURL: "http://localhost:3000" });
 
+test("desktop navbar keeps public navigation centred and account links hidden when signed out", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const navbar = page.getByRole("navigation").first();
+
+  await expect(navbar.getByRole("link", { name: "FAIR PLAY" })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "Home" })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "Games" })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "About" })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "My Bookings" })).toHaveCount(0);
+  await expect(navbar.getByRole("link", { name: "Wallet" })).toHaveCount(0);
+  await expect(navbar.getByRole("link", { name: "Profile" })).toHaveCount(0);
+  await expect(navbar.getByRole("link", { name: "Admin" })).toHaveCount(0);
+  await expect(navbar.getByRole("button", { name: "Sign in" })).toBeVisible();
+
+  if (process.env.E2E_CAPTURE_NAV_SCREENSHOTS === "true") {
+    await navbar.screenshot({ path: "/tmp/fair-play-navbar-desktop.png" });
+  }
+});
+
+test("mobile navbar groups Browse links without overflowing", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const navbar = page.getByRole("navigation").first();
+  await navbar.getByRole("button", { name: "Toggle navigation menu" }).click();
+
+  await expect(navbar.getByText("Browse", { exact: true })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "Home" })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "Games" })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "About" })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "Admin" })).toHaveCount(0);
+
+  if (process.env.E2E_CAPTURE_NAV_SCREENSHOTS === "true") {
+    await navbar.screenshot({ path: "/tmp/fair-play-navbar-mobile.png" });
+  }
+
+  const bodyWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  const viewportWidth = await page.evaluate(() => window.innerWidth);
+
+  expect(bodyWidth).toBeLessThanOrEqual(viewportWidth + 1);
+});
+
 test("signed-out navbar auth modal validates required signup profile fields", async ({
   page,
 }) => {

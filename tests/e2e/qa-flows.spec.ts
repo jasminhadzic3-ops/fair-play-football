@@ -540,6 +540,22 @@ test.describe("TEST-only launch QA flows", () => {
     });
 
     await signInWithEmail(page, player.email, player.password);
+    const signedInNavbar = page.getByRole("navigation").first();
+    await expect(signedInNavbar.getByRole("link", { name: "My Bookings" })).toBeVisible();
+    await expect(signedInNavbar.getByRole("link", { name: "Wallet" })).toBeVisible();
+    await expect(signedInNavbar.getByRole("link", { name: "Profile" })).toBeVisible();
+    await expect(signedInNavbar.getByRole("link", { name: "Admin" })).toHaveCount(0);
+    await expect(signedInNavbar.getByRole("button", { name: "Sign out" })).toBeVisible();
+    if (process.env.E2E_CAPTURE_NAV_SCREENSHOTS === "true") {
+      await signedInNavbar.screenshot({ path: "/tmp/fair-play-navbar-signed-in-desktop.png" });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await signedInNavbar.getByRole("button", { name: "Toggle navigation menu" }).click();
+      await expect(signedInNavbar.getByText("Browse", { exact: true })).toBeVisible();
+      await expect(signedInNavbar.getByText("Account", { exact: true })).toBeVisible();
+      await expect(signedInNavbar.getByRole("link", { name: "My Bookings" })).toBeVisible();
+      await signedInNavbar.screenshot({ path: "/tmp/fair-play-navbar-signed-in-mobile.png" });
+      await page.setViewportSize({ width: 1280, height: 720 });
+    }
     await page.getByRole("link", { name: "Find Games" }).first().click();
     const gameCard = page.locator("#games").locator(".cursor-pointer").filter({ hasText: game.title }).first();
     await expect(gameCard).toBeVisible();
@@ -567,6 +583,9 @@ test.describe("TEST-only launch QA flows", () => {
     await page.goto("/my-bookings");
     await expect(page.getByRole("heading", { name: "My Bookings" })).toBeVisible();
     await expect(page.getByRole("heading", { name: game.title })).toBeVisible();
+    const bookingCard = page.getByRole("link", { name: `Open details for ${game.title}` });
+    await expect(bookingCard).toBeVisible();
+    await expect(bookingCard.getByRole("button", { name: "Leave Game" })).toBeVisible();
 
     const token = await getBrowserAccessToken(page);
     expect(token).toBeTruthy();
@@ -604,6 +623,12 @@ test.describe("TEST-only launch QA flows", () => {
 
       return count ?? 0;
     }).toBe(1);
+
+    await page.goto("/my-bookings");
+    await bookingCard.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`open_game_id=${game.id}`));
   });
 
   test("waiting-list join, duplicate prevention and leave work for a full game", async ({
