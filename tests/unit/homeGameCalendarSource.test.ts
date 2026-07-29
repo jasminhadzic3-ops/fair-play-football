@@ -16,6 +16,7 @@ describe("homepage game calendar source", () => {
     expect(homePageSource).toContain("md:w-full");
     expect(homePageSource).toContain("Show previous week");
     expect(homePageSource).toContain("Today");
+    expect(homePageSource).toContain("All Games");
     expect(homePageSource).toContain("Show next week");
     expect(gameCardSource).toContain("Kickoff");
     expect(gameCardSource).toContain("GameDetails");
@@ -38,8 +39,35 @@ describe("homepage game calendar source", () => {
   it("uses London starts_at grouping and preserves public game exclusions", () => {
     expect(homePageSource).toContain("getGameLondonDateKey");
     expect(homePageSource).toContain("sortGamesByStartsAt");
+    expect(homePageSource).toContain("dateKey >= todayDateKey");
     expect(homePageSource).toContain('.eq("status", "active")');
     expect(homePageSource).toContain('.is("archived_at", null)');
+  });
+
+  it("uses green personal booking ticks and an all-games mode without changing the count badge", () => {
+    expect(homePageSource).toContain("const [showAllGames, setShowAllGames] = useState(false)");
+    expect(homePageSource).toContain("setShowAllGames(true)");
+    expect(homePageSource).toContain("setSelectedGameDateKey(null)");
+    expect(homePageSource).toContain("setShowAllGames(false)");
+    expect(homePageSource).toContain("const hasUserBooking = userBookedDateKeys.has(dateKey)");
+    expect(homePageSource).toContain("hasUserBooking ? (");
+    expect(homePageSource).toContain("data-testid={`calendar-booked-tick-${dateKey}`}");
+    expect(homePageSource).toContain("data-testid={`calendar-game-count-${dateKey}`}");
+    expect(homePageSource).toContain("border-emerald-400/45 bg-emerald-500/20 text-emerald-200");
+    expect(homePageSource).toContain("border-emerald-700/35 bg-emerald-500 text-zinc-950");
+    expect(homePageSource).toContain("{gameCount}");
+  });
+
+  it("explains calendar indicator meanings with a compact legend", () => {
+    expect(homePageSource).toContain("Booked — You&apos;re booked on this date");
+    expect(homePageSource).toContain("Games — Number of games on this date");
+  });
+
+  it("keeps keyboard-accessible buttons for all calendar controls", () => {
+    expect(homePageSource).toContain('aria-label="Show previous week"');
+    expect(homePageSource).toContain("aria-pressed={showAllGames}");
+    expect(homePageSource).toContain('aria-label="Show next week"');
+    expect(homePageSource).toContain("aria-pressed={isSelected}");
   });
 
   it("keeps legacy null starts_at games visible in a fallback section", () => {

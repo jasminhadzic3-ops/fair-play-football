@@ -31,6 +31,8 @@ describe("game calendar helpers", () => {
   it("counts only active non-archived games with starts_at", () => {
     expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(true);
     expect(isCalendarCountableGame({ id: 1, status: "cancelled", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
+    expect(isCalendarCountableGame({ id: 1, status: "draft", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
+    expect(isCalendarCountableGame({ id: 1, status: "hidden", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
     expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: "2026-07-20T10:00:00.000Z", starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
     expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: null, starts_at: null })).toBe(false);
   });

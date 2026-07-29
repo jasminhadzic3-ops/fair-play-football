@@ -70,16 +70,21 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedGameDateKey, setSelectedGameDateKey] = useState<string | null>(null);
+  const [showAllGames, setShowAllGames] = useState(false);
   const [visibleWeekStartKey, setVisibleWeekStartKey] = useState<string | null>(null);
   const [weekNavigationDirection, setWeekNavigationDirection] = useState<"previous" | "next" | null>(null);
   const returnPollingReference = useRef<string | null>(null);
   const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
   const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
   const todayDateKey = getTodayLondonDateKey();
-  const fallbackSelectedDateKey = selectedGameDateKey ?? getDefaultSelectedDateKey(games);
-  const fallbackWeekStartKey = visibleWeekStartKey ?? fallbackSelectedDateKey;
+  const fallbackSelectedDateKey = showAllGames ? null : selectedGameDateKey ?? getDefaultSelectedDateKey(games);
+  const fallbackWeekStartKey = visibleWeekStartKey ?? selectedGameDateKey ?? getDefaultSelectedDateKey(games);
   const weekDateKeys = getWeekDateKeys(fallbackWeekStartKey);
-  const calendarGames = games.filter((game) => getGameLondonDateKey(game));
+  const calendarGames = games.filter((game) => {
+    const dateKey = getGameLondonDateKey(game);
+
+    return Boolean(dateKey && dateKey >= todayDateKey);
+  });
   const legacyGames = games.filter((game) => !getGameLondonDateKey(game));
   const gamesByDateKey = calendarGames.reduce<Map<string, any[]>>((map, game) => {
     const dateKey = getGameLondonDateKey(game);
@@ -98,7 +103,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       .map((game) => game ? getGameLondonDateKey(game) : null)
       .filter((dateKey): dateKey is string => Boolean(dateKey))
   );
-  const selectedDatedGames = sortGamesByStartsAt(gamesByDateKey.get(fallbackSelectedDateKey) ?? []);
+  const selectedDatedGames = showAllGames
+    ? sortGamesByStartsAt(calendarGames)
+    : sortGamesByStartsAt(fallbackSelectedDateKey ? gamesByDateKey.get(fallbackSelectedDateKey) ?? [] : []);
   const nextAvailableDateKey: string | null =
     Array.from(gamesByDateKey.keys()).sort().find((dateKey) => dateKey >= todayDateKey) ??
     Array.from(gamesByDateKey.keys()).sort()[0] ??
@@ -156,14 +163,14 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   }, [paymentReturnGateActive]);
 
   useEffect(() => {
-    if (games.length === 0 || selectedGameDateKey) {
+    if (games.length === 0 || selectedGameDateKey || showAllGames) {
       return;
     }
 
     const defaultDateKey = getDefaultSelectedDateKey(games);
     setSelectedGameDateKey(defaultDateKey);
     setVisibleWeekStartKey(defaultDateKey);
-  }, [games, selectedGameDateKey]);
+  }, [games, selectedGameDateKey, showAllGames]);
 
   async function fetchProfile(userId: string) {
     const { data, error } = await supabase
@@ -1241,12 +1248,29 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   type="button"
                   onClick={() => {
                     setWeekNavigationDirection(null);
+                    setShowAllGames(false);
                     setSelectedGameDateKey(todayDateKey);
                     setVisibleWeekStartKey(todayDateKey);
                   }}
                   className="min-h-9 rounded-full bg-stone-200 px-3.5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
                 >
                   Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWeekNavigationDirection(null);
+                    setShowAllGames(true);
+                    setSelectedGameDateKey(null);
+                  }}
+                  className={`min-h-9 rounded-full px-3.5 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-stone-200/50 ${
+                    showAllGames
+                      ? "bg-stone-200 text-zinc-950 hover:bg-stone-100"
+                      : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                  }`}
+                  aria-pressed={showAllGames}
+                >
+                  All Games
                 </button>
                 <button
                   type="button"
@@ -1280,7 +1304,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                       type="button"
                       aria-pressed={isSelected}
                       aria-label={`${formatCalendarDateLabel(dateKey)}, ${gameCount} ${gameCount === 1 ? "game" : "games"}${hasUserBooking ? ", you have a booking" : ""}${isToday ? ", today" : ""}`}
-                      onClick={() => setSelectedGameDateKey(dateKey)}
+                      onClick={() => {
+                        setShowAllGames(false);
+                        setSelectedGameDateKey(dateKey);
+                      }}
                       className={`min-h-[4.25rem] w-[6.6rem] snap-start rounded-xl border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-stone-200/50 md:w-full ${
                         isSelected
                           ? "border-stone-200/60 bg-stone-200 text-zinc-950"
@@ -1295,13 +1322,21 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                           {formatCalendarDayNumber(dateKey)}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className={`rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold leading-none ${isSelected ? "border-zinc-950/10 bg-zinc-950/5 text-zinc-700" : "border-zinc-700 bg-white/[0.03] text-zinc-400"}`}>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold leading-none ${isSelected ? "border-zinc-950/10 bg-zinc-950/5 text-zinc-700" : "border-zinc-700 bg-white/[0.03] text-zinc-400"}`}
+                            data-testid={`calendar-game-count-${dateKey}`}
+                          >
                             {gameCount}
                           </span>
                           {hasUserBooking ? (
                             <span
                               aria-hidden="true"
-                              className={`inline-flex h-[1.125rem] w-[1.125rem] items-center justify-center rounded-full text-[0.62rem] font-black ${isSelected ? "bg-zinc-950/10 text-zinc-900" : "bg-stone-200/10 text-stone-200"}`}
+                              data-testid={`calendar-booked-tick-${dateKey}`}
+                              className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[0.68rem] font-black shadow-[0_0_18px_rgba(16,185,129,0.18)] ${
+                                isSelected
+                                  ? "border-emerald-700/35 bg-emerald-500 text-zinc-950"
+                                  : "border-emerald-400/45 bg-emerald-500/20 text-emerald-200"
+                              }`}
                             >
                               ✓
                             </span>
@@ -1316,10 +1351,30 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 })}
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-900/80 px-4 py-3 text-[0.72rem] font-semibold text-zinc-500 sm:px-5">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400/45 bg-emerald-500/20 text-[0.58rem] font-black text-emerald-200"
+                >
+                  ✓
+                </span>
+                <span>Booked — You&apos;re booked on this date</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-zinc-700 bg-white/[0.03] px-1 text-[0.58rem] font-semibold leading-none text-zinc-400"
+                >
+                  1
+                </span>
+                <span>Games — Number of games on this date</span>
+              </span>
+            </div>
           </div>
 
           <div className="space-y-6">
-            {selectedDatedGames.length === 0 ? (
+            {!showAllGames && selectedDatedGames.length === 0 ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
                 <div>
                   <p className="text-sm font-semibold text-white">No games on this date.</p>
