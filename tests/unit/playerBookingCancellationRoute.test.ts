@@ -28,7 +28,7 @@ function cancellationResult(overrides: Record<string, unknown> = {}) {
   return {
     success: true,
     status: 200,
-    message: "Booking cancelled and wallet credit restored.",
+    message: "Booking Cancelled\n\n£8.00 has been added to your Fair Play Wallet.\n\nYou can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.",
     bookingId: 100,
     gameId: 10,
     released: true,
@@ -44,7 +44,7 @@ function cancellationResult(overrides: Record<string, unknown> = {}) {
     shouldNotifyWaitingList: false,
     automaticRefund: {
       status: "not_applicable",
-      message: "No card refund is required.",
+      message: "Wallet credit added. You can request a refund from your Wallet.",
     },
     ...overrides,
   };
@@ -93,7 +93,7 @@ describe("player booking cancellation route", () => {
     });
     expect(body).toMatchObject({
       ok: true,
-      message: "Booking cancelled and wallet credit restored.",
+      message: "Booking Cancelled\n\n£8.00 has been added to your Fair Play Wallet.\n\nYou can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.",
       released: true,
       refund_eligible: true,
       payment_method: "wallet",

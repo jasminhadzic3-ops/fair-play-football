@@ -9,6 +9,12 @@ type RefundRequestPayload = {
   source_wallet_transaction_id?: unknown;
 };
 
+type BalanceBreakdownRpcRow = {
+  completed_balance?: number | string | null;
+  reserved_refund_amount?: number | string | null;
+  available_balance?: number | string | null;
+};
+
 const failedAutomaticRefundRetryCooldownMs = 60 * 1000;
 
 function parseSourceWalletTransactionId(value: unknown) {
@@ -88,7 +94,7 @@ function automaticRefundAlreadyCompleted() {
 function automaticRefundRetryCoolingDown() {
   return {
     status: "failed",
-    message: "Automatic refund could not complete. Please wait before trying again or contact support.",
+    message: "Refund could not complete. The funds remain available in your Fair Play Wallet.",
   };
 }
 
@@ -118,7 +124,7 @@ function automaticRefundFromProcessorResult(
   if (result.outcome === "sumup_unknown") {
     return {
       status: "manual_review",
-      message: "Refund needs review; your wallet credit remains reserved.",
+      message: "Refund needs review. We will keep this visible while it is checked.",
       diagnostic_code: result.diagnosticCode,
       sumup_refund_attempt: {
         id: result.attemptId,
@@ -130,7 +136,7 @@ function automaticRefundFromProcessorResult(
   if (result.outcome === "sumup_failed") {
     return {
       status: "failed",
-      message: "Automatic refund could not complete. Please try again later or contact support.",
+      message: "Refund could not complete. The funds remain available in your Fair Play Wallet.",
       diagnostic_code: result.diagnosticCode,
       sumup_refund_attempt: {
         id: result.attemptId,
@@ -146,7 +152,7 @@ function automaticRefundFromProcessorResult(
       status,
       message:
         status === "manual_review"
-          ? "Refund needs review; your wallet credit remains reserved."
+          ? "Refund needs review. We will keep this visible while it is checked."
           : "Refund processing.",
       sumup_refund_attempt: result.attemptId
         ? {
@@ -159,8 +165,41 @@ function automaticRefundFromProcessorResult(
 
   return {
     status: "failed",
-    message: "Automatic refund is unavailable. Your refund request remains reserved.",
+    message: "Refund is unavailable right now. The funds remain available in your Fair Play Wallet.",
     reason: result.outcome === "claim_failed" ? result.reason : undefined,
+  };
+}
+
+async function releaseFailedRefundRequest(refundRequestId: number, userId: string) {
+  const { error: updateError } = await supabaseAdmin
+    .from("wallet_transactions")
+    .update({
+      status: "failed",
+    })
+    .eq("id", refundRequestId)
+    .eq("user_id", userId)
+    .eq("transaction_type", "refund_requested")
+    .in("status", ["pending", "processing"]);
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("get_wallet_balance_breakdown", {
+    p_user_id: userId,
+    p_currency: "GBP",
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const balanceBreakdown = (Array.isArray(data) ? data[0] : data) as BalanceBreakdownRpcRow | null;
+
+  return {
+    completedBalance: Number(balanceBreakdown?.completed_balance ?? 0),
+    reservedRefundAmount: Number(balanceBreakdown?.reserved_refund_amount ?? 0),
+    availableBalance: Number(balanceBreakdown?.available_balance ?? 0),
   };
 }
 
@@ -177,6 +216,10 @@ function getRefundRequestResponseStatus({
 
   if (automaticRefundStatus === "processing" || automaticRefundStatus === "manual_review") {
     return "processing";
+  }
+
+  if (automaticRefundStatus === "failed") {
+    return "failed";
   }
 
   return alreadyExists ? "existing" : "pending";
@@ -263,6 +306,11 @@ export async function POST(request: NextRequest) {
               reservedRefundAmount: processorResult.balanceBreakdown.reservedRefundAmount,
               availableBalance: processorResult.balanceBreakdown.availableBalance,
             };
+          } else if (processorResult.outcome === "sumup_failed") {
+            responseBalanceBreakdown = await releaseFailedRefundRequest(
+              result.refundRequestId,
+              user.id
+            );
           }
         }
       }

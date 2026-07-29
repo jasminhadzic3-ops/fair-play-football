@@ -138,13 +138,11 @@ set search_path = public
 as $$
 declare
   v_ambiguous_wallet_booking_payment_count integer := 0;
-  v_available_balance numeric(10, 2);
   v_booking public.bookings%rowtype;
   v_booking_count_after integer := 0;
   v_booking_count_before integer := 0;
   v_cancellation public.player_booking_cancellations%rowtype;
   v_currency text := 'GBP';
-  v_existing_refund_request public.wallet_transactions%rowtype;
   v_existing_source_credit public.wallet_transactions%rowtype;
   v_game public.games%rowtype;
   v_is_refund_eligible boolean := false;
@@ -383,7 +381,7 @@ begin
       v_booking.game_id,
       v_booking.id,
       v_paid_booking_payment.id,
-      'Credit reserved for player cancellation card refund',
+      'Wallet credit for player cancellation',
       jsonb_build_object(
         'original_payment_method', 'sumup',
         'original_payment_id', v_paid_booking_payment.id,
@@ -391,7 +389,7 @@ begin
         'original_booking_id', v_booking.id,
         'player_booking_cancellation_id', v_cancellation.id,
         'refund_policy', v_policy,
-        'reserved_for_card_refund', true
+        'wallet_first_refund', true
       )
     )
     on conflict (idempotency_key) where idempotency_key is not null
@@ -399,67 +397,6 @@ begin
     returning * into v_existing_source_credit;
 
     v_source_credit_id := v_existing_source_credit.id;
-
-    select *
-    into v_existing_refund_request
-    from public.wallet_transactions
-    where user_id = p_user_id
-      and transaction_type = 'refund_requested'
-      and status in ('pending', 'processing', 'completed')
-      and metadata->>'source_wallet_transaction_id' = v_source_credit_id::text
-    order by created_at asc
-    limit 1
-    for update;
-
-    if v_existing_refund_request.id is not null then
-      v_refund_request_id := v_existing_refund_request.id;
-    else
-      select balance_breakdown.available_balance
-      into v_available_balance
-      from public.get_wallet_balance_breakdown(p_user_id, v_currency) as balance_breakdown;
-
-      if v_available_balance < v_paid_booking_payment.amount::numeric(10, 2) then
-        raise exception 'Player cancellation SumUp source credit was not available for reservation.';
-      end if;
-
-      insert into public.wallet_transactions (
-        user_id,
-        amount,
-        idempotency_key,
-        currency,
-        transaction_type,
-        status,
-        game_id,
-        booking_id,
-        payment_id,
-        description,
-        metadata
-      )
-      values (
-        p_user_id,
-        -v_paid_booking_payment.amount::numeric(10, 2),
-        'refund_requested:source_credit:' || v_source_credit_id::text,
-        v_currency,
-        'refund_requested',
-        'pending',
-        v_booking.game_id,
-        v_booking.id,
-        v_paid_booking_payment.id,
-        'Refund requested',
-        jsonb_build_object(
-          'source_wallet_transaction_id', v_source_credit_id,
-          'source_transaction_type', 'player_cancelled_credit',
-          'original_payment_method', 'sumup',
-          'original_payment_id', v_paid_booking_payment.id,
-          'original_game_id', v_booking.game_id,
-          'original_booking_id', v_booking.id,
-          'player_booking_cancellation_id', v_cancellation.id,
-          'refund_mode', 'player_cancellation_24h',
-          'automatic_refund_eligible', true
-        )
-      )
-      returning id into v_refund_request_id;
-    end if;
   elsif v_is_refund_eligible and v_payment_method = 'wallet' then
     insert into public.wallet_transactions (
       user_id,

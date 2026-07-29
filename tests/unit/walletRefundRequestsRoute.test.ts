@@ -6,6 +6,7 @@ const getLatestSumUpRefundAttemptForRequestMock = vi.hoisted(() => vi.fn());
 const getAutomaticRefundProcessorDependenciesMock = vi.hoisted(() => vi.fn());
 const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
+const supabaseRpcMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sumupPayments", () => ({
   getAuthenticatedUser: getAuthenticatedUserMock,
@@ -22,6 +23,7 @@ vi.mock("@/lib/sumupRefundProcessing", () => ({
 vi.mock("@/lib/supabaseAdmin", () => ({
   supabaseAdmin: {
     from: supabaseFromMock,
+    rpc: supabaseRpcMock,
   },
 }));
 
@@ -71,6 +73,14 @@ class MockSupabaseQuery {
     return this;
   }
 
+  in() {
+    return this;
+  }
+
+  update() {
+    return this;
+  }
+
   async maybeSingle<T>() {
     return {
       data: { status: this.status } as T,
@@ -103,6 +113,16 @@ beforeEach(() => {
     skippedSumUpRefundCall: false,
   });
   supabaseFromMock.mockReturnValue(new MockSupabaseQuery());
+  supabaseRpcMock.mockResolvedValue({
+    data: [
+      {
+        completed_balance: 12,
+        reserved_refund_amount: 0,
+        available_balance: 12,
+      },
+    ],
+    error: null,
+  });
 });
 
 describe("wallet refund request route", () => {
@@ -213,13 +233,30 @@ describe("wallet refund request route", () => {
     const serialized = JSON.stringify(body);
 
     expect(response.status).toBe(200);
+    expect(supabaseFromMock).toHaveBeenCalledWith("wallet_transactions");
+    expect(supabaseRpcMock).toHaveBeenCalledWith("get_wallet_balance_breakdown", {
+      p_user_id: "user-1",
+      p_currency: "GBP",
+    });
     expect(body.automatic_refund).toEqual({
       status: "failed",
-      message: "Automatic refund could not complete. Please try again later or contact support.",
+      message: "Refund could not complete. The funds remain available in your Fair Play Wallet.",
       diagnostic_code: "sumup_refund_403_request_not_allowed",
       sumup_refund_attempt: {
         id: 900,
         status: "failed",
+      },
+    });
+    expect(body).toMatchObject({
+      refund_request: {
+        id: 123,
+        status: "failed",
+      },
+      balance: 12,
+      balance_breakdown: {
+        completedBalance: 12,
+        reservedRefundAmount: 0,
+        availableBalance: 12,
       },
     });
     expect(serialized).not.toContain("secret raw body");
@@ -248,7 +285,7 @@ describe("wallet refund request route", () => {
       },
       automatic_refund: {
         status: "manual_review",
-        message: "Refund needs review; your wallet credit remains reserved.",
+        message: "Refund needs review. We will keep this visible while it is checked.",
         diagnostic_code: "sumup_refund_409_conflict",
         sumup_refund_attempt: {
           id: 901,
@@ -275,7 +312,7 @@ describe("wallet refund request route", () => {
     expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
     expect(body.automatic_refund).toEqual({
       status: "failed",
-      message: "Automatic refund could not complete. Please wait before trying again or contact support.",
+      message: "Refund could not complete. The funds remain available in your Fair Play Wallet.",
     });
   });
 

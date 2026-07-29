@@ -133,28 +133,8 @@ describe("sendPlayerBookingCancelledEmail", () => {
   it.each([
     [
       "wallet_restored",
-      "Booking cancelled: Thursday Football - wallet credit restored",
-      "Your booking has been cancelled and £8.00 has been restored to your Fair Play wallet.",
-    ],
-    [
-      "card_refund_completed",
-      "Booking cancelled: Thursday Football - card refund processed",
-      "Your booking has been cancelled and your £8.00 card refund has been processed.",
-    ],
-    [
-      "card_refund_pending",
-      "Booking cancelled: Thursday Football - card refund processing",
-      "Your booking has been cancelled. Your £8.00 card refund is being processed and may take a few working days to appear.",
-    ],
-    [
-      "card_refund_manual_review",
-      "Booking cancelled: Thursday Football - refund needs review",
-      "Your booking has been cancelled. Your £8.00 card refund is reserved and needs a review before it can be completed.",
-    ],
-    [
-      "card_refund_failed",
-      "Booking cancelled: Thursday Football - refund follow-up needed",
-      "Your booking has been cancelled, but we could not complete your £8.00 card refund automatically. The refund remains recorded for follow-up.",
+      "Booking cancelled: Thursday Football - wallet credit added",
+      "Your booking has been cancelled and £8.00 has been added to your Fair Play Wallet. You can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.",
     ],
     [
       "no_refund_within_24h",

@@ -968,7 +968,7 @@ export default function AdminPage() {
         `Amount: ${amount}`,
         `Original payment method: ${candidate.original_payment_method || "SumUp"}`,
         "",
-        "This will create or reserve the existing wallet refund request, then attempt one real SumUp card refund if live refunds are enabled.",
+        "This will create or find the wallet refund request, then attempt one real SumUp card refund if live refunds are enabled.",
         "Do not retry if SumUp returns an unknown outcome; use Recheck SumUp in the Refund Requests queue.",
       ].join("\n")
     );

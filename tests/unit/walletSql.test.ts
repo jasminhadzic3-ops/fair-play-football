@@ -25,6 +25,15 @@ describe("wallet SQL", () => {
     expect(sql).toContain("and status in ('pending', 'processing', 'completed')");
   });
 
+  it("allows player-cancellation credits to be requested back from the Wallet", () => {
+    expect(sql).toContain(
+      "v_source_credit.transaction_type not in ('game_cancelled_credit', 'player_cancelled_credit')"
+    );
+    expect(sql).toContain(
+      "'refund_requested:source_credit:' || v_source_credit.id::text || ':request:' || txid_current()::text"
+    );
+  });
+
   it("writes the same refund request identifier for manual and automatic refund completions", () => {
     expect(sql).toContain("'refund_request_id', v_refund_request.id");
     expect(sql).toContain("v_metadata := coalesce(v_refund_request.metadata, '{}'::jsonb) ||");

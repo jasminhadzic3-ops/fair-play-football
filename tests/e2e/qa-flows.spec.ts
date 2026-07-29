@@ -884,7 +884,7 @@ test.describe("TEST-only launch QA flows", () => {
     }).toBe(true);
   });
 
-  test("player cancellation for an eligible SumUp booking creates a reserved card refund without calling SumUp", async ({
+  test("player cancellation for an eligible SumUp booking credits the Wallet without calling SumUp", async ({
     page,
   }) => {
     test.skip(!qaSchemaReady, qaSchemaSkipReason);
@@ -927,8 +927,9 @@ test.describe("TEST-only launch QA flows", () => {
       refund_eligible: true,
       payment_method: "sumup",
       refund_policy: "eligible_24h",
+      refund_request_id: null,
       automatic_refund: {
-        status: "disabled",
+        status: "not_applicable",
       },
     });
 
@@ -974,17 +975,30 @@ test.describe("TEST-only launch QA flows", () => {
     }
 
     expect(walletRows?.filter((row) => row.transaction_type === "player_cancelled_credit")).toHaveLength(1);
-    expect(walletRows?.filter((row) => row.transaction_type === "refund_requested")).toHaveLength(1);
+    expect(walletRows?.filter((row) => row.transaction_type === "refund_requested")).toHaveLength(0);
     await expect.poll(async () => getWalletBalanceBreakdown(supabase, player.id)).toEqual({
       completedBalance: 5,
-      reservedRefundAmount: 5,
-      availableBalance: 0,
+      reservedRefundAmount: 0,
+      availableBalance: 5,
     });
+
+    const { data: paymentRow, error: paymentLookupError } = await supabase
+      .from("booking_payments")
+      .select("id")
+      .eq("checkout_reference", `${seed.runId}_${booking.id}_reference`)
+      .limit(1)
+      .maybeSingle();
+
+    if (paymentLookupError) {
+      throw new Error(paymentLookupError.message);
+    }
+
+    expect(paymentRow).toBeTruthy();
 
     const { count: attemptCount, error: attemptError } = await supabase
       .from("sumup_refund_attempts")
       .select("id", { count: "exact", head: true })
-      .eq("refund_request_id", Number(cancelResult.body.refund_request_id));
+      .eq("booking_payment_id", paymentRow!.id);
 
     if (attemptError) {
       throw new Error(attemptError.message);
@@ -1104,7 +1118,7 @@ test.describe("TEST-only launch QA flows", () => {
     );
 
     expect(results.every((result) => result.status === 200)).toBe(true);
-    expect(new Set(results.map((result) => result.body.refund_request_id)).size).toBe(1);
+    expect(results.every((result) => result.body.refund_request_id === null)).toBe(true);
 
     const { count: cancellationCount, error: cancellationError } = await supabase
       .from("player_booking_cancellations")
@@ -1129,7 +1143,7 @@ test.describe("TEST-only launch QA flows", () => {
     }
 
     expect(walletRows?.filter((row) => row.transaction_type === "player_cancelled_credit")).toHaveLength(1);
-    expect(walletRows?.filter((row) => row.transaction_type === "refund_requested")).toHaveLength(1);
+    expect(walletRows?.filter((row) => row.transaction_type === "refund_requested")).toHaveLength(0);
     await expect.poll(async () => {
       const { count, error } = await supabase
         .from("bookings")

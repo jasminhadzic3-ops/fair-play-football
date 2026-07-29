@@ -82,6 +82,11 @@ test.describe("wallet refund flow", () => {
   });
 
   test("player can request a refund from an eligible SumUp cancellation credit", async ({ page }) => {
+    test.skip(
+      canRunMockSumUpRefundE2E(),
+      "Pending refund request assertion is covered only when mocked automatic SumUp refunds are disabled."
+    );
+
     const seed = await seedWalletRefundFlow(supabase, {
       creditAmount: 15,
     });
@@ -114,6 +119,11 @@ test.describe("wallet refund flow", () => {
   });
 
   test("refund request reserves the source credit and reduces available balance", async ({ page }) => {
+    test.skip(
+      canRunMockSumUpRefundE2E(),
+      "Reservation assertion is covered only when mocked automatic SumUp refunds are disabled."
+    );
+
     const seed = await seedWalletRefundFlow(supabase, {
       creditAmount: 18,
     });
@@ -161,7 +171,7 @@ test.describe("wallet refund flow", () => {
     await page.goto("/wallet");
     await page.getByRole("button", { name: "Request refund" }).click();
 
-    await expect(page.getByText("Refund completed.")).toBeVisible();
+    await expect(page.getByText("Refund sent to your original payment method.")).toBeVisible();
     await expect(page.locator("span").filter({ hasText: /^Refund completed$/ })).toBeVisible();
 
     const refundRequests = await getRefundRequestsForSourceCredit(
@@ -275,7 +285,7 @@ test.describe("wallet refund flow", () => {
     await page.getByRole("button", { name: "Request refund" }).click();
 
     await expect(
-      page.getByText("Refund needs review; your wallet credit remains reserved.")
+      page.getByText("Refund needs review. We will keep this visible while it is checked.")
     ).toBeVisible();
 
     const refundRequests = await getRefundRequestsForSourceCredit(
@@ -304,5 +314,46 @@ test.describe("wallet refund flow", () => {
     } finally {
       await adminContext.close();
     }
+  });
+
+  test("failed mocked automatic refund releases the credit back to available balance", async ({
+    page,
+  }, testInfo) => {
+    testInfo.setTimeout(60_000);
+
+    test.skip(
+      !canRunMockSumUpRefundE2E() || mockRefundOutcome() !== "failed",
+      "Mocked failed SumUp refund E2E requires TEST Supabase ref, E2E_ALLOW_DB_MUTATION=true, E2E_MOCK_SUMUP_REFUNDS=true, and E2E_MOCK_SUMUP_REFUND_OUTCOME=failed."
+    );
+
+    const seed = await seedWalletRefundFlow(supabase, {
+      creditAmount: 11,
+    });
+    seeds.push(seed);
+
+    await signInWithEmail(page, seed.player.email, seed.player.password);
+    await page.goto("/wallet");
+    await page.getByRole("button", { name: "Request refund" }).click();
+
+    await expect(
+      page.getByText("Refund could not complete. The funds remain available in your Fair Play Wallet.")
+    ).toBeVisible();
+
+    const refundRequests = await getRefundRequestsForSourceCredit(
+      supabase,
+      seed.player.id,
+      seed.sourceCredit.id
+    );
+
+    expect(refundRequests).toHaveLength(1);
+    expect(refundRequests[0].status).toBe("failed");
+
+    await expect.poll(async () => getWalletBalanceBreakdown(supabase, seed.player.id)).toEqual({
+      completedBalance: 11,
+      reservedRefundAmount: 0,
+      availableBalance: 11,
+    });
+
+    await expect(page.getByRole("button", { name: "Request refund" })).toBeVisible();
   });
 });

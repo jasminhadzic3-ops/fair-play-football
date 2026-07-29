@@ -2,9 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseRpcMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
-const getAutomaticRefundDependencyMock = vi.hoisted(() => vi.fn());
-const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
-const getLatestSumUpRefundAttemptForRequestMock = vi.hoisted(() => vi.fn());
 const sendPlayerBookingCancelledEmailMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabaseAdmin", () => ({
@@ -16,18 +13,6 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 
 vi.mock("@/lib/email/playerBookingCancelled", () => ({
   sendPlayerBookingCancelledEmail: sendPlayerBookingCancelledEmailMock,
-}));
-
-vi.mock("@/lib/sumupRefundDependencies", () => ({
-  getAutomaticRefundDependency: getAutomaticRefundDependencyMock,
-}));
-
-vi.mock("@/lib/sumupRefundProcessing", () => ({
-  processAutomaticSumUpRefund: processAutomaticSumUpRefundMock,
-}));
-
-vi.mock("@/lib/wallet", () => ({
-  getLatestSumUpRefundAttemptForRequest: getLatestSumUpRefundAttemptForRequestMock,
 }));
 
 import { cancelPlayerBookingWithRefundPolicy } from "@/lib/playerBookingCancellation";
@@ -42,7 +27,7 @@ function rpcResult(overrides: Record<string, unknown> = {}) {
     payment_method: "sumup",
     refund_policy: "eligible_24h",
     source_credit_transaction_id: 700,
-    refund_request_id: 800,
+    refund_request_id: null,
     wallet_restoration_transaction_id: null,
     amount: 8,
     currency: "GBP",
@@ -67,23 +52,7 @@ beforeEach(() => {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: 600 }, error: null }),
     };
   });
-  getAutomaticRefundDependencyMock.mockReturnValue(null);
-  getLatestSumUpRefundAttemptForRequestMock.mockResolvedValue(null);
   sendPlayerBookingCancelledEmailMock.mockResolvedValue({ id: "email-1" });
-  processAutomaticSumUpRefundMock.mockResolvedValue({
-    outcome: "completed",
-    status: 200,
-    message: "SumUp refund completed and wallet balance was updated.",
-    attemptId: 900,
-    refundRequestId: 800,
-    refundTransactionId: 901,
-    skippedSumUpRefundCall: false,
-    balanceBreakdown: {
-      completedBalance: 0,
-      reservedRefundAmount: 0,
-      availableBalance: 0,
-    },
-  });
 });
 
 describe("cancelPlayerBookingWithRefundPolicy", () => {
@@ -102,48 +71,41 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       released: true,
       refundEligible: true,
       paymentMethod: "sumup",
-      refundRequestId: 800,
+      refundRequestId: null,
       shouldNotifyWaitingList: true,
       automaticRefund: {
-        status: "disabled",
-        message: "Card refund requested and reserved; awaiting processing.",
+        status: "not_applicable",
+        message: "Wallet credit added. You can request a refund from your Wallet.",
       },
     });
-    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
     expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith({
       cancellationId: 600,
       bookingId: 100,
       gameId: 10,
       userId: "user-1",
-      outcome: "card_refund_pending",
+      outcome: "wallet_restored",
       amount: 8,
       currency: "GBP",
     });
   });
 
-  it("processes an eligible SumUp refund only after the RPC returns a refund request", async () => {
-    const refundDependency = vi.fn();
-    getAutomaticRefundDependencyMock.mockReturnValue(refundDependency);
+  it("does not process an eligible SumUp cancellation automatically even if a legacy refund request id is returned", async () => {
+    supabaseRpcMock.mockResolvedValue({
+      data: [rpcResult({ refund_request_id: 800 })],
+      error: null,
+    });
 
     const result = await cancelPlayerBookingWithRefundPolicy({
       bookingId: 100,
       userId: "user-1",
     });
 
-    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
-      refundRequestId: 800,
-      actorUserId: "user-1",
-      initiatedBy: "player",
-      refundDependency,
-    });
     expect(result.automaticRefund).toMatchObject({
-      status: "completed",
-      refund_transaction_id: 901,
-      sumup_refund_attempt_id: 900,
+      status: "not_applicable",
     });
     expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        outcome: "card_refund_completed",
+        outcome: "wallet_restored",
       })
     );
   });
@@ -159,16 +121,14 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       ],
       error: null,
     });
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
 
     const result = await cancelPlayerBookingWithRefundPolicy({
       bookingId: 100,
       userId: "user-1",
     });
 
-    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      message: "Booking cancelled and wallet credit restored.",
+      message: "Booking Cancelled\n\n£8.00 has been added to your Fair Play Wallet.\n\nYou can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.",
       walletRestorationTransactionId: 777,
       automaticRefund: {
         status: "not_applicable",
@@ -194,14 +154,12 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       ],
       error: null,
     });
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
 
     const result = await cancelPlayerBookingWithRefundPolicy({
       bookingId: 100,
       userId: "user-1",
     });
 
-    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       message: "Booking cancelled. No refund is available within 24 hours of kick-off.",
       refundEligible: false,
@@ -230,7 +188,6 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       ],
       error: null,
     });
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
 
     const result = await cancelPlayerBookingWithRefundPolicy({
       bookingId: 100,
@@ -243,7 +200,6 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       released: false,
       message: "This booking needs support to cancel because the kickoff time is not fully confirmed. Please contact Fair Play Football.",
     });
-    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
     expect(sendPlayerBookingCancelledEmailMock).not.toHaveBeenCalled();
   });
 
@@ -305,79 +261,10 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
       paymentMethod: "sumup",
       refundRequestId: 800,
       automaticRefund: {
-        status: "disabled",
+        status: "not_applicable",
       },
     });
     expect(sendPlayerBookingCancelledEmailMock).not.toHaveBeenCalled();
-  });
-
-  it("does not immediately retry recent failed SumUp attempts", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
-    getLatestSumUpRefundAttemptForRequestMock.mockResolvedValue({
-      status: "failed",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-
-    const result = await cancelPlayerBookingWithRefundPolicy({
-      bookingId: 100,
-      userId: "user-1",
-    });
-
-    expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
-    expect(result.automaticRefund).toEqual({
-      status: "cooling_down",
-      message: "Card refund could not complete. Please wait before trying again or contact support.",
-    });
-    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: "card_refund_failed",
-      })
-    );
-  });
-
-  it("maps unknown SumUp refund outcomes to manual-review cancellation email", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
-    processAutomaticSumUpRefundMock.mockResolvedValue({
-      outcome: "sumup_unknown",
-      attemptId: 900,
-      refundRequestId: 800,
-      diagnosticCode: "sumup_unknown",
-    });
-
-    const result = await cancelPlayerBookingWithRefundPolicy({
-      bookingId: 100,
-      userId: "user-1",
-    });
-
-    expect(result.automaticRefund.status).toBe("manual_review");
-    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: "card_refund_manual_review",
-      })
-    );
-  });
-
-  it("maps failed SumUp refund outcomes to failed cancellation email", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
-    processAutomaticSumUpRefundMock.mockResolvedValue({
-      outcome: "sumup_failed",
-      attemptId: 900,
-      refundRequestId: 800,
-      diagnosticCode: "sumup_failed",
-    });
-
-    const result = await cancelPlayerBookingWithRefundPolicy({
-      bookingId: 100,
-      userId: "user-1",
-    });
-
-    expect(result.automaticRefund.status).toBe("failed");
-    expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: "card_refund_failed",
-      })
-    );
   });
 
   it("uses the durable cancellation id for duplicate cancellation email idempotency", async () => {
@@ -394,11 +281,11 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
     expect(sendPlayerBookingCancelledEmailMock).toHaveBeenCalledTimes(2);
     expect(sendPlayerBookingCancelledEmailMock).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ cancellationId: 600, outcome: "card_refund_pending" })
+      expect.objectContaining({ cancellationId: 600, outcome: "wallet_restored" })
     );
     expect(sendPlayerBookingCancelledEmailMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ cancellationId: 600, outcome: "card_refund_pending" })
+      expect.objectContaining({ cancellationId: 600, outcome: "wallet_restored" })
     );
   });
 
@@ -413,7 +300,7 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
     expect(result).toMatchObject({
       success: true,
       released: true,
-      message: "Card refund requested and reserved; awaiting processing.",
+      message: "Booking Cancelled\n\n£8.00 has been added to your Fair Play Wallet.\n\nYou can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.",
     });
   });
 });

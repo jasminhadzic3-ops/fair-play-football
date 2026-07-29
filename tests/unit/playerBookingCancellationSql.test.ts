@@ -39,17 +39,17 @@ describe("player booking cancellation SQL", () => {
     expect(sql).toContain("booking_has_no_refundable_payment_source");
   });
 
-  it("records SumUp source credit and refund request before releasing the booking", () => {
+  it("records SumUp source credit without creating an automatic refund request", () => {
     const auditInsertIndex = sql.indexOf("insert into public.player_booking_cancellations");
-    const sourceCreditIndex = sql.indexOf("Credit reserved for player cancellation card refund");
-    const refundRequestIndex = sql.indexOf("'refund_mode', 'player_cancellation_24h'");
+    const sourceCreditIndex = sql.indexOf("Wallet credit for player cancellation");
     const deleteIndex = sql.indexOf("delete from public.bookings");
 
     expect(auditInsertIndex).toBeGreaterThan(-1);
     expect(sourceCreditIndex).toBeGreaterThan(auditInsertIndex);
-    expect(refundRequestIndex).toBeGreaterThan(sourceCreditIndex);
-    expect(deleteIndex).toBeGreaterThan(refundRequestIndex);
-    expect(sql).toContain("'reserved_for_card_refund', true");
+    expect(deleteIndex).toBeGreaterThan(sourceCreditIndex);
+    expect(sql).toContain("'wallet_first_refund', true");
+    expect(sql).not.toContain("'refund_mode', 'player_cancellation_24h'");
+    expect(sql).not.toContain("'reserved_for_card_refund', true");
   });
 
   it("restores wallet-paid bookings without creating a SumUp refund request", () => {

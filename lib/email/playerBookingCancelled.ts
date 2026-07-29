@@ -6,10 +6,6 @@ import { escapeHtml, formatPrice, getSiteUrl, renderEmailLayout } from "./shared
 
 export type PlayerBookingCancellationEmailOutcome =
   | "wallet_restored"
-  | "card_refund_completed"
-  | "card_refund_pending"
-  | "card_refund_manual_review"
-  | "card_refund_failed"
   | "no_refund_within_24h";
 
 type SendPlayerBookingCancelledEmailParams = {
@@ -85,33 +81,9 @@ function getOutcomeCopy(
   switch (outcome) {
     case "wallet_restored":
       return {
-        subjectSuffix: "wallet credit restored",
-        heading: "Wallet credit restored",
-        explanation: `Your booking has been cancelled and ${amount} has been restored to your Fair Play wallet.`,
-      };
-    case "card_refund_completed":
-      return {
-        subjectSuffix: "card refund processed",
-        heading: "Card refund processed",
-        explanation: `Your booking has been cancelled and your ${amount} card refund has been processed.`,
-      };
-    case "card_refund_pending":
-      return {
-        subjectSuffix: "card refund processing",
-        heading: "Card refund processing",
-        explanation: `Your booking has been cancelled. Your ${amount} card refund is being processed and may take a few working days to appear.`,
-      };
-    case "card_refund_manual_review":
-      return {
-        subjectSuffix: "refund needs review",
-        heading: "Refund needs review",
-        explanation: `Your booking has been cancelled. Your ${amount} card refund is reserved and needs a review before it can be completed.`,
-      };
-    case "card_refund_failed":
-      return {
-        subjectSuffix: "refund follow-up needed",
-        heading: "Refund follow-up needed",
-        explanation: `Your booking has been cancelled, but we could not complete your ${amount} card refund automatically. The refund remains recorded for follow-up.`,
+        subjectSuffix: "wallet credit added",
+        heading: "Booking Cancelled",
+        explanation: `Your booking has been cancelled and ${amount} has been added to your Fair Play Wallet. You can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.`,
       };
     case "no_refund_within_24h":
       return {

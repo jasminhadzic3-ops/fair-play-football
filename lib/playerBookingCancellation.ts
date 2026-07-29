@@ -4,12 +4,7 @@ import {
   sendPlayerBookingCancelledEmail,
   type PlayerBookingCancellationEmailOutcome,
 } from "@/lib/email/playerBookingCancelled";
-import { getAutomaticRefundDependency } from "@/lib/sumupRefundDependencies";
-import { processAutomaticSumUpRefund } from "@/lib/sumupRefundProcessing";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { getLatestSumUpRefundAttemptForRequest } from "@/lib/wallet";
-
-const failedAutomaticRefundRetryCooldownMs = 60 * 1000;
 
 export type PlayerBookingCancellationRpcResult = {
   success: boolean | null;
@@ -30,23 +25,10 @@ export type PlayerBookingCancellationRpcResult = {
 };
 
 export type AutomaticCancellationRefund =
-  | {
-      status: "not_applicable" | "disabled" | "cooling_down";
-      message: string;
-    }
-  | {
-      status: "completed";
-      message: string;
-      refund_transaction_id: number | null;
-      sumup_refund_attempt_id: number;
-      skipped_sumup_refund_call: boolean;
-    }
-  | {
-      status: "failed" | "manual_review" | "processing";
-      message: string;
-      diagnostic_code?: string;
-      sumup_refund_attempt_id?: number | null;
-    };
+  {
+    status: "not_applicable";
+    message: string;
+  };
 
 export type PlayerBookingCancellationResult = {
   success: boolean;
@@ -126,85 +108,11 @@ function getMessageForReason(reason: string | null) {
   }
 }
 
-function automaticRefundDisabled(): AutomaticCancellationRefund {
-  return {
-    status: "disabled",
-    message: "Card refund requested and reserved; awaiting processing.",
-  };
-}
-
 function automaticRefundNotApplicable(message: string): AutomaticCancellationRefund {
   return {
     status: "not_applicable",
     message,
   };
-}
-
-function automaticRefundCoolingDown(): AutomaticCancellationRefund {
-  return {
-    status: "cooling_down",
-    message: "Card refund could not complete. Please wait before trying again or contact support.",
-  };
-}
-
-function automaticRefundFromProcessorResult(
-  result: Awaited<ReturnType<typeof processAutomaticSumUpRefund>>
-): AutomaticCancellationRefund {
-  if (result.outcome === "completed") {
-    return {
-      status: "completed",
-      message: "Booking cancelled and card refund completed.",
-      refund_transaction_id: result.refundTransactionId,
-      sumup_refund_attempt_id: result.attemptId,
-      skipped_sumup_refund_call: result.skippedSumUpRefundCall,
-    };
-  }
-
-  if (result.outcome === "sumup_unknown") {
-    return {
-      status: "manual_review",
-      message: "Booking cancelled. Your card refund needs review and remains reserved.",
-      diagnostic_code: result.diagnosticCode,
-      sumup_refund_attempt_id: result.attemptId,
-    };
-  }
-
-  if (result.outcome === "sumup_failed") {
-    return {
-      status: "failed",
-      message: "Booking cancelled. The automatic card refund could not complete; your refund remains reserved for support.",
-      diagnostic_code: result.diagnosticCode,
-      sumup_refund_attempt_id: result.attemptId,
-    };
-  }
-
-  if (result.outcome === "blocked") {
-    return {
-      status: result.attemptStatus === "unknown" ? "manual_review" : "processing",
-      message:
-        result.attemptStatus === "unknown"
-          ? "Booking cancelled. Your card refund needs review and remains reserved."
-          : "Booking cancelled. Your card refund is processing.",
-      sumup_refund_attempt_id: result.attemptId,
-    };
-  }
-
-  return {
-    status: "failed",
-    message: "Booking cancelled. Card refund processing is unavailable; your refund remains reserved.",
-  };
-}
-
-async function isRecentFailedAttemptCoolingDown(refundRequestId: number) {
-  const latestAttempt = await getLatestSumUpRefundAttemptForRequest(refundRequestId);
-
-  if (latestAttempt?.status !== "failed") {
-    return false;
-  }
-
-  const updatedAt = Date.parse(latestAttempt.updated_at || latestAttempt.created_at);
-
-  return Number.isFinite(updatedAt) && Date.now() - updatedAt < failedAutomaticRefundRetryCooldownMs;
 }
 
 function responseFromRpcResult(
@@ -213,13 +121,14 @@ function responseFromRpcResult(
 ): PlayerBookingCancellationResult {
   const amount = toNumber(result.amount);
   const baseMessage =
-    result.payment_method === "wallet" && result.refund_policy === "eligible_24h"
-      ? "Booking cancelled and wallet credit restored."
+    result.refund_policy === "eligible_24h" &&
+    (result.payment_method === "wallet" || result.payment_method === "sumup")
+      ? amount === null
+        ? "Booking Cancelled\n\nCredit has been added to your Fair Play Wallet.\n\nYou can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet."
+        : `Booking Cancelled\n\n${formatCancellationAmount(amount, result.currency)} has been added to your Fair Play Wallet.\n\nYou can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.`
       : result.refund_policy === "ineligible_within_24h"
         ? "Booking cancelled. No refund is available within 24 hours of kick-off."
-        : result.payment_method === "sumup" && result.refund_policy === "eligible_24h"
-          ? automaticRefund.message
-          : "Booking cancelled.";
+        : "Booking cancelled.";
 
   return {
     success: true,
@@ -242,6 +151,17 @@ function responseFromRpcResult(
   };
 }
 
+function formatCancellationAmount(amount: number, currency: string | null) {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency || "GBP",
+    }).format(amount);
+  } catch {
+    return `${currency || "GBP"} ${amount.toFixed(2)}`;
+  }
+}
+
 function getCancellationEmailOutcome(
   result: PlayerBookingCancellationResult
 ): PlayerBookingCancellationEmailOutcome | null {
@@ -253,28 +173,14 @@ function getCancellationEmailOutcome(
     return "no_refund_within_24h";
   }
 
-  if (result.paymentMethod === "wallet" && result.refundPolicy === "eligible_24h") {
+  if (
+    result.refundPolicy === "eligible_24h" &&
+    (result.paymentMethod === "wallet" || result.paymentMethod === "sumup")
+  ) {
     return "wallet_restored";
   }
 
-  if (result.paymentMethod !== "sumup" || result.refundPolicy !== "eligible_24h") {
-    return null;
-  }
-
-  switch (result.automaticRefund.status) {
-    case "completed":
-      return "card_refund_completed";
-    case "manual_review":
-      return "card_refund_manual_review";
-    case "failed":
-    case "cooling_down":
-      return "card_refund_failed";
-    case "disabled":
-    case "processing":
-      return "card_refund_pending";
-    default:
-      return null;
-  }
+  return null;
 }
 
 async function loadCancellationId(bookingId: number, userId: string) {
@@ -329,13 +235,11 @@ async function loadReleasedCancellationFallback(bookingId: number, userId: strin
       was_full_before_release: data.was_full_before_release,
       space_available_after_release: data.space_available_after_release,
     },
-    data.payment_method === "sumup" && data.refund_policy === "eligible_24h"
-      ? automaticRefundDisabled()
-      : automaticRefundNotApplicable(
-          data.refund_policy === "ineligible_within_24h"
-            ? "No refund is available within 24 hours of kick-off."
-            : "No card refund is required."
-        )
+    automaticRefundNotApplicable(
+      data.refund_policy === "ineligible_within_24h"
+        ? "No refund is available within 24 hours of kick-off."
+        : "Wallet credit added. You can request a refund from your Wallet."
+    )
   );
 }
 
@@ -418,34 +322,11 @@ export async function cancelPlayerBookingWithRefundPolicy({
     };
   }
 
-  let automaticRefund: AutomaticCancellationRefund = automaticRefundNotApplicable(
+  const automaticRefund: AutomaticCancellationRefund = automaticRefundNotApplicable(
     rpcResult.refund_policy === "ineligible_within_24h"
       ? "No refund is available within 24 hours of kick-off."
-      : "No card refund is required."
+      : "Wallet credit added. You can request a refund from your Wallet."
   );
-
-  if (
-    rpcResult.payment_method === "sumup" &&
-    rpcResult.refund_policy === "eligible_24h" &&
-    rpcResult.refund_request_id
-  ) {
-    const refundDependency = getAutomaticRefundDependency();
-
-    if (!refundDependency) {
-      automaticRefund = automaticRefundDisabled();
-    } else if (await isRecentFailedAttemptCoolingDown(rpcResult.refund_request_id)) {
-      automaticRefund = automaticRefundCoolingDown();
-    } else {
-      const processorResult = await processAutomaticSumUpRefund({
-        refundRequestId: rpcResult.refund_request_id,
-        actorUserId: userId,
-        initiatedBy: "player",
-        refundDependency,
-      });
-
-      automaticRefund = automaticRefundFromProcessorResult(processorResult);
-    }
-  }
 
   const result = responseFromRpcResult(rpcResult, automaticRefund);
 

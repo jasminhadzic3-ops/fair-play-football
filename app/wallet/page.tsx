@@ -91,13 +91,13 @@ function formatTransactionType(transactionType: string | null) {
 function getRefundMessage(result: WalletRefundRequestResponse | null) {
   switch (result?.automatic_refund?.status) {
     case "completed":
-      return "Refund completed.";
+      return "Refund sent to your original payment method.";
     case "processing":
       return "Refund processing.";
     case "manual_review":
-      return "Refund needs review; your wallet credit remains reserved.";
+      return "Refund needs review. We will keep this visible while it is checked.";
     case "failed":
-      return "Automatic refund could not complete. Please try again later or contact support.";
+      return "Refund could not complete. The funds remain available in your Fair Play Wallet.";
     case "disabled":
       return "Refund requested; awaiting processing.";
     default:
@@ -195,7 +195,8 @@ export default function WalletPage() {
     );
 
   const isRefundableSourceCredit = (transaction: WalletTransaction) =>
-    transaction.transaction_type === "game_cancelled_credit" &&
+    (transaction.transaction_type === "game_cancelled_credit" ||
+      transaction.transaction_type === "player_cancelled_credit") &&
     transaction.status === "completed" &&
     Number(transaction.amount) > 0 &&
     Boolean(transaction.payment_id) &&
@@ -364,7 +365,7 @@ export default function WalletPage() {
               </div>
               <div className="mt-6 border-t border-zinc-800 pt-5">
                 <p className="text-sm font-semibold text-zinc-300">
-                  Eligible cancelled-game credits can be requested back to your card.
+                  Eligible cancellation credits can be used straight away or requested back to your card.
                 </p>
                 {refundMessage ? (
                   <p className="mt-3 text-sm font-semibold text-zinc-300">{refundMessage}</p>
@@ -385,7 +386,7 @@ export default function WalletPage() {
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-6 text-zinc-400">
                   <p className="font-semibold text-zinc-200">No wallet activity yet.</p>
                   <p className="mt-2 text-sm leading-6">
-                    If one of your games is cancelled, your credit will appear here automatically.
+                    Eligible cancellation credit will appear here automatically.
                   </p>
                 </div>
               ) : (

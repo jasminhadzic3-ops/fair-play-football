@@ -771,7 +771,7 @@ begin
     return;
   end if;
 
-  if v_source_credit.transaction_type <> 'game_cancelled_credit'
+  if v_source_credit.transaction_type not in ('game_cancelled_credit', 'player_cancelled_credit')
     or v_source_credit.status <> 'completed'
     or v_source_credit.payment_id is null
     or coalesce(v_source_credit.metadata->>'original_payment_method', '') <> 'sumup'
@@ -809,7 +809,7 @@ begin
 
   v_idempotency_key := coalesce(
     nullif(trim(p_idempotency_key), ''),
-    'refund_requested:source_credit:' || v_source_credit.id::text
+    'refund_requested:source_credit:' || v_source_credit.id::text || ':request:' || txid_current()::text
   );
 
   select *

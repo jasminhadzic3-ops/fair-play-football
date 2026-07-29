@@ -516,14 +516,10 @@ export async function createWalletRefundRequest({
     throw new Error("Source wallet transaction id is required.");
   }
 
-  const normalizedIdempotencyKey =
-    normalizeIdempotencyKey(idempotencyKey) ||
-    `refund_requested:source_credit:${sourceWalletTransactionId}`;
-
   const { data, error } = await supabaseAdmin.rpc("create_wallet_refund_request", {
     p_user_id: userId,
     p_source_wallet_transaction_id: sourceWalletTransactionId,
-    p_idempotency_key: normalizedIdempotencyKey,
+    p_idempotency_key: normalizeIdempotencyKey(idempotencyKey),
   });
 
   if (error) {
