@@ -15,7 +15,7 @@ test("signed-out mobile homepage and game details smoke test", async ({
     page.getByRole("heading", { name: "Football on your schedule." })
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Find Games" }).click();
+  await page.getByRole("link", { name: "Find Games" }).first().click();
   await expect(page.locator("#games")).toBeVisible();
   await expect(page.getByText("Discover upcoming games")).toBeVisible();
 

@@ -107,7 +107,11 @@ test.describe("signup agreement", () => {
       "rel",
       "noopener noreferrer"
     );
-    await expect(page.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
+    const agreementPrivacyLink = page
+      .getByRole("link", { name: "Privacy Policy" })
+      .first();
+
+    await expect(agreementPrivacyLink).toHaveAttribute(
       "href",
       "/privacy"
     );

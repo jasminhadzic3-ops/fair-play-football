@@ -8,9 +8,10 @@ test("signed-out homepage and game details smoke test", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Football on your schedule." })
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Find Games" })).toBeVisible();
+  const heroFindGamesLink = page.getByRole("link", { name: "Find Games" }).first();
+  await expect(heroFindGamesLink).toBeVisible();
 
-  await page.getByRole("link", { name: "Find Games" }).click();
+  await heroFindGamesLink.click();
   await expect(page.locator("#games")).toBeVisible();
   await expect(page.getByText("Discover upcoming games")).toBeVisible();
 
@@ -31,7 +32,7 @@ test("signed-out homepage and game details smoke test", async ({ page }) => {
 test("signed-out game details modal shows match information", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByRole("link", { name: "Find Games" }).click();
+  await page.getByRole("link", { name: "Find Games" }).first().click();
   await expect(page.locator("#games")).toBeVisible();
   await expect(page.getByText("Discover upcoming games")).toBeVisible();
 

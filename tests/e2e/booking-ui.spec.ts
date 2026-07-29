@@ -9,7 +9,7 @@ test("signed-out Join Game opens auth prompt without checkout access", async ({
 }) => {
   await page.goto("/");
 
-  await page.getByRole("link", { name: "Find Games" }).click();
+  await page.getByRole("link", { name: "Find Games" }).first().click();
   await expect(page.locator("#games")).toBeVisible();
   await expect(page.getByText("Discover upcoming games")).toBeVisible();
 

@@ -540,7 +540,7 @@ test.describe("TEST-only launch QA flows", () => {
     });
 
     await signInWithEmail(page, player.email, player.password);
-    await page.getByRole("link", { name: "Find Games" }).click();
+    await page.getByRole("link", { name: "Find Games" }).first().click();
     const gameCard = page.locator("#games").locator(".cursor-pointer").filter({ hasText: game.title }).first();
     await expect(gameCard).toBeVisible();
     await gameCard.click();
@@ -589,8 +589,8 @@ test.describe("TEST-only launch QA flows", () => {
       { accessToken: token, gameId: game.id }
     );
 
-    expect(duplicateResult.status).toBe(200);
-    expect(duplicateResult.body.payment_status).toBe("paid");
+    expect(duplicateResult.status).toBe(409);
+    expect(duplicateResult.body.error).toBe("You have already joined this game.");
 
     await expect.poll(async () => {
       const { count, error } = await supabase
@@ -621,7 +621,7 @@ test.describe("TEST-only launch QA flows", () => {
     await fillGameToCapacity(supabase, seed, game);
 
     await signInWithEmail(page, player.email, player.password);
-    await page.getByRole("link", { name: "Find Games" }).click();
+    await page.getByRole("link", { name: "Find Games" }).first().click();
     const gameCard = page.locator("#games").locator(".cursor-pointer").filter({ hasText: game.title }).first();
     await expect(gameCard).toBeVisible();
     await gameCard.click();

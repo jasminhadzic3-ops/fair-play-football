@@ -30,6 +30,7 @@ test("signed-out navbar auth modal validates required signup profile fields", as
 
   await page.getByRole("button", { name: "Create account" }).first().click();
   await expect(page.getByPlaceholder("Create password")).toBeVisible();
+  await page.getByRole("checkbox", { name: /I agree to the Terms of Service and Privacy Policy/ }).check();
 
   await page.getByRole("button", { name: "Create account" }).last().click();
 
@@ -62,6 +63,7 @@ test("signed-out create account form validates password mismatch", async ({
     .getByRole("combobox")
     .filter({ has: page.getByRole("option", { name: "Midfielder" }) })
     .selectOption("Midfielder");
+  await page.getByRole("checkbox", { name: /I agree to the Terms of Service and Privacy Policy/ }).check();
 
   await page.getByRole("button", { name: "Create account" }).last().click();
 

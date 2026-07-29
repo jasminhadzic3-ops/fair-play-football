@@ -250,7 +250,7 @@ test.describe("admin refund processing", () => {
     await expect(card).toContainText(`E2E Wallet Refund ${moneySeed.runId}`);
     await expect(card).toContainText(`Payment ${moneySeed.payment.id}`);
     await expect(card).toContainText(`Credit ${moneySeed.sourceCredit.id}`);
-    await expect(card).toContainText(`SumUp ${moneySeed.runId}_txn_code`);
+    await expect(card).not.toContainText(`${moneySeed.runId}_txn_code`);
     if (canRunMockSumUpRefundE2E()) {
       await expect(card.getByRole("button", { name: "Refund via SumUp" })).toBeVisible();
     } else {

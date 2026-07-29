@@ -72,6 +72,22 @@ type PlayerBookingCancellationRow = {
   id: number;
 };
 
+type PlayerBookingCancellationFallbackRow = {
+  booking_id: number;
+  game_id: number;
+  payment_method: "sumup" | "wallet" | "legacy";
+  refund_policy: "eligible_24h" | "ineligible_within_24h" | "support_required";
+  status: string | null;
+  source_credit_transaction_id: number | null;
+  refund_request_id: number | null;
+  wallet_transaction_id: number | null;
+  amount: number | string | null;
+  currency: string | null;
+  reason: string | null;
+  was_full_before_release: boolean | null;
+  space_available_after_release: boolean | null;
+};
+
 function toNumber(value: number | string | null) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
@@ -276,6 +292,53 @@ async function loadCancellationId(bookingId: number, userId: string) {
   return data?.id ?? null;
 }
 
+async function loadReleasedCancellationFallback(bookingId: number, userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("player_booking_cancellations")
+    .select(
+      "booking_id,game_id,payment_method,refund_policy,status,source_credit_transaction_id,refund_request_id,wallet_transaction_id,amount,currency,reason,was_full_before_release,space_available_after_release"
+    )
+    .eq("booking_id", bookingId)
+    .eq("user_id", userId)
+    .maybeSingle<PlayerBookingCancellationFallbackRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.status !== "released") {
+    return null;
+  }
+
+  return responseFromRpcResult(
+    {
+      success: true,
+      booking_id: data.booking_id,
+      game_id: data.game_id,
+      released: true,
+      refund_eligible: data.refund_policy === "eligible_24h",
+      payment_method: data.payment_method,
+      refund_policy: data.refund_policy,
+      source_credit_transaction_id: data.source_credit_transaction_id,
+      refund_request_id: data.refund_request_id,
+      wallet_restoration_transaction_id:
+        data.payment_method === "wallet" ? data.source_credit_transaction_id : data.wallet_transaction_id,
+      amount: data.amount,
+      currency: data.currency,
+      reason: data.reason,
+      was_full_before_release: data.was_full_before_release,
+      space_available_after_release: data.space_available_after_release,
+    },
+    data.payment_method === "sumup" && data.refund_policy === "eligible_24h"
+      ? automaticRefundDisabled()
+      : automaticRefundNotApplicable(
+          data.refund_policy === "ineligible_within_24h"
+            ? "No refund is available within 24 hours of kick-off."
+            : "No card refund is required."
+        )
+  );
+}
+
 async function sendCancellationEmailAfterRelease(
   result: PlayerBookingCancellationResult,
   userId: string
@@ -326,6 +389,14 @@ export async function cancelPlayerBookingWithRefundPolicy({
   }
 
   if (!rpcResult.success) {
+    if (rpcResult.reason === "booking_not_found") {
+      const fallbackResult = await loadReleasedCancellationFallback(bookingId, userId);
+
+      if (fallbackResult) {
+        return fallbackResult;
+      }
+    }
+
     return {
       success: false,
       status: getStatusForReason(rpcResult.reason),

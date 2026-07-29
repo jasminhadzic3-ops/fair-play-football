@@ -85,7 +85,7 @@ test.describe("reserved refund wallet booking protection", () => {
     });
 
     await signInWithEmail(page, moneySeed.player.email, moneySeed.player.password);
-    await page.getByRole("link", { name: "Find Games" }).click();
+    await page.getByRole("link", { name: "Find Games" }).first().click();
     await expect(page.locator("#games")).toBeVisible();
 
     const targetGameCard = page

@@ -247,6 +247,70 @@ describe("cancelPlayerBookingWithRefundPolicy", () => {
     expect(sendPlayerBookingCancelledEmailMock).not.toHaveBeenCalled();
   });
 
+  it("returns the durable cancellation result when a concurrent duplicate sees the booking already released", async () => {
+    supabaseRpcMock.mockResolvedValue({
+      data: [
+        rpcResult({
+          success: false,
+          released: false,
+          refund_eligible: false,
+          payment_method: null,
+          refund_policy: null,
+          source_credit_transaction_id: null,
+          refund_request_id: null,
+          reason: "booking_not_found",
+        }),
+      ],
+      error: null,
+    });
+    supabaseFromMock.mockImplementation((table: string) => {
+      if (table !== "player_booking_cancellations") {
+        throw new Error(`Unexpected table ${table}`);
+      }
+
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            booking_id: 100,
+            game_id: 10,
+            payment_method: "sumup",
+            refund_policy: "eligible_24h",
+            status: "released",
+            source_credit_transaction_id: 700,
+            refund_request_id: 800,
+            wallet_transaction_id: null,
+            amount: 8,
+            currency: "GBP",
+            reason: null,
+            was_full_before_release: true,
+            space_available_after_release: true,
+          },
+          error: null,
+        }),
+      };
+    });
+
+    const result = await cancelPlayerBookingWithRefundPolicy({
+      bookingId: 100,
+      userId: "user-1",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 200,
+      released: true,
+      refundEligible: true,
+      paymentMethod: "sumup",
+      refundRequestId: 800,
+      automaticRefund: {
+        status: "disabled",
+      },
+    });
+    expect(sendPlayerBookingCancelledEmailMock).not.toHaveBeenCalled();
+  });
+
   it("does not immediately retry recent failed SumUp attempts", async () => {
     getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
     getLatestSumUpRefundAttemptForRequestMock.mockResolvedValue({
