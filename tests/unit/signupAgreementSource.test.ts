@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
 
-const homePageSource = readFileSync(join(process.cwd(), "app/page.tsx"), "utf8");
+const homePageSource = readFileSync(join(process.cwd(), "components/home/HomeClient.tsx"), "utf8");
 const gameDetailsSource = readFileSync(
   join(process.cwd(), "components/games/GameDetails.tsx"),
   "utf8"

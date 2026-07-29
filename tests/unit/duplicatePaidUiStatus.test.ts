@@ -31,7 +31,7 @@ describe("duplicate paid checkout UI status", () => {
   });
 
   it("stops homepage return polling for duplicate_paid without showing success", () => {
-    const pageSource = readSource("app/page.tsx");
+    const pageSource = readSource("components/home/HomeClient.tsx");
     const duplicateBranch = extractSection(
       pageSource,
       'if (paymentStatus === "duplicate_paid")',

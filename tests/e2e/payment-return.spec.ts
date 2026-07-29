@@ -1,0 +1,376 @@
+import { expect, test, type Page, type Request } from "@playwright/test";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { signInWithEmail } from "./helpers/auth";
+import { createE2ESupabaseClient } from "./helpers/moneySeed";
+import {
+  canRunDatabaseMutationE2E,
+  requireDatabaseMutationE2EEnv,
+} from "./helpers/supabaseEnv";
+
+type PaymentReturnSeed = {
+  runId: string;
+  userId: string;
+  email: string;
+  password: string;
+  username: string;
+  gameId: number;
+  gameTitle: string;
+  bookingId?: number;
+};
+
+test.use({
+  trace: "on-first-retry",
+  screenshot: "only-on-failure",
+  video: "retain-on-failure",
+});
+
+test.describe("SumUp payment return", () => {
+  test.skip(
+    !canRunDatabaseMutationE2E(),
+    "TEST-only payment-return E2E requires E2E_ALLOW_DB_MUTATION=true and the TEST Supabase project."
+  );
+  test.describe.configure({ mode: "serial" });
+
+  let supabase: SupabaseClient;
+  const seeds: PaymentReturnSeed[] = [];
+
+  test.beforeAll(() => {
+    supabase = createE2ESupabaseClient(requireDatabaseMutationE2EEnv());
+  });
+
+  test.afterEach(async () => {
+    const seed = seeds.pop();
+
+    if (seed) {
+      await cleanupSeed(supabase, seed);
+    }
+  });
+
+  test("shows processing immediately, hides the ordinary games page, and opens the paid game", async ({
+    page,
+  }) => {
+    const seed = await createSeed(supabase, { label: "paid", booked: true });
+    seeds.push(seed);
+    const checkoutReference = `${seed.runId}_checkout_reference`;
+    const diagnostics = collectDiagnostics(page);
+    let statusRequests = 0;
+
+    await page.route("**/api/sumup/status?**", async (route) => {
+      statusRequests += 1;
+      await new Promise((resolve) => setTimeout(resolve, statusRequests === 1 ? 1200 : 0));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          paymentStatus: "paid",
+          gameId: seed.gameId,
+          bookingId: seed.bookingId,
+        }),
+      });
+    });
+
+    await signInWithEmail(page, seed.email, seed.password);
+    await setPendingPaymentStorage(page, {
+      checkoutReference,
+      checkoutId: `${seed.runId}_checkout_id`,
+      gameId: seed.gameId,
+    });
+
+    await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
+
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("We're checking your payment. This may take a few moments.")).toBeVisible();
+    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
+    await expect(page.getByText(seed.gameTitle)).toHaveCount(0);
+
+    await expect(page.getByText("Payment confirmed. Your booking has been added.").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
+    await expect(page.getByText(seed.gameTitle).first()).toBeVisible();
+    await expect(page.getByText("Already Joined").first()).toBeVisible();
+
+    const bookingCountBeforeRefresh = await countBookings(supabase, seed);
+    await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("Already Joined").first()).toBeVisible();
+    await expect.poll(() => countBookings(supabase, seed)).toBe(bookingCountBeforeRefresh);
+    expect(statusRequests).toBeGreaterThanOrEqual(2);
+    expect(diagnostics.errors()).toEqual([]);
+  });
+
+  test("keeps slow verification on the processing state without showing the games page", async ({
+    page,
+  }) => {
+    const seed = await createSeed(supabase, { label: "slow", booked: true });
+    seeds.push(seed);
+    const checkoutReference = `${seed.runId}_slow_reference`;
+    const diagnostics = collectDiagnostics(page);
+
+    await page.route("**/api/sumup/status?**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ paymentStatus: "pending", gameId: seed.gameId }),
+      });
+    });
+
+    await signInWithEmail(page, seed.email, seed.password);
+    await setPendingPaymentStorage(page, {
+      checkoutReference,
+      checkoutId: `${seed.runId}_checkout_id`,
+      gameId: seed.gameId,
+    });
+
+    await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
+
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
+    await expect(page.getByText(seed.gameTitle)).toHaveCount(0);
+    await page.waitForTimeout(1000);
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
+    expect(diagnostics.errors()).toEqual([]);
+  });
+
+  test("shows existing paid_no_space and failed return states", async ({ page }) => {
+    const paidNoSpaceSeed = await createSeed(supabase, { label: "no_space", booked: false });
+    seeds.push(paidNoSpaceSeed);
+    const noSpaceDiagnostics = collectDiagnostics(page);
+
+    await page.route("**/api/sumup/status?**", async (route) => {
+      const url = new URL(route.request().url());
+      const reference = url.searchParams.get("checkout_reference") ?? "";
+      const isFailed = reference.includes("failed");
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          isFailed
+            ? { paymentStatus: "failed", gameId: paidNoSpaceSeed.gameId }
+            : { paymentStatus: "paid_no_space", gameId: paidNoSpaceSeed.gameId }
+        ),
+      });
+    });
+
+    await signInWithEmail(page, paidNoSpaceSeed.email, paidNoSpaceSeed.password);
+    await page.goto(`/?sumup_checkout_reference=${paidNoSpaceSeed.runId}_paid_no_space_reference`);
+
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("Payment received, but this game is now full.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
+
+    await page.goto(`/?sumup_checkout_reference=${paidNoSpaceSeed.runId}_failed_reference`);
+
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("SumUp could not complete the payment. Please try again.")).toBeVisible();
+    expect(noSpaceDiagnostics.errors()).toEqual([]);
+  });
+});
+
+function collectDiagnostics(page: Page) {
+  const messages: string[] = [];
+  const failedRequests: string[] = [];
+
+  page.on("console", (message) => {
+    const text = message.text();
+
+    if (text === "Failed to load resource: the server responded with a status of 403 ()") {
+      return;
+    }
+
+    if (
+      message.type() === "error" ||
+      /hydration/i.test(text) ||
+      /did not match/i.test(text)
+    ) {
+      messages.push(text);
+    }
+  });
+
+  page.on("requestfailed", (request: Request) => {
+    const failure = request.failure();
+    if (failure?.errorText === "net::ERR_ABORTED") {
+      return;
+    }
+
+    failedRequests.push(`${request.method()} ${request.url()} ${failure?.errorText ?? ""}`.trim());
+  });
+
+  return {
+    errors: () => [...messages, ...failedRequests],
+  };
+}
+
+async function setPendingPaymentStorage(
+  page: Page,
+  params: { checkoutReference: string; checkoutId: string; gameId: number }
+) {
+  await page.evaluate(({ checkoutReference, checkoutId, gameId }) => {
+    localStorage.setItem("pendingSumUpGameId", String(gameId));
+    localStorage.setItem("pendingSumUpCheckoutId", checkoutId);
+    localStorage.setItem("pendingSumUpCheckoutReference", checkoutReference);
+  }, params);
+}
+
+async function createSeed(
+  supabase: SupabaseClient,
+  options: { label: string; booked: boolean }
+): Promise<PaymentReturnSeed> {
+  const runId = `e2e_payment_return_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const email = `${runId}_${options.label}@example.test`;
+  const password = `Password-${runId}-${options.label}`;
+  const username = `E2E Payment Return ${options.label}`;
+  const gameTitle = `E2E Payment Return ${options.label} ${runId}`;
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      username,
+      e2e_run_id: runId,
+    },
+  });
+
+  if (authError || !authData.user) {
+    throw new Error(`create payment return user: ${authError?.message || "no user returned"}`);
+  }
+
+  const userId = authData.user.id;
+
+  await insertSingle(
+    supabase
+      .from("profiles")
+      .upsert({
+        id: userId,
+        email,
+        username,
+        age: 25,
+        gender: "Prefer not to say",
+        favourite_position: "Midfielder",
+      })
+      .select("id")
+      .single(),
+    "upsert payment return profile"
+  );
+
+  const game = await insertSingle<{ id: number }>(
+    supabase
+      .from("games")
+      .insert({
+        title: gameTitle,
+        location: `E2E Payment Pitch ${runId.slice(-6)}`,
+        time: "15 Jan 2099, 20:00",
+        starts_at: "2099-01-15T20:00:00.000Z",
+        price: 5,
+        max_players: 12,
+        status: "active",
+      })
+      .select("id")
+      .single(),
+    "insert payment return game"
+  );
+
+  let bookingId: number | undefined;
+
+  if (options.booked) {
+    const booking = await insertSingle<{ id: number }>(
+      supabase
+        .from("bookings")
+        .insert({
+          game_id: game.id,
+          user_id: userId,
+          player_name: username,
+        })
+        .select("id")
+        .single(),
+      "insert payment return booking"
+    );
+    bookingId = booking.id;
+  }
+
+  return {
+    runId,
+    userId,
+    email,
+    password,
+    username,
+    gameId: game.id,
+    gameTitle,
+    bookingId,
+  };
+}
+
+async function insertSingle<T>(
+  query: PromiseLike<{ data: T | null; error: { message: string } | null }>,
+  context: string
+) {
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`${context}: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error(`${context}: no row returned.`);
+  }
+
+  return data;
+}
+
+async function countBookings(supabase: SupabaseClient, seed: PaymentReturnSeed) {
+  const { count, error } = await supabase
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", seed.gameId)
+    .eq("user_id", seed.userId);
+
+  if (error) {
+    throw new Error(`count payment return bookings: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+async function cleanupSeed(supabase: SupabaseClient, seed: PaymentReturnSeed) {
+  const failures: string[] = [];
+  const runCleanup = async (
+    label: string,
+    cleanup: () => PromiseLike<{ error: { message: string } | null }>
+  ) => {
+    const { error } = await cleanup();
+
+    if (error) {
+      failures.push(`${label}: ${error.message}`);
+    }
+  };
+
+  await runCleanup("delete payment return booking payments", () =>
+    supabase.from("booking_payments").delete().eq("game_id", seed.gameId)
+  );
+  await runCleanup("delete payment return wallet transactions", () =>
+    supabase.from("wallet_transactions").delete().eq("game_id", seed.gameId)
+  );
+  await runCleanup("delete payment return waiting list", () =>
+    supabase.from("waiting_list").delete().eq("game_id", seed.gameId)
+  );
+  await runCleanup("delete payment return bookings", () =>
+    supabase.from("bookings").delete().eq("game_id", seed.gameId)
+  );
+  await runCleanup("delete payment return game", () =>
+    supabase.from("games").delete().eq("id", seed.gameId)
+  );
+  await runCleanup("delete payment return profile", () =>
+    supabase.from("profiles").delete().eq("id", seed.userId)
+  );
+
+  const { error: deleteUserError } = await supabase.auth.admin.deleteUser(seed.userId);
+
+  if (deleteUserError) {
+    failures.push(`delete payment return auth user: ${deleteUserError.message}`);
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Payment return E2E cleanup failed for ${seed.runId}. ${failures.join(" | ")}`);
+  }
+}

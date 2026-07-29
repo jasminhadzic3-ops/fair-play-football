@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const homePageSource = readFileSync(join(process.cwd(), "app/page.tsx"), "utf8");
+const homePageSource = readFileSync(join(process.cwd(), "components/home/HomeClient.tsx"), "utf8");
 const gameDetailsSource = readFileSync(join(process.cwd(), "components/games/GameDetails.tsx"), "utf8");
 const navbarSource = readFileSync(join(process.cwd(), "components/shared/layout/Navbar.tsx"), "utf8");
 const footerSource = readFileSync(join(process.cwd(), "components/shared/layout/Footer.tsx"), "utf8");
