@@ -59,8 +59,18 @@ describe("homepage game calendar source", () => {
   });
 
   it("explains calendar indicator meanings with a compact legend", () => {
+    expect(homePageSource).toContain("grid grid-cols-[1rem_auto] items-center gap-1.5");
+    expect(homePageSource).toContain("grid gap-1 text-[0.72rem] font-semibold text-zinc-500");
     expect(homePageSource).toContain("= Your Booking");
     expect(homePageSource).toContain("= Games on This Date");
+  });
+
+  it("explains the calendar symbols in the existing FAQ", () => {
+    expect(homePageSource).toContain("What do the calendar symbols mean?");
+    expect(homePageSource).toContain(
+      "The green tick shows a date where you have booked a game. The number shows how many games are available on that date."
+    );
+    expect(homePageSource).toContain("<details key={item.question}");
   });
 
   it("keeps keyboard-accessible buttons for all calendar controls", () => {

@@ -331,6 +331,7 @@ test.describe("Games calendar navigation", () => {
       await expect(page.locator("#games")).toBeVisible();
       await expect(page.getByRole("button", { name: "All Games" })).toBeVisible();
       await expect(page.getByText("= Your Booking")).toBeVisible();
+      await expect(page.getByText("= Games on This Date")).toBeVisible();
       if (process.env.E2E_CAPTURE_CALENDAR_SCREENSHOTS === "true") {
         await page.locator("#games").screenshot({ path: "/tmp/fair-play-calendar-mobile.png" });
       }
@@ -342,5 +343,19 @@ test.describe("Games calendar navigation", () => {
     } finally {
       await cleanupCalendarSeed(runId, [player.id]);
     }
+  });
+
+  test("FAQ explains the calendar symbols in the existing accordion", async ({ page }) => {
+    await page.goto("/");
+
+    const question = page.getByText("What do the calendar symbols mean?");
+    await expect(question).toBeVisible();
+    await question.click();
+
+    await expect(
+      page.getByText(
+        "The green tick shows a date where you have booked a game. The number shows how many games are available on that date."
+      )
+    ).toBeVisible();
   });
 });

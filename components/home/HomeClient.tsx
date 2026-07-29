@@ -1232,8 +1232,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
           <div className="mb-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-[0_12px_34px_rgba(0,0,0,0.16)]">
             <div className="flex flex-col gap-2.5 border-b border-zinc-800/80 px-3 py-2.5 sm:px-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex flex-col items-start gap-1.5 text-[0.72rem] font-semibold text-zinc-500">
-                <span className="inline-flex items-center gap-1.5">
+              <div className="grid gap-1 text-[0.72rem] font-semibold text-zinc-500">
+                <span className="grid grid-cols-[1rem_auto] items-center gap-1.5">
                   <span
                     aria-hidden="true"
                     className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400/45 bg-emerald-500/20 text-[0.58rem] font-black text-emerald-200"
@@ -1242,10 +1242,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   </span>
                   <span>= Your Booking</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5">
+                <span className="grid grid-cols-[1rem_auto] items-center gap-1.5">
                   <span
                     aria-hidden="true"
-                    className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-zinc-700 bg-white/[0.03] px-1 text-[0.58rem] font-semibold leading-none text-zinc-400"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-zinc-700 bg-white/[0.03] px-1 text-[0.58rem] font-semibold leading-none text-zinc-400"
                   >
                     1
                   </span>
@@ -1596,6 +1596,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   {
                     question: "What happens if a game is full?",
                     answer: "You can join the waiting list. If a space opens, you will be notified.",
+                  },
+                  {
+                    question: "What do the calendar symbols mean?",
+                    answer: "The green tick shows a date where you have booked a game. The number shows how many games are available on that date.",
                   },
                   {
                     question: "What do I need to bring?",
