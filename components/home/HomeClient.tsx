@@ -1231,8 +1231,28 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               ) : null}
 
           <div className="mb-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-[0_12px_34px_rgba(0,0,0,0.16)]">
-            <div className="flex flex-wrap items-center justify-end gap-3 border-b border-zinc-800/80 px-3 py-2.5 sm:px-4">
-              <div className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-black p-1">
+            <div className="flex flex-col gap-2.5 border-b border-zinc-800/80 px-3 py-2.5 sm:px-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.72rem] font-semibold text-zinc-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400/45 bg-emerald-500/20 text-[0.58rem] font-black text-emerald-200"
+                  >
+                    ✓
+                  </span>
+                  <span>Booked — You&apos;re booked on this date</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-zinc-700 bg-white/[0.03] px-1 text-[0.58rem] font-semibold leading-none text-zinc-400"
+                  >
+                    1
+                  </span>
+                  <span>Games — Number of games on this date</span>
+                </span>
+              </div>
+              <div className="flex w-full items-center gap-1.5 rounded-full border border-zinc-800 bg-black p-1 md:w-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -1259,6 +1279,17 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 <button
                   type="button"
                   onClick={() => {
+                    setWeekNavigationDirection("next");
+                    setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, 7));
+                  }}
+                  className="min-h-9 rounded-full px-3 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                  aria-label="Show next week"
+                >
+                  Next
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     setWeekNavigationDirection(null);
                     setShowAllGames(true);
                     setSelectedGameDateKey(null);
@@ -1271,17 +1302,6 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   aria-pressed={showAllGames}
                 >
                   All Games
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWeekNavigationDirection("next");
-                    setVisibleWeekStartKey(addDaysToDateKey(fallbackWeekStartKey, 7));
-                  }}
-                  className="min-h-9 rounded-full px-3 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
-                  aria-label="Show next week"
-                >
-                  Next
                 </button>
               </div>
             </div>
@@ -1350,26 +1370,6 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   );
                 })}
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-900/80 px-4 py-3 text-[0.72rem] font-semibold text-zinc-500 sm:px-5">
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400/45 bg-emerald-500/20 text-[0.58rem] font-black text-emerald-200"
-                >
-                  ✓
-                </span>
-                <span>Booked — You&apos;re booked on this date</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-zinc-700 bg-white/[0.03] px-1 text-[0.58rem] font-semibold leading-none text-zinc-400"
-                >
-                  1
-                </span>
-                <span>Games — Number of games on this date</span>
-              </span>
             </div>
           </div>
 
