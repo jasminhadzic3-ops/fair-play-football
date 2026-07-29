@@ -62,6 +62,24 @@ describe("homepage about section source", () => {
     expect(gameDetailsSource).not.toContain("If a game is cancelled by the organiser");
   });
 
+  it("orders game details policy, wallet and booking actions without changing wallet behaviour", () => {
+    const rulesIndex = gameDetailsSource.indexOf("Rules</h3>");
+    const refundIndex = gameDetailsSource.indexOf("Refund Policy</h3>");
+    const walletIndex = gameDetailsSource.indexOf("WALLET");
+    const waitingListIndex = gameDetailsSource.indexOf("Waiting list");
+    const bookingIndex = gameDetailsSource.indexOf("Book Your Spot");
+
+    expect(rulesIndex).toBeGreaterThan(-1);
+    expect(refundIndex).toBeGreaterThan(rulesIndex);
+    expect(walletIndex).toBeGreaterThan(refundIndex);
+    expect(waitingListIndex).toBeGreaterThan(walletIndex);
+    expect(bookingIndex).toBeGreaterThan(walletIndex);
+    expect(gameDetailsSource).toContain("Available balance");
+    expect(gameDetailsSource).toContain("formatWalletBalance(walletBalance ?? 0)");
+    expect(gameDetailsSource).not.toContain("Available wallet balance");
+    expect(gameDetailsSource).not.toContain("Credit available on your Fair Play Football account.");
+  });
+
   it("shows Find Games and signed-out Sign Up CTAs", () => {
     expect(homePageSource).toContain('href="#games"');
     expect(homePageSource).toContain("Find Games");

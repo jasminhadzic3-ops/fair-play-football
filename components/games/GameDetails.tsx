@@ -1017,34 +1017,6 @@ export default function GameDetails({
           </div>
         </div>
 
-        {isAuthenticated && (walletBalanceLoading || walletBalance !== null) ? (
-          <div className="rounded-3xl border border-stone-300/15 bg-zinc-950/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500 sm:tracking-[0.3em]">
-                  Available wallet balance
-                </p>
-                <p className="mt-1.5 text-sm text-zinc-400">
-                  Credit available on your Fair Play Football account.
-                </p>
-              </div>
-              {walletBalanceLoading ? (
-                <div
-                  className="flex h-9 items-center justify-start sm:h-10 sm:justify-end"
-                  role="status"
-                  aria-label="Loading wallet balance"
-                >
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300/20 border-t-stone-200" />
-                </div>
-              ) : (
-                <p className="text-2xl font-black text-stone-100 sm:text-3xl">
-                  {formatWalletBalance(walletBalance ?? 0)}
-                </p>
-              )}
-            </div>
-          </div>
-        ) : null}
-
         <div className="space-y-2.5 sm:space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h3 className="text-base font-bold text-white sm:text-lg">Teams</h3>
@@ -1142,6 +1114,52 @@ export default function GameDetails({
           </div>
         </div>
 
+        <div className="border-t border-zinc-800 pt-3 bg-zinc-800 bg-opacity-50 rounded-lg p-3 border border-zinc-700 sm:p-4 sm:pt-6">
+          <h3 className="text-base font-bold text-white mb-2 sm:text-lg sm:mb-3">Refund Policy</h3>
+          <div className="space-y-2.5 text-sm text-gray-300 sm:space-y-3">
+            <p>
+              • {REFUND_POLICY_ITEMS[0]}
+            </p>
+            <p>
+              • {REFUND_POLICY_ITEMS[1]}
+            </p>
+            <p>
+              • {REFUND_POLICY_ITEMS[2]}
+            </p>
+            <p>
+              • {REFUND_POLICY_ITEMS[3]}
+            </p>
+          </div>
+        </div>
+
+        {isAuthenticated && (walletBalanceLoading || walletBalance !== null) ? (
+          <div className="rounded-3xl border border-stone-300/15 bg-zinc-950/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500 sm:tracking-[0.3em]">
+                  WALLET
+                </p>
+                <p className="mt-1.5 text-sm text-zinc-400">
+                  Available balance
+                </p>
+              </div>
+              {walletBalanceLoading ? (
+                <div
+                  className="flex h-9 items-center justify-start sm:h-10 sm:justify-end"
+                  role="status"
+                  aria-label="Loading wallet balance"
+                >
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300/20 border-t-stone-200" />
+                </div>
+              ) : (
+                <p className="text-2xl font-black text-stone-100 sm:text-3xl">
+                  {formatWalletBalance(walletBalance ?? 0)}
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {isGameFull && !alreadyJoined ? (
           <div className="border-t border-zinc-800 pt-3 sm:pt-6">
             <div className="rounded-3xl border border-stone-300/10 bg-zinc-900/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-4">
@@ -1189,24 +1207,6 @@ export default function GameDetails({
             </div>
           </div>
         ) : null}
-
-        <div className="border-t border-zinc-800 pt-3 bg-zinc-800 bg-opacity-50 rounded-lg p-3 border border-zinc-700 sm:p-4 sm:pt-6">
-          <h3 className="text-base font-bold text-white mb-2 sm:text-lg sm:mb-3">Refund Policy</h3>
-          <div className="space-y-2.5 text-sm text-gray-300 sm:space-y-3">
-            <p>
-              • {REFUND_POLICY_ITEMS[0]}
-            </p>
-            <p>
-              • {REFUND_POLICY_ITEMS[1]}
-            </p>
-            <p>
-              • {REFUND_POLICY_ITEMS[2]}
-            </p>
-            <p>
-              • {REFUND_POLICY_ITEMS[3]}
-            </p>
-          </div>
-        </div>
 
         <div className="border-t border-zinc-800 pt-3 sm:pt-6">
           <div className="rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-3 shadow-[0_18px_54px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-6">
