@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getAuthenticatedUserMock = vi.hoisted(() => vi.fn());
 const createWalletRefundRequestMock = vi.hoisted(() => vi.fn());
 const getLatestSumUpRefundAttemptForRequestMock = vi.hoisted(() => vi.fn());
-const getAutomaticRefundDependencyMock = vi.hoisted(() => vi.fn());
+const getAutomaticRefundProcessorDependenciesMock = vi.hoisted(() => vi.fn());
 const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
 
@@ -12,7 +12,7 @@ vi.mock("@/lib/sumupPayments", () => ({
 }));
 
 vi.mock("@/lib/sumupRefundDependencies", () => ({
-  getAutomaticRefundDependency: getAutomaticRefundDependencyMock,
+  getAutomaticRefundProcessorDependencies: getAutomaticRefundProcessorDependenciesMock,
 }));
 
 vi.mock("@/lib/sumupRefundProcessing", () => ({
@@ -87,7 +87,7 @@ beforeEach(() => {
   });
   createWalletRefundRequestMock.mockResolvedValue(successfulRefundRequest());
   getLatestSumUpRefundAttemptForRequestMock.mockResolvedValue(null);
-  getAutomaticRefundDependencyMock.mockReturnValue(null);
+  getAutomaticRefundProcessorDependenciesMock.mockReturnValue(null);
   processAutomaticSumUpRefundMock.mockResolvedValue({
     outcome: "completed",
     status: 200,
@@ -155,7 +155,7 @@ describe("wallet refund request route", () => {
 
   it("runs automatic refund processing after the reservation when enabled", async () => {
     const refundDependency = vi.fn();
-    getAutomaticRefundDependencyMock.mockReturnValue(refundDependency);
+    getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency });
 
     const response = await POST(refundRequest() as Parameters<typeof POST>[0]);
     const body = await response.json();
@@ -196,7 +196,7 @@ describe("wallet refund request route", () => {
   });
 
   it("returns a safe failed automatic refund result without raw upstream data", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+    getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency: vi.fn() });
     processAutomaticSumUpRefundMock.mockResolvedValue({
       outcome: "sumup_failed",
       status: 502,
@@ -227,7 +227,7 @@ describe("wallet refund request route", () => {
   });
 
   it("returns manual review for unknown automatic refund outcomes", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+    getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency: vi.fn() });
     processAutomaticSumUpRefundMock.mockResolvedValue({
       outcome: "sumup_unknown",
       status: 502,
@@ -259,7 +259,7 @@ describe("wallet refund request route", () => {
   });
 
   it("does not immediately retry a recently failed automatic refund attempt", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+    getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency: vi.fn() });
     getLatestSumUpRefundAttemptForRequestMock.mockResolvedValue({
       id: 904,
       status: "failed",
@@ -280,7 +280,7 @@ describe("wallet refund request route", () => {
   });
 
   it("returns processing for duplicate requests while an attempt is already active", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+    getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency: vi.fn() });
     createWalletRefundRequestMock.mockResolvedValue(
       successfulRefundRequest({
         refundRequestId: 55,
@@ -317,7 +317,7 @@ describe("wallet refund request route", () => {
   });
 
   it("does not process an existing completed refund request again", async () => {
-    getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+    getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency: vi.fn() });
     createWalletRefundRequestMock.mockResolvedValue(
       successfulRefundRequest({
         refundRequestId: 55,
@@ -345,7 +345,7 @@ describe("wallet refund request route", () => {
 
   it("keeps concurrent duplicate requests on the same existing processor path", async () => {
     const refundDependency = vi.fn();
-    getAutomaticRefundDependencyMock.mockReturnValue(refundDependency);
+    getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency });
     createWalletRefundRequestMock.mockResolvedValue(
       successfulRefundRequest({
         refundRequestId: 55,

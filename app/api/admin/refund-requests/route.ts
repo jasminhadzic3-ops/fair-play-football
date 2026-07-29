@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { buildAdminRefundCandidates } from "@/lib/adminRefundCandidates";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
-import { getAutomaticRefundDependency } from "@/lib/sumupRefundDependencies";
+import { getAutomaticRefundProcessorDependencies } from "@/lib/sumupRefundDependencies";
 import { processAutomaticSumUpRefund } from "@/lib/sumupRefundProcessing";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { createWalletRefundRequest, getLatestSumUpRefundAttemptForRequest } from "@/lib/wallet";
@@ -383,9 +383,9 @@ export async function POST(request: NextRequest) {
         "Refund request already exists. Use the Refund Requests queue for processing and recovery."
       );
     } else if (refundRequestResult.refundRequestId) {
-      const refundDependency = getAutomaticRefundDependency();
+      const automaticRefundDependencies = getAutomaticRefundProcessorDependencies();
 
-      if (refundDependency) {
+      if (automaticRefundDependencies) {
         if (await isRecentFailedAttemptCoolingDown(refundRequestResult.refundRequestId)) {
           automaticRefund = automaticRefundRetryCoolingDown();
         } else {
@@ -394,7 +394,7 @@ export async function POST(request: NextRequest) {
               refundRequestId: refundRequestResult.refundRequestId,
               actorUserId: adminUser.id,
               initiatedBy: "admin",
-              refundDependency,
+              ...automaticRefundDependencies,
             })
           );
         }

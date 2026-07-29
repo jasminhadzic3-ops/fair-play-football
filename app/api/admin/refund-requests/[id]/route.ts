@@ -8,7 +8,7 @@ import {
   type SumUpRefundEvidenceDependency,
 } from "@/lib/sumupRefundReconciliation";
 import { getAutomaticSumUpRefundMode } from "@/lib/sumupRefundCapabilities";
-import { getAutomaticRefundDependency } from "@/lib/sumupRefundDependencies";
+import { getAutomaticRefundProcessorDependencies } from "@/lib/sumupRefundDependencies";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { completeWalletRefundRequest } from "@/lib/wallet";
 
@@ -241,9 +241,9 @@ export async function PATCH(
     }
 
     if (action === "refund_via_sumup") {
-      const refundDependency = getAutomaticRefundDependency();
+      const automaticRefundDependencies = getAutomaticRefundProcessorDependencies();
 
-      if (!refundDependency) {
+      if (!automaticRefundDependencies) {
         return Response.json(
           { error: "Automatic SumUp refunds are not enabled in this environment." },
           { status: 403 }
@@ -254,7 +254,7 @@ export async function PATCH(
         refundRequestId,
         actorUserId: adminUser.id,
         initiatedBy: "admin",
-        refundDependency,
+        ...automaticRefundDependencies,
       });
 
       if (result.outcome === "completed") {

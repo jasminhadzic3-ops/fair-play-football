@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getAutomaticRefundDependency } from "@/lib/sumupRefundDependencies";
+import { getAutomaticRefundProcessorDependencies } from "@/lib/sumupRefundDependencies";
 import { processAutomaticSumUpRefund } from "@/lib/sumupRefundProcessing";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getAuthenticatedUser } from "@/lib/sumupPayments";
@@ -242,9 +242,9 @@ export async function POST(request: NextRequest) {
     if (refundRequestStatus === "completed") {
       automaticRefund = automaticRefundAlreadyCompleted();
     } else {
-      const refundDependency = getAutomaticRefundDependency();
+      const automaticRefundDependencies = getAutomaticRefundProcessorDependencies();
 
-      if (refundDependency && result.refundRequestId) {
+      if (automaticRefundDependencies && result.refundRequestId) {
         if (await isRecentFailedAttemptCoolingDown(result.refundRequestId)) {
           automaticRefund = automaticRefundRetryCoolingDown();
         } else {
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
             refundRequestId: result.refundRequestId,
             actorUserId: user.id,
             initiatedBy: "player",
-            refundDependency,
+            ...automaticRefundDependencies,
           });
 
           automaticRefund = automaticRefundFromProcessorResult(processorResult);

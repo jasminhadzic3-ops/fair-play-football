@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getAuthenticatedAdminUserMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
 const buildAdminRefundCandidatesMock = vi.hoisted(() => vi.fn());
-const getAutomaticRefundDependencyMock = vi.hoisted(() => vi.fn());
+const getAutomaticRefundProcessorDependenciesMock = vi.hoisted(() => vi.fn());
 const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
 const createWalletRefundRequestMock = vi.hoisted(() => vi.fn());
 const getLatestSumUpRefundAttemptForRequestMock = vi.hoisted(() => vi.fn());
@@ -17,7 +17,7 @@ vi.mock("@/lib/adminRefundCandidates", () => ({
 }));
 
 vi.mock("@/lib/sumupRefundDependencies", () => ({
-  getAutomaticRefundDependency: getAutomaticRefundDependencyMock,
+  getAutomaticRefundProcessorDependencies: getAutomaticRefundProcessorDependenciesMock,
 }));
 
 vi.mock("@/lib/sumupRefundProcessing", () => ({
@@ -156,7 +156,7 @@ beforeEach(() => {
   getAuthenticatedAdminUserMock.mockResolvedValue({ id: "admin-1" });
   supabaseFromMock.mockImplementation((table: string) => new MockSupabaseQuery(table));
   buildAdminRefundCandidatesMock.mockImplementation(() => state.candidates);
-  getAutomaticRefundDependencyMock.mockReturnValue(vi.fn());
+  getAutomaticRefundProcessorDependenciesMock.mockReturnValue({ refundDependency: vi.fn() });
   createWalletRefundRequestMock.mockResolvedValue({
     success: true,
     refundRequestId: 501,

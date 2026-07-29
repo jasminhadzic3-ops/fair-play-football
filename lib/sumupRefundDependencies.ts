@@ -1,8 +1,18 @@
 import "server-only";
 
 import { getAutomaticSumUpRefundMode } from "@/lib/sumupRefundCapabilities";
-import { refundSumUpTransaction, SumUpRefundHttpError } from "@/lib/sumupPayments";
-import type { SumUpRefundDependency } from "@/lib/sumupRefundProcessing";
+import {
+  refundSumUpTransaction,
+  SumUpRefundHttpError,
+  type retrieveValidatedSumUpTransactionForPayment,
+  type resolveAndStoreSumUpTransactionIdForPaymentId,
+} from "@/lib/sumupPayments";
+import type { ProcessAutomaticSumUpRefundParams, SumUpRefundDependency } from "@/lib/sumupRefundProcessing";
+
+type AutomaticRefundProcessorDependencies = Pick<
+  ProcessAutomaticSumUpRefundParams,
+  "refundDependency" | "resolveTransactionId" | "retrieveValidatedTransaction"
+>;
 
 export function getTestOnlyMockRefundDependency(): SumUpRefundDependency {
   return async ({ transactionId, amount }) => {
@@ -112,4 +122,61 @@ export function getAutomaticRefundDependency(): SumUpRefundDependency | null {
   }
 
   return null;
+}
+
+function getTestOnlyMockResolveTransactionId(): typeof resolveAndStoreSumUpTransactionIdForPaymentId {
+  return async (bookingPaymentId) => `mock-sumup-transaction-${bookingPaymentId}`;
+}
+
+function getTestOnlyMockValidatedTransaction(): typeof retrieveValidatedSumUpTransactionForPayment {
+  return async (payment) => {
+    const paymentStatus = payment.payment_status?.toLowerCase();
+
+    if (paymentStatus !== "paid" && paymentStatus !== "paid_no_space") {
+      throw new Error("Only paid SumUp payments can be refunded.");
+    }
+
+    const amount = Number(payment.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Invalid SumUp payment amount.");
+    }
+
+    const transactionId =
+      payment.sumup_transaction_id?.trim() ||
+      (payment.transaction_code?.trim()
+        ? `mock-sumup-transaction-${payment.transaction_code.trim()}`
+        : null);
+
+    if (!transactionId) {
+      throw new Error("SumUp transaction code is required.");
+    }
+
+    return {
+      id: transactionId,
+      transaction_code: payment.transaction_code?.trim() || `mock-code-${payment.id}`,
+      amount,
+      currency: payment.currency || "GBP",
+      status: "SUCCESSFUL",
+    };
+  };
+}
+
+export function getAutomaticRefundProcessorDependencies(): AutomaticRefundProcessorDependencies | null {
+  const mode = getAutomaticSumUpRefundMode();
+  const refundDependency = getAutomaticRefundDependency();
+
+  if (!refundDependency) {
+    return null;
+  }
+
+  if (mode === "test_mock") {
+    return {
+      refundDependency,
+      resolveTransactionId: getTestOnlyMockResolveTransactionId(),
+      retrieveValidatedTransaction: getTestOnlyMockValidatedTransaction(),
+    };
+  }
+
+  return { refundDependency };
 }

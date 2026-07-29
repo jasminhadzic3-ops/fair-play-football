@@ -400,12 +400,12 @@ describe("admin refund request route", () => {
 
     expect(response.status).toBe(200);
     expect(processAutomaticSumUpRefundMock).toHaveBeenCalledTimes(1);
-    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
+    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith(expect.objectContaining({
       refundRequestId: 501,
       actorUserId: "admin-1",
       initiatedBy: "admin",
       refundDependency: expect.any(Function),
-    });
+    }));
     expect(completeWalletRefundRequestMock).not.toHaveBeenCalled();
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
     expect(body).toMatchObject({
@@ -580,12 +580,12 @@ describe("admin refund request route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
+    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith(expect.objectContaining({
       refundRequestId: 501,
       actorUserId: "admin-1",
       initiatedBy: "admin",
       refundDependency: expect.any(Function),
-    });
+    }));
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
   });
 
@@ -668,12 +668,12 @@ describe("admin refund request route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith({
+    expect(processAutomaticSumUpRefundMock).toHaveBeenCalledWith(expect.objectContaining({
       refundRequestId: 501,
       actorUserId: "admin-1",
       initiatedBy: "admin",
       refundDependency: expect.any(Function),
-    });
+    }));
     expect(refundSumUpTransactionMock).not.toHaveBeenCalled();
   });
 
