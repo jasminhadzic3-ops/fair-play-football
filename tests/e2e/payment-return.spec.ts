@@ -82,11 +82,20 @@ test.describe("SumUp payment return", () => {
     await expect(page.getByText("We're checking your payment. This may take a few moments.")).toBeVisible();
     await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
     await expect(page.getByText(seed.gameTitle)).toHaveCount(0);
+    await startPaymentReturnFrameMonitor(page, seed.gameTitle);
 
     await expect(page.getByText("Payment confirmed. Your booking has been added.").first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
     await expect(page.getByText(seed.gameTitle).first()).toBeVisible();
     await expect(page.getByText("Already Joined").first()).toBeVisible();
+    await expect(page.getByText(seed.username).first()).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
+    const frames = await stopPaymentReturnFrameMonitor(page);
+    expect(frames.some((frame) => frame.confirming)).toBe(true);
+    expect(frames.some((frame) => frame.modal)).toBe(true);
+    expect(frames.filter((frame) => frame.gamesList && !frame.modal)).toEqual([]);
+    expect(frames.filter((frame) => !frame.confirming && !frame.modal)).toEqual([]);
 
     const bookingCountBeforeRefresh = await countBookings(supabase, seed);
     await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
@@ -200,6 +209,69 @@ function collectDiagnostics(page: Page) {
   return {
     errors: () => [...messages, ...failedRequests],
   };
+}
+
+type PaymentReturnFrame = {
+  confirming: boolean;
+  gamesList: boolean;
+  modal: boolean;
+  path: string;
+};
+
+async function startPaymentReturnFrameMonitor(page: Page, gameTitle: string) {
+  await page.evaluate((title) => {
+    const monitoredWindow = window as typeof window & {
+      __paymentReturnFrames?: PaymentReturnFrame[];
+      __paymentReturnMonitorActive?: boolean;
+    };
+    monitoredWindow.__paymentReturnFrames = [];
+    monitoredWindow.__paymentReturnMonitorActive = true;
+
+    const isVisible = (element: Element | null) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+
+    const sample = () => {
+      const bodyText = document.body.innerText;
+      const confirming = bodyText.includes("Confirming your booking");
+      const modal = Array.from(document.querySelectorAll("h2")).some(
+        (heading) => heading.textContent?.trim() === "Game Info" && isVisible(heading)
+      );
+      const gamesHeader = bodyText.includes("Browse premium football matches in one clean list.");
+      const gameCard = Array.from(document.querySelectorAll("#games .cursor-pointer")).some(
+        (element) => element.textContent?.includes(title) && isVisible(element)
+      );
+
+      monitoredWindow.__paymentReturnFrames?.push({
+        confirming,
+        gamesList: gamesHeader || gameCard,
+        modal,
+        path: `${window.location.pathname}${window.location.search}`,
+      });
+
+      if (monitoredWindow.__paymentReturnMonitorActive) {
+        window.requestAnimationFrame(sample);
+      }
+    };
+
+    window.requestAnimationFrame(sample);
+  }, gameTitle);
+}
+
+async function stopPaymentReturnFrameMonitor(page: Page) {
+  return page.evaluate(() => {
+    const monitoredWindow = window as typeof window & {
+      __paymentReturnFrames?: PaymentReturnFrame[];
+      __paymentReturnMonitorActive?: boolean;
+    };
+    monitoredWindow.__paymentReturnMonitorActive = false;
+    return monitoredWindow.__paymentReturnFrames ?? [];
+  });
 }
 
 async function setPendingPaymentStorage(

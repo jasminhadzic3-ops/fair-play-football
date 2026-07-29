@@ -35,6 +35,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [profile, setProfile] = useState<any | null>(null);
   const [games, setGames] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
+  const [bookingsLoaded, setBookingsLoaded] = useState(false);
   const [successGameId, setSuccessGameId] = useState<number | null>(null);
   const [checkoutGameId, setCheckoutGameId] = useState<number | null>(null);
   const [pendingCheckoutId, setPendingCheckoutId] = useState<string | null>(null);
@@ -47,6 +48,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [returnPaymentState, setReturnPaymentState] = useState<"checking" | "paid" | "paid_no_space" | "duplicate_paid" | "pending" | "failed" | null>(
     hasInitialPaymentReturnReference ? "checking" : null
   );
+  const [paymentReturnGateActive, setPaymentReturnGateActive] = useState(hasInitialPaymentReturnReference);
+  const [paymentReturnTargetGameId, setPaymentReturnTargetGameId] = useState<number | null>(null);
   const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
   const [navbarAuthEmail, setNavbarAuthEmail] = useState("");
   const [navbarAuthPassword, setNavbarAuthPassword] = useState("");
@@ -104,7 +107,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       : weekNavigationDirection === "previous"
         ? "calendar-week-slide-previous"
         : "";
-  const isPaymentReturnChecking = hasInitialPaymentReturnReference && returnPaymentState === "checking";
+  const hideHeroForPaymentReturn = hasInitialPaymentReturnReference && returnPaymentState !== null;
+  const isPaymentReturnGateActive = paymentReturnGateActive;
 
   useEffect(() => {
     if (games.length === 0 || selectedGameDateKey) {
@@ -203,10 +207,22 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     }
 
     if (bookingsResponse.ok) {
-      setBookings(bookingsResult?.bookings ?? []);
+      const nextBookings = bookingsResult?.bookings ?? [];
+      setBookings(nextBookings);
+      setBookingsLoaded(true);
+      return {
+        games: gamesData ?? [],
+        bookings: nextBookings,
+      };
     } else {
       console.error("Unable to load bookings:", bookingsResult?.error || "Unknown error");
+      setBookingsLoaded(false);
     }
+
+    return {
+      games: gamesData ?? [],
+      bookings,
+    };
   }
 
   async function fetchUnreadNotificationCount() {
@@ -424,6 +440,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
       if (paymentStatus === "paid" || paymentStatus === "successful") {
         const paidGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
+        setPaymentReturnTargetGameId(paidGameId);
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
@@ -432,14 +449,20 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
         setSuccessGameId(paidGameId);
-        await fetchGames();
+        const refreshed = await fetchGames();
         if (paidGameId) {
-          setOpenDetailsGameId(paidGameId);
+          const refreshedGameExists = refreshed.games.some((game) => game.id === paidGameId);
+          if (refreshedGameExists) {
+            setOpenDetailsGameId(paidGameId);
+          } else {
+            setPaymentReturnGateActive(false);
+          }
+        } else {
+          setPaymentReturnGateActive(false);
         }
         clearSumUpCheckoutReferenceFromUrl();
         setReturnPaymentState("paid");
         setReturnPaymentMessage("Payment confirmed. Your booking has been added.");
-        scrollToGames();
         setTimeout(() => setSuccessGameId(null), 5000);
         return;
       }
@@ -459,7 +482,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         clearSumUpCheckoutReferenceFromUrl();
         setReturnPaymentState("paid_no_space");
         setReturnPaymentMessage("Payment received, but this game is now full. You are still on the waiting list and we’ll notify you if a spot opens.");
-        scrollToGames();
+        setPaymentReturnGateActive(false);
         return;
       }
 
@@ -473,11 +496,12 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         clearSumUpCheckoutReferenceFromUrl();
         setReturnPaymentState("duplicate_paid");
         setReturnPaymentMessage(result?.message || duplicatePaidPaymentMessage);
-        scrollToGames();
+        setPaymentReturnGateActive(false);
         return;
       }
 
       if (paymentStatus === "failed" || paymentStatus === "expired") {
+        setPaymentReturnGateActive(false);
         setReturnPaymentState("failed");
         setReturnPaymentMessage("SumUp could not complete the payment. Please try again.");
         return;
@@ -487,6 +511,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     }
 
     setReturnPaymentState("pending");
+    setPaymentReturnGateActive(false);
     setReturnPaymentMessage("Payment is still processing.");
   }
 
@@ -547,6 +572,36 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       listenerSubscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !paymentReturnGateActive ||
+      returnPaymentState !== "paid" ||
+      !paymentReturnTargetGameId
+    ) {
+      return;
+    }
+
+    const hasTargetGame = games.some((game) => game.id === paymentReturnTargetGameId);
+    const hasTargetBooking = bookings.some((booking) => booking.game_id === paymentReturnTargetGameId);
+
+    if (
+      hasTargetGame &&
+      bookingsLoaded &&
+      hasTargetBooking &&
+      openDetailsGameId === paymentReturnTargetGameId
+    ) {
+      setPaymentReturnGateActive(false);
+    }
+  }, [
+    bookings,
+    bookingsLoaded,
+    games,
+    openDetailsGameId,
+    paymentReturnGateActive,
+    paymentReturnTargetGameId,
+    returnPaymentState,
+  ]);
 
   useEffect(() => {
     if (!user) {
@@ -1074,10 +1129,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           </div>
         </div>
       </Modal>
-      {isPaymentReturnChecking ? null : <Hero />}
+      {hideHeroForPaymentReturn ? null : <Hero />}
       <main className="bg-black text-white" id="games">
         <div className="max-w-5xl mx-auto px-6 py-12">
-          {!isPaymentReturnChecking ? (
+          {!isPaymentReturnGateActive ? (
             <div className="mb-5 text-center">
               <p className="text-xs uppercase tracking-[0.35em] text-zinc-500 mb-3">
                 Find Games
@@ -1091,7 +1146,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             </div>
           ) : null}
 
-          {isPaymentReturnChecking ? (
+          {isPaymentReturnGateActive ? (
             <section
               className="mx-auto max-w-2xl rounded-3xl border border-stone-200/15 bg-zinc-950 px-6 py-8 text-center shadow-[0_18px_54px_rgba(214,211,209,0.08)]"
               aria-live="polite"

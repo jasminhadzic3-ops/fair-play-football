@@ -62,7 +62,7 @@ export default function GameCard({
   openAuthModal,
   onOpenAuthModalHandled,
 }: GameCardProps) {
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(Boolean(openAuthModal || openDetails));
 
   useEffect(() => {
     if (openAuthModal || openDetails) {
