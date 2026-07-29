@@ -11,6 +11,7 @@ import Hero from "@/components/shared/layout/Hero";
 import Footer from "@/components/shared/layout/Footer";
 import Modal from "@/components/shared/ui/Modal";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
+import { REFUND_POLICY_ITEMS } from "@/lib/refundPolicy";
 import {
   addDaysToDateKey,
   formatCalendarDateLabel,
@@ -1336,12 +1337,7 @@ export default function Home() {
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
             <h3 className="text-xl font-bold text-white">Refund Policy</h3>
             <div className="mt-4 grid gap-3 text-sm leading-6 text-zinc-300">
-              {[
-                "Cancel your booking at least 24 hours before kick-off and you'll receive a full refund.",
-                "If you cancel within 24 hours of kick-off, no refund is available.",
-                "If Fair Play Football cancels a game, all booked players receive a full refund.",
-                "If a game is cancelled because the minimum number of players is not reached, all booked players receive a full refund.",
-              ].map((item) => (
+              {REFUND_POLICY_ITEMS.map((item) => (
                 <div key={item} className="flex gap-3 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5">
                   <span className="mt-0.5 text-stone-300" aria-hidden="true">•</span>
                   <span>{item}</span>

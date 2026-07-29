@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Footer from "@/components/shared/layout/Footer";
+import { REFUND_POLICY_ITEMS } from "@/lib/refundPolicy";
 
 export const metadata: Metadata = {
   title: "Contact & Support",
@@ -40,8 +41,7 @@ const faqs = [
   },
   {
     category: "Refunds",
-    answer:
-      "Cancel your booking at least 24 hours before kick-off and you'll receive a full refund. If you cancel within 24 hours of kick-off, no refund is available.",
+    answer: `${REFUND_POLICY_ITEMS[0]} ${REFUND_POLICY_ITEMS[1]}`,
   },
   {
     category: "Waiting list",
@@ -49,8 +49,7 @@ const faqs = [
   },
   {
     category: "Game cancellations",
-    answer:
-      "If Fair Play Football cancels a game, all booked players receive a full refund. If a game is cancelled because the minimum number of players is not reached, all booked players receive a full refund.",
+    answer: `${REFUND_POLICY_ITEMS[2]} ${REFUND_POLICY_ITEMS[3]}`,
   },
   {
     category: "Competitive vs Casual games",

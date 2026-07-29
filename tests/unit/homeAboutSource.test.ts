@@ -6,6 +6,7 @@ const homePageSource = readFileSync(join(process.cwd(), "app/page.tsx"), "utf8")
 const gameDetailsSource = readFileSync(join(process.cwd(), "components/games/GameDetails.tsx"), "utf8");
 const navbarSource = readFileSync(join(process.cwd(), "components/shared/layout/Navbar.tsx"), "utf8");
 const footerSource = readFileSync(join(process.cwd(), "components/shared/layout/Footer.tsx"), "utf8");
+const refundPolicySource = readFileSync(join(process.cwd(), "lib/refundPolicy.ts"), "utf8");
 
 describe("homepage about section source", () => {
   it("adds a navbar-compatible About section with the approved positioning", () => {
@@ -47,10 +48,18 @@ describe("homepage about section source", () => {
     expect(gameDetailsSource).toContain("Goalkeeper rotates every 8 minutes");
     expect(homePageSource).toContain("Goalkeeper rotates every 8 minutes.");
     expect(homePageSource).toContain("Refund Policy");
-    expect(homePageSource).toContain("Cancel your booking at least 24 hours before kick-off");
-    expect(homePageSource).toContain("If you cancel within 24 hours of kick-off, no refund is available.");
-    expect(homePageSource).toContain("If Fair Play Football cancels a game, all booked players receive a full refund.");
-    expect(homePageSource).toContain("minimum number of players is not reached");
+    expect(homePageSource).toContain("REFUND_POLICY_ITEMS.map");
+    expect(gameDetailsSource).toContain("REFUND_POLICY_ITEMS[0]");
+    expect(gameDetailsSource).toContain("REFUND_POLICY_ITEMS[1]");
+    expect(gameDetailsSource).toContain("REFUND_POLICY_ITEMS[2]");
+    expect(gameDetailsSource).toContain("REFUND_POLICY_ITEMS[3]");
+    expect(refundPolicySource).toContain("Cancel your booking at least 24 hours before kick-off and you'll receive a full refund.");
+    expect(refundPolicySource).toContain("If you cancel within 24 hours of kick-off, no refund is available.");
+    expect(refundPolicySource).toContain("If Fair Play Football cancels a game, all booked players receive a full refund.");
+    expect(refundPolicySource).toContain("If a game is cancelled because the minimum number of players is not reached, all booked players receive a full refund.");
+    expect(gameDetailsSource).not.toContain("Please allow 2-5 working days for refunds to appear.");
+    expect(gameDetailsSource).not.toContain("You are eligible for a full refund if you cancel your booking");
+    expect(gameDetailsSource).not.toContain("If a game is cancelled by the organiser");
   });
 
   it("shows Find Games and signed-out Sign Up CTAs", () => {

@@ -7,6 +7,7 @@ const footerSource = readFileSync(join(process.cwd(), "components/shared/layout/
 const navbarSource = readFileSync(join(process.cwd(), "components/shared/layout/Navbar.tsx"), "utf8");
 const privacyPageSource = readFileSync(join(process.cwd(), "app/privacy/page.tsx"), "utf8");
 const termsPageSource = readFileSync(join(process.cwd(), "app/terms/page.tsx"), "utf8");
+const refundPolicySource = readFileSync(join(process.cwd(), "lib/refundPolicy.ts"), "utf8");
 
 describe("contact page source", () => {
   it("uses the configured support email without hardcoding a personal address", () => {
@@ -35,12 +36,16 @@ describe("contact page source", () => {
     expect(contactPageSource).toContain("Payments");
     expect(contactPageSource).toContain("Wallet");
     expect(contactPageSource).toContain("Refunds");
-    expect(contactPageSource).toContain("Cancel your booking at least 24 hours before kick-off");
-    expect(contactPageSource).toContain("If you cancel within 24 hours of kick-off, no refund is available.");
+    expect(contactPageSource).toContain("REFUND_POLICY_ITEMS[0]");
+    expect(contactPageSource).toContain("REFUND_POLICY_ITEMS[1]");
+    expect(refundPolicySource).toContain("Cancel your booking at least 24 hours before kick-off");
+    expect(refundPolicySource).toContain("If you cancel within 24 hours of kick-off, no refund is available.");
     expect(contactPageSource).toContain("Waiting list");
     expect(contactPageSource).toContain("If a game is full, you can join the waiting list.");
     expect(contactPageSource).toContain("Game cancellations");
-    expect(contactPageSource).toContain("If Fair Play Football cancels a game, all booked players receive a full refund.");
+    expect(contactPageSource).toContain("REFUND_POLICY_ITEMS[2]");
+    expect(contactPageSource).toContain("REFUND_POLICY_ITEMS[3]");
+    expect(refundPolicySource).toContain("If Fair Play Football cancels a game, all booked players receive a full refund.");
     expect(contactPageSource).toContain("Competitive vs Casual games");
     expect(contactPageSource).toContain("Age requirement");
     expect(contactPageSource).toContain("Players must be 18 or over.");

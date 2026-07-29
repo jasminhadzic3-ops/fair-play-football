@@ -7,6 +7,7 @@ import TeamList from "./TeamList";
 import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
 import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
+import { REFUND_POLICY_ITEMS } from "@/lib/refundPolicy";
 
 interface GameDetailsProps {
   isOpen: boolean;
@@ -1193,13 +1194,16 @@ export default function GameDetails({
           <h3 className="text-base font-bold text-white mb-2 sm:text-lg sm:mb-3">Refund Policy</h3>
           <div className="space-y-2.5 text-sm text-gray-300 sm:space-y-3">
             <p>
-              If fewer than 12 players are confirmed, the game will be cancelled and all players will receive a full refund. Please allow 2-5 working days for refunds to appear.
+              • {REFUND_POLICY_ITEMS[0]}
             </p>
             <p>
-              You are eligible for a full refund if you cancel your booking at least 24 hours before kick-off.
+              • {REFUND_POLICY_ITEMS[1]}
             </p>
             <p>
-              If a game is cancelled by the organiser, all players will receive a full refund.
+              • {REFUND_POLICY_ITEMS[2]}
+            </p>
+            <p>
+              • {REFUND_POLICY_ITEMS[3]}
             </p>
           </div>
         </div>
