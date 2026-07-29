@@ -1,5 +1,5 @@
-import { expect, test, type Page, type Request } from "@playwright/test";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { signInWithEmail } from "./helpers/auth";
 import { createE2ESupabaseClient } from "./helpers/moneySeed";
 import {
@@ -104,6 +104,83 @@ test.describe("SumUp payment return", () => {
     await expect.poll(() => countBookings(supabase, seed)).toBe(bookingCountBeforeRefresh);
     expect(statusRequests).toBeGreaterThanOrEqual(2);
     expect(diagnostics.errors()).toEqual([]);
+  });
+
+  test("keeps the return gate visible from a fresh browser return without a query flash", async ({
+    browser,
+  }) => {
+    const seed = await createSeed(supabase, { label: "fresh", booked: true });
+    seeds.push(seed);
+    const checkoutReference = `${seed.runId}_fresh_reference`;
+    const checkoutId = `${seed.runId}_fresh_checkout`;
+    await createPendingPayment(supabase, seed, {
+      checkoutReference,
+      checkoutId,
+    });
+    const context = await browser.newContext();
+    const env = requireDatabaseMutationE2EEnv();
+    const session = await signInForFreshContext(env, seed.email, seed.password);
+    await installFreshPaymentReturnState(context, {
+      supabaseUrl: env.supabaseUrl,
+      session,
+      checkoutReference,
+      checkoutId,
+      gameId: seed.gameId,
+      gameTitle: seed.gameTitle,
+    });
+    const page = await context.newPage();
+    const diagnostics = collectDiagnostics(page);
+    let statusRequests = 0;
+
+    await page.route("**/rest/v1/profiles?**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await route.continue();
+    });
+    await page.route("**/rest/v1/games?**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      await route.continue();
+    });
+    await page.route("**/api/bookings", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await route.continue();
+    });
+    await page.route("**/api/sumup/status?**", async (route) => {
+      statusRequests += 1;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          paymentStatus: "paid",
+          gameId: seed.gameId,
+          bookingId: seed.bookingId,
+        }),
+      });
+    });
+
+    try {
+      await page.goto("/");
+
+      await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+      await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
+      await expect(page.getByText(seed.gameTitle)).toHaveCount(0);
+      await expect.poll(() => statusRequests).toBeGreaterThan(0);
+
+      await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
+      await expect(page.getByText(seed.gameTitle).first()).toBeVisible();
+      await expect(page.getByText(seed.username).first()).toBeVisible();
+      await page.waitForTimeout(500);
+      await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
+
+      const frames = await getInstalledPaymentReturnFrames(page);
+      expect(frames.some((frame) => frame.confirming)).toBe(true);
+      expect(frames.some((frame) => frame.modal)).toBe(true);
+      expect(frames.filter((frame) => frame.gamesList && !frame.modal)).toEqual([]);
+      expect(frames.filter((frame) => !frame.confirming && !frame.modal)).toEqual([]);
+      expect(diagnostics.errors()).toEqual([]);
+    } finally {
+      await context.close();
+    }
   });
 
   test("keeps slow verification on the processing state without showing the games page", async ({
@@ -218,6 +295,116 @@ type PaymentReturnFrame = {
   path: string;
 };
 
+async function signInForFreshContext(
+  env: ReturnType<typeof requireDatabaseMutationE2EEnv>,
+  email: string,
+  password: string
+) {
+  const authClient = createClient(env.supabaseUrl, env.supabasePublishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+  const { data, error } = await authClient.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error || !data.session) {
+    throw new Error(`sign in fresh payment return context: ${error?.message || "no session returned"}`);
+  }
+
+  return data.session;
+}
+
+async function installFreshPaymentReturnState(
+  context: BrowserContext,
+  params: {
+    supabaseUrl: string;
+    session: Awaited<ReturnType<typeof signInForFreshContext>>;
+    checkoutReference: string;
+    checkoutId: string;
+    gameId: number;
+    gameTitle: string;
+  }
+) {
+  const supabaseRef = new URL(params.supabaseUrl).hostname.split(".")[0];
+  const authStorageKey = `sb-${supabaseRef}-auth-token`;
+
+  await context.addInitScript(
+    ({ authStorageKey, session, checkoutReference, checkoutId, gameId, gameTitle }) => {
+      localStorage.setItem(authStorageKey, JSON.stringify(session));
+      localStorage.setItem("pendingSumUpGameId", String(gameId));
+      localStorage.setItem("pendingSumUpCheckoutId", checkoutId);
+      localStorage.setItem("pendingSumUpCheckoutReference", checkoutReference);
+
+      const monitoredWindow = window as typeof window & {
+        __paymentReturnFrames?: PaymentReturnFrame[];
+      };
+      monitoredWindow.__paymentReturnFrames = [];
+
+      const isVisible = (element: Element | null) => {
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+
+      const sample = () => {
+        if (!document.body || document.body.children.length === 0) {
+          window.requestAnimationFrame(sample);
+          return;
+        }
+
+        const bodyText = document.body.innerText;
+        const confirming =
+          document.documentElement.getAttribute("data-payment-return-pending") === "true" ||
+          bodyText.includes("Confirming your booking");
+        const modal = Array.from(document.querySelectorAll("h2")).some(
+          (heading) => heading.textContent?.trim() === "Game Info" && isVisible(heading)
+        );
+        const gamesHeader = bodyText.includes("Browse premium football matches in one clean list.");
+        const gameCard = Array.from(document.querySelectorAll("#games .cursor-pointer")).some(
+          (element) => element.textContent?.includes(gameTitle) && isVisible(element)
+        );
+
+        monitoredWindow.__paymentReturnFrames?.push({
+          confirming,
+          gamesList: gamesHeader || gameCard,
+          modal,
+          path: `${window.location.pathname}${window.location.search}`,
+        });
+
+        if (!modal || (monitoredWindow.__paymentReturnFrames?.length ?? 0) < 10) {
+          window.requestAnimationFrame(sample);
+        }
+      };
+
+      window.requestAnimationFrame(sample);
+    },
+    {
+      authStorageKey,
+      session: params.session,
+      checkoutReference: params.checkoutReference,
+      checkoutId: params.checkoutId,
+      gameId: params.gameId,
+      gameTitle: params.gameTitle,
+    }
+  );
+}
+
+async function getInstalledPaymentReturnFrames(page: Page) {
+  return page.evaluate(() => {
+    const monitoredWindow = window as typeof window & {
+      __paymentReturnFrames?: PaymentReturnFrame[];
+    };
+    return monitoredWindow.__paymentReturnFrames ?? [];
+  });
+}
+
 async function startPaymentReturnFrameMonitor(page: Page, gameTitle: string) {
   await page.evaluate((title) => {
     const monitoredWindow = window as typeof window & {
@@ -238,7 +425,9 @@ async function startPaymentReturnFrameMonitor(page: Page, gameTitle: string) {
 
     const sample = () => {
       const bodyText = document.body.innerText;
-      const confirming = bodyText.includes("Confirming your booking");
+      const confirming =
+        document.documentElement.getAttribute("data-payment-return-pending") === "true" ||
+        bodyText.includes("Confirming your booking");
       const modal = Array.from(document.querySelectorAll("h2")).some(
         (heading) => heading.textContent?.trim() === "Game Info" && isVisible(heading)
       );
@@ -371,6 +560,32 @@ async function createSeed(
     gameTitle,
     bookingId,
   };
+}
+
+async function createPendingPayment(
+  supabase: SupabaseClient,
+  seed: PaymentReturnSeed,
+  params: { checkoutReference: string; checkoutId: string }
+) {
+  await insertSingle(
+    supabase
+      .from("booking_payments")
+      .insert({
+        user_id: seed.userId,
+        game_id: seed.gameId,
+        booking_id: seed.bookingId ?? null,
+        player_name: seed.username,
+        checkout_id: params.checkoutId,
+        checkout_reference: params.checkoutReference,
+        hosted_checkout_url: "https://checkout.sumup.example/e2e",
+        payment_status: "pending",
+        amount: 5,
+        currency: "GBP",
+      })
+      .select("id")
+      .single(),
+    "insert payment return pending payment"
+  );
 }
 
 async function insertSingle<T>(

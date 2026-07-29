@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -24,6 +24,7 @@ import {
 } from "@/lib/gameCalendar";
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
+const PENDING_SUMUP_CHECKOUT_REFERENCE_KEY = "pendingSumUpCheckoutReference";
 
 type HomeClientProps = {
   initialPaymentReturnReference?: string | null;
@@ -50,6 +51,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   );
   const [paymentReturnGateActive, setPaymentReturnGateActive] = useState(hasInitialPaymentReturnReference);
   const [paymentReturnTargetGameId, setPaymentReturnTargetGameId] = useState<number | null>(null);
+  const [recoveredPaymentReturnReference, setRecoveredPaymentReturnReference] = useState<string | null>(null);
   const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
   const [navbarAuthEmail, setNavbarAuthEmail] = useState("");
   const [navbarAuthPassword, setNavbarAuthPassword] = useState("");
@@ -107,8 +109,51 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       : weekNavigationDirection === "previous"
         ? "calendar-week-slide-previous"
         : "";
-  const hideHeroForPaymentReturn = hasInitialPaymentReturnReference && returnPaymentState !== null;
   const isPaymentReturnGateActive = paymentReturnGateActive;
+  const hideHeroForPaymentReturn = isPaymentReturnGateActive || (hasInitialPaymentReturnReference && returnPaymentState !== null);
+
+  function getStoredPaymentReturnReference() {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    try {
+      return localStorage.getItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function getCurrentPaymentReturnReference() {
+    if (typeof window === "undefined") {
+      return initialPaymentReturnReference ?? recoveredPaymentReturnReference;
+    }
+
+    const checkoutReferenceFromUrl = new URLSearchParams(window.location.search).get("sumup_checkout_reference");
+    return checkoutReferenceFromUrl || initialPaymentReturnReference || recoveredPaymentReturnReference || getStoredPaymentReturnReference();
+  }
+
+  useLayoutEffect(() => {
+    const recoveredReference = getCurrentPaymentReturnReference();
+
+    if (!recoveredReference) {
+      document.documentElement.removeAttribute("data-payment-return-pending");
+      return;
+    }
+
+    setRecoveredPaymentReturnReference(recoveredReference);
+    setPaymentReturnGateActive(true);
+    setReturnPaymentState("checking");
+    setReturnPaymentMessage("We're checking your payment. This may take a few moments.");
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!paymentReturnGateActive) {
+      return;
+    }
+
+    document.documentElement.removeAttribute("data-payment-return-pending");
+  }, [paymentReturnGateActive]);
 
   useEffect(() => {
     if (games.length === 0 || selectedGameDateKey) {
@@ -316,7 +361,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     localStorage.removeItem("pendingJoinGameId");
     localStorage.removeItem("pendingSumUpGameId");
     localStorage.removeItem("pendingSumUpCheckoutId");
-    localStorage.removeItem("pendingSumUpCheckoutReference");
+    localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
   }
 
   function openGameFromNotification() {
@@ -348,41 +393,17 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setOpenDetailsGameId(Number(pendingJoinGameId));
   }
 
-  async function continuePendingPayment(authUserId: string) {
-    const checkoutReferenceFromUrl = new URLSearchParams(window.location.search).get("sumup_checkout_reference");
-    const pendingSumUpGameId = localStorage.getItem("pendingSumUpGameId");
-    const pendingSumUpCheckoutId = localStorage.getItem("pendingSumUpCheckoutId");
-    const pendingSumUpCheckoutReference = localStorage.getItem("pendingSumUpCheckoutReference");
+  async function continuePendingPayment() {
+    const currentPaymentReturnReference = getCurrentPaymentReturnReference();
 
-    if (!checkoutReferenceFromUrl) {
-      clearPendingCheckoutState();
-      setPendingCheckoutId(null);
-      setPendingCheckoutReference(null);
-      setCheckoutGameId(null);
+    if (currentPaymentReturnReference) {
       return;
     }
 
-    if (!pendingSumUpGameId || (!pendingSumUpCheckoutId && !pendingSumUpCheckoutReference)) {
-      return;
-    }
-
-    let paymentQuery = supabase
-      .from("booking_payments")
-      .select("user_id,checkout_id,checkout_reference");
-
-    paymentQuery = pendingSumUpCheckoutId
-      ? paymentQuery.eq("checkout_id", pendingSumUpCheckoutId)
-      : paymentQuery.eq("checkout_reference", pendingSumUpCheckoutReference);
-
-    const { data: payment, error } = await paymentQuery.maybeSingle();
-
-    if (error || !payment || payment.user_id !== authUserId) {
-      clearPendingCheckoutState();
-      setPendingCheckoutId(null);
-      setPendingCheckoutReference(null);
-      setCheckoutGameId(null);
-      return;
-    }
+    clearPendingCheckoutState();
+    setPendingCheckoutId(null);
+    setPendingCheckoutReference(null);
+    setCheckoutGameId(null);
   }
 
   function clearSumUpCheckoutReferenceFromUrl() {
@@ -396,27 +417,42 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   }
 
   async function checkReturnedPayment(accessToken: string) {
-    const checkoutReference = new URLSearchParams(window.location.search).get("sumup_checkout_reference");
+    const checkoutReference = getCurrentPaymentReturnReference();
 
     if (!checkoutReference || returnPollingReference.current === checkoutReference) {
       return;
     }
 
     returnPollingReference.current = checkoutReference;
+    setRecoveredPaymentReturnReference(checkoutReference);
+    setPaymentReturnGateActive(true);
     setReturnPaymentState("checking");
     setReturnPaymentMessage("Checking your payment...");
 
     const deadline = Date.now() + 30000;
 
     while (Date.now() <= deadline) {
-      const response = await fetch(
-        `/api/sumup/status?checkout_reference=${encodeURIComponent(checkoutReference)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
+      let response: Response;
+
+      try {
+        response = await fetch(
+          `/api/sumup/status?checkout_reference=${encodeURIComponent(checkoutReference)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+      } catch (error) {
+        if (document.visibilityState === "hidden") {
+          return;
         }
-      );
+
+        setReturnPaymentState("failed");
+        setReturnPaymentMessage("Unable to check payment status.");
+        return;
+      }
+
       const responseText = await response.text();
       let result: any = null;
 
@@ -443,7 +479,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         setPaymentReturnTargetGameId(paidGameId);
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
-        localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
         localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
@@ -471,7 +507,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         const paidNoSpaceGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
-        localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
@@ -489,7 +525,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       if (paymentStatus === "duplicate_paid") {
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
-        localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
@@ -521,7 +557,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       await fetchUnreadNotificationCount();
       openGameFromNotification();
       continuePendingJoin();
-      await continuePendingPayment(session.user.id);
+      await continuePendingPayment();
       await checkReturnedPayment(session.access_token);
     } catch (error) {
       console.error("Unable to complete post-auth work:", error);
@@ -582,11 +618,11 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       return;
     }
 
-    const hasTargetGame = games.some((game) => game.id === paymentReturnTargetGameId);
+    const targetGame = games.find((game) => game.id === paymentReturnTargetGameId);
     const hasTargetBooking = bookings.some((booking) => booking.game_id === paymentReturnTargetGameId);
 
     if (
-      hasTargetGame &&
+      targetGame &&
       bookingsLoaded &&
       hasTargetBooking &&
       openDetailsGameId === paymentReturnTargetGameId
@@ -1130,7 +1166,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         </div>
       </Modal>
       {hideHeroForPaymentReturn ? null : <Hero />}
-      <main className="bg-black text-white" id="games">
+      <main
+        className={`bg-black text-white ${isPaymentReturnGateActive ? "min-h-[calc(100vh-4.5rem)]" : ""}`}
+        id="games"
+      >
         <div className="max-w-5xl mx-auto px-6 py-12">
           {!isPaymentReturnGateActive ? (
             <div className="mb-5 text-center">
@@ -1324,6 +1363,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         </div>
       </main>
 
+      {!isPaymentReturnGateActive ? (
+        <>
       <section id="about" className="bg-black px-6 py-14 text-white sm:py-16">
         <div className="mx-auto max-w-5xl">
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
@@ -1580,6 +1621,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         </div>
       </section>
       <Footer />
+        </>
+      ) : null}
     </>
   );
 }
