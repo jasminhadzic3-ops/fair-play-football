@@ -173,6 +173,7 @@ export default function GameDetails({
   const canBookGame = !isGameFull && !alreadyJoined;
   const canPayWithWallet =
     isAuthenticated && walletBalance !== null && walletBalance >= gamePrice && gamePrice > 0;
+  const showWalletSection = isAuthenticated && (walletBalanceLoading || walletBalance !== null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1132,7 +1133,7 @@ export default function GameDetails({
           </div>
         </div>
 
-        {isAuthenticated && (walletBalanceLoading || walletBalance !== null) ? (
+        {showWalletSection ? (
           <div className="rounded-3xl border border-stone-300/15 bg-zinc-950/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1161,7 +1162,7 @@ export default function GameDetails({
         ) : null}
 
         {isGameFull && !alreadyJoined ? (
-          <div className="border-t border-zinc-800 pt-3 sm:pt-6">
+          <div className={`border-t border-zinc-800 pt-3 sm:pt-6 ${showWalletSection ? "!mt-1 sm:!mt-4" : ""}`}>
             <div className="rounded-3xl border border-stone-300/10 bg-zinc-900/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -1208,7 +1209,7 @@ export default function GameDetails({
           </div>
         ) : null}
 
-        <div className="border-t border-zinc-800 pt-3 sm:pt-6">
+        <div className={`border-t border-zinc-800 pt-3 sm:pt-6 ${showWalletSection ? "!mt-1 sm:!mt-4" : ""}`}>
           <div className="rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-3 shadow-[0_18px_54px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between sm:gap-4">
               <div>

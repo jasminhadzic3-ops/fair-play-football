@@ -76,6 +76,8 @@ describe("homepage about section source", () => {
     expect(bookingIndex).toBeGreaterThan(walletIndex);
     expect(gameDetailsSource).toContain("Available balance");
     expect(gameDetailsSource).toContain("formatWalletBalance(walletBalance ?? 0)");
+    expect(gameDetailsSource).toContain("const showWalletSection = isAuthenticated && (walletBalanceLoading || walletBalance !== null);");
+    expect(gameDetailsSource).toContain('showWalletSection ? "!mt-1 sm:!mt-4" : ""');
     expect(gameDetailsSource).not.toContain("Available wallet balance");
     expect(gameDetailsSource).not.toContain("Credit available on your Fair Play Football account.");
   });
