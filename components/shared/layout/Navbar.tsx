@@ -164,14 +164,14 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
 
   return (
     <nav className="sticky top-0 z-40 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-4 py-3 sm:px-5 lg:px-6 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-3 py-3 sm:px-4 lg:px-5 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-8">
         <Link href="/" className="flex shrink-0 items-center gap-3 justify-self-start">
           <span className="text-lg font-black tracking-[0.3em] text-white">
             FAIR PLAY
           </span>
         </Link>
 
-        <div className="hidden min-w-0 items-center justify-center gap-5 md:flex">
+        <div className="hidden min-w-0 items-center justify-start gap-5 md:flex">
           {accountNavLinks.length > 0 ? (
             <div className="flex min-w-0 items-center gap-4 lg:gap-5">
               {renderNavLinks(accountNavLinks)}
