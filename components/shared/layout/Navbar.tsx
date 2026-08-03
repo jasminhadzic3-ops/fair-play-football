@@ -47,7 +47,15 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
     ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
     ...(user ? [{ label: "Wallet", href: "/wallet" }] : []),
     ...(user ? [{ label: "Profile", href: "/profile" }] : []),
+  ];
+
+  const adminNavLinks = [
     ...(isAdmin ? [{ label: "Admin", href: "/admin" }] : []),
+  ];
+
+  const mobileAccountNavLinks = [
+    ...accountNavLinks,
+    ...adminNavLinks,
   ];
 
   const handleMobileLogout = () => {
@@ -156,26 +164,27 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
 
   return (
     <nav className="sticky top-0 z-40 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 md:grid md:grid-cols-[minmax(9rem,1fr)_auto_minmax(18rem,1fr)] md:gap-5">
-        <Link href="/" className="flex items-center gap-3 justify-self-start">
-          <span className="text-xl font-black text-white tracking-[0.3em]">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-4 py-3 sm:px-5 lg:px-6 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]">
+        <Link href="/" className="flex shrink-0 items-center gap-3 justify-self-start">
+          <span className="text-lg font-black tracking-[0.3em] text-white">
             FAIR PLAY
           </span>
         </Link>
 
-        <div className="hidden items-center justify-center gap-8 md:flex">
-          {renderNavLinks(publicNavLinks)}
+        <div className="hidden min-w-0 items-center justify-center gap-5 md:flex">
+          {accountNavLinks.length > 0 ? (
+            <div className="flex min-w-0 items-center gap-4 lg:gap-5">
+              {renderNavLinks(accountNavLinks)}
+            </div>
+          ) : null}
         </div>
 
         <div className="hidden min-w-0 items-center justify-end gap-4 md:flex">
-          {accountNavLinks.length > 0 ? (
-            <>
-              <div className="flex items-center gap-4 lg:gap-5">
-                {renderNavLinks(accountNavLinks)}
-              </div>
-              <span className="h-5 w-px bg-zinc-800/80" aria-hidden="true" />
-            </>
-          ) : null}
+          <div className="flex items-center gap-4 lg:gap-5">
+            {renderNavLinks(publicNavLinks)}
+            {renderNavLinks(adminNavLinks)}
+          </div>
+          {user ? <span className="h-4 w-px bg-zinc-800/70" aria-hidden="true" /> : null}
           {renderAuthControls()}
         </div>
 
@@ -195,7 +204,7 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
       {isMenuOpen && (
         <div className="md:hidden space-y-5 border-t border-zinc-800/60 bg-black px-6 py-4">
           {renderMobileNavGroup("Browse", publicNavLinks)}
-          {accountNavLinks.length > 0 ? renderMobileNavGroup("Account", accountNavLinks) : null}
+          {mobileAccountNavLinks.length > 0 ? renderMobileNavGroup("Account", mobileAccountNavLinks) : null}
           {renderAuthControls(true)}
         </div>
       )}

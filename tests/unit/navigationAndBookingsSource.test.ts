@@ -6,7 +6,7 @@ const navbarSource = readFileSync(join(process.cwd(), "components/shared/layout/
 const myBookingsSource = readFileSync(join(process.cwd(), "app/my-bookings/page.tsx"), "utf8");
 
 describe("navigation and my bookings source", () => {
-  it("groups desktop and mobile navigation into public and account sections", () => {
+  it("groups desktop navigation into logo, centred account and right public sections", () => {
     expect(navbarSource).toContain("const publicNavLinks = [");
     expect(navbarSource).toContain('{ label: "Home", href: "/" }');
     expect(navbarSource).toContain('{ label: "Games", href: "/#games" }');
@@ -15,10 +15,18 @@ describe("navigation and my bookings source", () => {
     expect(navbarSource).toContain('{ label: "My Bookings", href: "/my-bookings" }');
     expect(navbarSource).toContain('{ label: "Wallet", href: "/wallet" }');
     expect(navbarSource).toContain('{ label: "Profile", href: "/profile" }');
+    expect(navbarSource).toContain("const adminNavLinks = [");
     expect(navbarSource).toContain('...(isAdmin ? [{ label: "Admin", href: "/admin" }] : [])');
+    expect(navbarSource).toContain("const mobileAccountNavLinks = [");
+    expect(navbarSource).toContain("items-center justify-between gap-5 px-4 py-3");
+    expect(navbarSource).toContain("md:grid md:grid-cols-[auto_minmax(0,1fr)_auto]");
+    expect(navbarSource).toContain("hidden min-w-0 items-center justify-center gap-5 md:flex");
+    expect(navbarSource).toContain("{renderNavLinks(publicNavLinks)}");
+    expect(navbarSource).toContain("{renderNavLinks(adminNavLinks)}");
+    expect(navbarSource).toContain("text-lg font-black tracking-[0.3em] text-white");
     expect(navbarSource).toContain('renderMobileNavGroup("Browse", publicNavLinks)');
-    expect(navbarSource).toContain('renderMobileNavGroup("Account", accountNavLinks)');
-    expect(navbarSource).toContain("h-5 w-px bg-zinc-800/80");
+    expect(navbarSource).toContain('renderMobileNavGroup("Account", mobileAccountNavLinks)');
+    expect(navbarSource).toContain("h-4 w-px bg-zinc-800/70");
   });
 
   it("keeps active-link affordances without changing routes", () => {

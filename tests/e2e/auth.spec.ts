@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.use({ baseURL: "http://localhost:3000" });
 
-test("desktop navbar keeps public navigation centred and account links hidden when signed out", async ({
+test("desktop navbar keeps public navigation on the far right when signed out", async ({
   page,
 }) => {
   await page.goto("/");
