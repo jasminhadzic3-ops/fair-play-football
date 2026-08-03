@@ -118,6 +118,36 @@ begin
   from public.games
   where id = p_target_game_id;
 
+  if v_source_game.id is null then
+    return query select false, v_booking.id, v_booking.game_id, p_target_game_id, 'source_game_not_found'::text, false, false;
+    return;
+  end if;
+
+  if v_source_game.archived_at is not null then
+    return query select false, v_booking.id, v_booking.game_id, p_target_game_id, 'source_game_archived'::text, false, false;
+    return;
+  end if;
+
+  if v_source_game.status = 'cancelled' then
+    return query select false, v_booking.id, v_booking.game_id, p_target_game_id, 'source_game_cancelled'::text, false, false;
+    return;
+  end if;
+
+  if v_source_game.status <> 'active' then
+    return query select false, v_booking.id, v_booking.game_id, p_target_game_id, 'source_game_not_active'::text, false, false;
+    return;
+  end if;
+
+  if v_source_game.starts_at is null then
+    return query select false, v_booking.id, v_booking.game_id, p_target_game_id, 'source_game_missing_starts_at'::text, false, false;
+    return;
+  end if;
+
+  if v_source_game.starts_at <= now() then
+    return query select false, v_booking.id, v_booking.game_id, p_target_game_id, 'source_game_completed'::text, false, false;
+    return;
+  end if;
+
   if v_target_game.id is null then
     return query select false, v_booking.id, v_booking.game_id, p_target_game_id, 'target_game_not_found'::text, false, false;
     return;

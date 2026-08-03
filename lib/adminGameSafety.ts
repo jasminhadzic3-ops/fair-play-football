@@ -89,6 +89,13 @@ export function isValidAdminMoveDestination(
   return bookingsCount < (game.max_players ?? 0);
 }
 
+export function isValidAdminMoveSource(
+  game: Pick<AdminGameSafetyGame, "status" | "starts_at" | "archived_at"> | null | undefined,
+  now = new Date()
+) {
+  return Boolean(game && getAdminGameLifecycle(game, now) === "active_upcoming");
+}
+
 export function formatCountReason(count: number, singular: string, plural = `${singular}s`) {
   return count === 1 ? `1 ${singular}` : `${count} ${plural}`;
 }

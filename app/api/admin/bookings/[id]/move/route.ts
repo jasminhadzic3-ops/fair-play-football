@@ -41,6 +41,18 @@ function getMoveBookingErrorMessage(reason: string | null) {
       return "Bookings cannot be moved into past games.";
     case "target_game_full":
       return "Target game is full.";
+    case "source_game_not_found":
+      return "Source game not found.";
+    case "source_game_cancelled":
+      return "Bookings cannot be moved from a cancelled game.";
+    case "source_game_archived":
+      return "Bookings cannot be moved from archived games.";
+    case "source_game_not_active":
+      return "Bookings can only be moved from active games.";
+    case "source_game_missing_starts_at":
+      return "Bookings can only be moved from active future games with a structured kickoff time.";
+    case "source_game_completed":
+      return "Bookings cannot be moved from completed games.";
     case "booking_has_cancellation_history":
       return "This booking cannot be moved because it already has cancellation credit history.";
     case "booking_has_refund_history":

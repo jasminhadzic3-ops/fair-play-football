@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAdminGameSafetySummary,
   getAdminGameLifecycle,
+  isValidAdminMoveSource,
   isValidAdminMoveDestination,
 } from "@/lib/adminGameSafety";
 
@@ -134,6 +135,37 @@ describe("admin game safety helpers", () => {
         },
         1,
         0,
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("allows booking moves only from active upcoming source games", () => {
+    expect(
+      isValidAdminMoveSource(
+        { status: "active", starts_at: "2026-07-23T18:00:00.000Z", archived_at: null },
+        now
+      )
+    ).toBe(true);
+    expect(
+      isValidAdminMoveSource(
+        { status: "active", starts_at: "2026-07-21T18:00:00.000Z", archived_at: null },
+        now
+      )
+    ).toBe(false);
+    expect(
+      isValidAdminMoveSource(
+        { status: "cancelled", starts_at: "2026-07-23T18:00:00.000Z", archived_at: null },
+        now
+      )
+    ).toBe(false);
+    expect(
+      isValidAdminMoveSource(
+        {
+          status: "active",
+          starts_at: "2026-07-23T18:00:00.000Z",
+          archived_at: "2026-07-24T10:00:00.000Z",
+        },
         now
       )
     ).toBe(false);

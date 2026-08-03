@@ -66,6 +66,37 @@ describe("admin booking moves SQL", () => {
     expect(sql).toContain("if v_target_game.archived_at is not null then");
   });
 
+  it("rejects moves from completed, cancelled, archived, or missing source games", () => {
+    [
+      "source_game_not_found",
+      "source_game_archived",
+      "source_game_cancelled",
+      "source_game_not_active",
+      "source_game_missing_starts_at",
+      "source_game_completed",
+    ].forEach((reason) => {
+      expect(sql).toContain(`'${reason}'`);
+      expect(archiveSql).toContain(`'${reason}'`);
+    });
+
+    [sql, archiveSql].forEach((source) => {
+      const functionBody = extractMoveFunction(source);
+      const sourceGuardBlock = extractBlock(
+        functionBody,
+        "if v_source_game.id is null then",
+        "if v_target_game.id is null then"
+      );
+      const moveUpdateIndex = functionBody.indexOf("update public.bookings");
+
+      expect(sourceGuardBlock).toContain("if v_source_game.archived_at is not null then");
+      expect(sourceGuardBlock).toContain("if v_source_game.status = 'cancelled' then");
+      expect(sourceGuardBlock).toContain("if v_source_game.status <> 'active' then");
+      expect(sourceGuardBlock).toContain("if v_source_game.starts_at is null then");
+      expect(sourceGuardBlock).toContain("if v_source_game.starts_at <= now() then");
+      expect(functionBody.indexOf(sourceGuardBlock)).toBeLessThan(moveUpdateIndex);
+    });
+  });
+
   it("blocks bookings with cancellation or refund history", () => {
     expect(sql).toContain("transaction_type = 'game_cancelled_credit'");
     expect(sql).toContain("transaction_type in ('refund_requested', 'refund_completed')");

@@ -7,6 +7,7 @@ import {
   AdminGameLifecycle,
   AdminGameSafetySummary,
   getAdminGameLifecycle,
+  isValidAdminMoveSource,
   isValidAdminMoveDestination,
 } from "@/lib/adminGameSafety";
 import { supabase } from "@/lib/supabase";
@@ -523,6 +524,11 @@ export default function AdminPage() {
   const getValidMoveDestinations = useCallback(
     (booking: Booking) => {
       const now = new Date();
+      const sourceGame = games.find((game) => game.id === booking.game_id);
+
+      if (!isValidAdminMoveSource(sourceGame, now)) {
+        return [];
+      }
 
       return games
         .filter((game) =>
