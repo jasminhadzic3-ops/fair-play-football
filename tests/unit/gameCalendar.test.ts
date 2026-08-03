@@ -30,12 +30,15 @@ describe("game calendar helpers", () => {
   });
 
   it("counts only active non-archived games with starts_at", () => {
-    expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(true);
-    expect(isCalendarCountableGame({ id: 1, status: "cancelled", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
-    expect(isCalendarCountableGame({ id: 1, status: "draft", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
-    expect(isCalendarCountableGame({ id: 1, status: "hidden", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
-    expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: "2026-07-20T10:00:00.000Z", starts_at: "2026-07-27T18:00:00.000Z" })).toBe(false);
-    expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: null, starts_at: null })).toBe(false);
+    const now = new Date("2026-07-27T09:00:00.000Z");
+
+    expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" }, now)).toBe(true);
+    expect(isCalendarCountableGame({ id: 1, status: "cancelled", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" }, now)).toBe(false);
+    expect(isCalendarCountableGame({ id: 1, status: "draft", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" }, now)).toBe(false);
+    expect(isCalendarCountableGame({ id: 1, status: "hidden", archived_at: null, starts_at: "2026-07-27T18:00:00.000Z" }, now)).toBe(false);
+    expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: "2026-07-20T10:00:00.000Z", starts_at: "2026-07-27T18:00:00.000Z" }, now)).toBe(false);
+    expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: null, starts_at: null }, now)).toBe(false);
+    expect(isCalendarCountableGame({ id: 1, status: "active", archived_at: null, starts_at: "2026-07-27T09:00:00.000Z" }, now)).toBe(false);
   });
 
   it("selects today when today has games, otherwise the next upcoming dated game", () => {
@@ -72,7 +75,8 @@ describe("game calendar helpers", () => {
       [{ game_id: 1, user_id: "player-1" }],
       [{ id: 1, status: "active", archived_at: null, starts_at: "2026-07-29T18:00:00.000Z" }],
       "player-1",
-      "2026-07-27"
+      "2026-07-27",
+      new Date("2026-07-27T09:00:00.000Z")
     );
 
     expect(bookedDateKeys).toEqual(new Set(["2026-07-29"]));
@@ -132,10 +136,22 @@ describe("game calendar helpers", () => {
     };
 
     expect(
-      getUserBookedVisibleDateKeys(bookings, [firstVisibleGame, secondVisibleGame], "player-1", "2026-07-27")
+      getUserBookedVisibleDateKeys(
+        bookings,
+        [firstVisibleGame, secondVisibleGame],
+        "player-1",
+        "2026-07-27",
+        new Date("2026-07-27T09:00:00.000Z")
+      )
     ).toEqual(new Set(["2026-07-29"]));
     expect(
-      getUserBookedVisibleDateKeys(bookings, [secondVisibleGame], "player-1", "2026-07-27")
+      getUserBookedVisibleDateKeys(
+        bookings,
+        [secondVisibleGame],
+        "player-1",
+        "2026-07-27",
+        new Date("2026-07-27T09:00:00.000Z")
+      )
     ).toEqual(new Set(["2026-07-29"]));
     expect(getUserBookedVisibleDateKeys(bookings, [], "player-1", "2026-07-27")).toEqual(
       new Set()

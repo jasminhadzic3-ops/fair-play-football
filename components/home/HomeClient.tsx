@@ -18,9 +18,11 @@ import {
   formatCalendarDayNumber,
   getDefaultSelectedDateKey,
   getGameLondonDateKey,
+  getLondonDateKey,
   getTodayLondonDateKey,
   getUserBookedVisibleDateKeys,
   getWeekDateKeys,
+  isCalendarCountableGame,
   sortGamesByStartsAt,
 } from "@/lib/gameCalendar";
 
@@ -77,18 +79,15 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const returnPollingReference = useRef<string | null>(null);
   const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
   const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
-  const todayDateKey = getTodayLondonDateKey();
-  const fallbackSelectedDateKey = showAllGames ? null : selectedGameDateKey ?? getDefaultSelectedDateKey(games);
-  const fallbackWeekStartKey = visibleWeekStartKey ?? selectedGameDateKey ?? getDefaultSelectedDateKey(games);
+  const lifecycleNow = new Date();
+  const todayDateKey = getTodayLondonDateKey(lifecycleNow);
+  const fallbackSelectedDateKey = showAllGames ? null : selectedGameDateKey ?? getDefaultSelectedDateKey(games, lifecycleNow);
+  const fallbackWeekStartKey = visibleWeekStartKey ?? selectedGameDateKey ?? getDefaultSelectedDateKey(games, lifecycleNow);
   const weekDateKeys = getWeekDateKeys(fallbackWeekStartKey);
-  const calendarGames = games.filter((game) => {
-    const dateKey = getGameLondonDateKey(game);
-
-    return Boolean(dateKey && dateKey >= todayDateKey);
-  });
-  const legacyGames = games.filter((game) => !getGameLondonDateKey(game));
+  const calendarGames = games.filter((game) => isCalendarCountableGame(game, lifecycleNow));
+  const legacyGames = games.filter((game) => !getLondonDateKey(game.starts_at));
   const gamesByDateKey = calendarGames.reduce<Map<string, any[]>>((map, game) => {
-    const dateKey = getGameLondonDateKey(game);
+    const dateKey = getGameLondonDateKey(game, lifecycleNow);
 
     if (!dateKey) {
       return map;
@@ -101,7 +100,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     bookings,
     calendarGames,
     user?.id,
-    todayDateKey
+    todayDateKey,
+    lifecycleNow
   );
   const selectedDatedGames = showAllGames
     ? sortGamesByStartsAt(calendarGames)

@@ -1,3 +1,5 @@
+import { isPubliclyVisible } from "@/lib/gameLifecycle";
+
 export type CalendarGameLike = {
   id: number;
   starts_at?: string | null;
@@ -92,12 +94,12 @@ export function formatCalendarDayNumber(dateKey: string) {
   return date ? calendarDayFormatter.format(date) : dateKey;
 }
 
-export function isCalendarCountableGame(game: CalendarGameLike) {
-  return game.status === "active" && !game.archived_at && Boolean(game.starts_at);
+export function isCalendarCountableGame(game: CalendarGameLike, now = new Date()) {
+  return isPubliclyVisible(game, { now }) && Boolean(game.starts_at);
 }
 
-export function getGameLondonDateKey(game: CalendarGameLike) {
-  return isCalendarCountableGame(game) ? getLondonDateKey(game.starts_at) : null;
+export function getGameLondonDateKey(game: CalendarGameLike, now = new Date()) {
+  return isCalendarCountableGame(game, now) ? getLondonDateKey(game.starts_at) : null;
 }
 
 export function sortGamesByStartsAt<T extends CalendarGameLike>(games: T[]) {
@@ -113,7 +115,8 @@ export function getUserBookedVisibleDateKeys(
   bookings: CalendarBookingLike[],
   games: CalendarGameLike[],
   userId: string | null | undefined,
-  todayDateKey = getTodayLondonDateKey()
+  todayDateKey = getTodayLondonDateKey(),
+  now = new Date()
 ) {
   if (!userId) {
     return new Set<string>();
@@ -122,7 +125,7 @@ export function getUserBookedVisibleDateKeys(
   const visibleUpcomingGameDateById = new Map<number, string>();
 
   games.forEach((game) => {
-    const dateKey = getGameLondonDateKey(game);
+    const dateKey = getGameLondonDateKey(game, now);
 
     if (dateKey && dateKey >= todayDateKey) {
       visibleUpcomingGameDateById.set(game.id, dateKey);
@@ -145,7 +148,7 @@ export function getDefaultSelectedDateKey(
 ) {
   const todayKey = getTodayLondonDateKey(now);
   const countableDateKeys = games
-    .map((game) => getGameLondonDateKey(game))
+    .map((game) => getGameLondonDateKey(game, now))
     .filter((dateKey): dateKey is string => Boolean(dateKey));
   const uniqueDateKeys = Array.from(new Set(countableDateKeys)).sort();
 
