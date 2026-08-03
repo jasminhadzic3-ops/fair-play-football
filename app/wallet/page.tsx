@@ -199,6 +199,7 @@ export default function WalletPage() {
       transaction.transaction_type === "player_cancelled_credit") &&
     transaction.status === "completed" &&
     Number(transaction.amount) > 0 &&
+    Number(transaction.amount) <= availableBalance &&
     Boolean(transaction.payment_id) &&
     transaction.metadata?.original_payment_method === "sumup" &&
     !hasRefundRequestForSourceCredit(transaction.id);
