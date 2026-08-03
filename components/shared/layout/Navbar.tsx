@@ -80,10 +80,21 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
     return pathname === href;
   };
 
-  const renderNavLinks = (links: Array<{ label: string; href: string }>, isMobile = false) =>
+  const renderNavLinks = (
+    links: Array<{ label: string; href: string }>,
+    isMobile = false,
+    emphasizeDesktop = false
+  ) =>
     links.map((link) => {
       const showNotificationBadge = link.href === "/profile" && unreadNotificationCount > 0;
       const isActive = isActiveLink(link.href);
+      const desktopLinkTone = emphasizeDesktop
+        ? isActive
+          ? "font-semibold text-white"
+          : "font-semibold text-zinc-200 hover:text-white"
+        : isActive
+          ? "font-medium text-white"
+          : "font-medium text-gray-300 hover:text-white";
 
       return (
       <Link
@@ -92,7 +103,7 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
         className={
           isMobile
             ? `flex items-center gap-2 py-2 font-medium transition ${isActive ? "text-white" : "text-gray-300 hover:text-white"}`
-            : `inline-flex items-center gap-2 text-sm font-medium transition ${isActive ? "text-white" : "text-gray-300 hover:text-white"}`
+            : `inline-flex items-center gap-2 text-sm transition ${desktopLinkTone}`
         }
         aria-current={isActive ? "page" : undefined}
         onClick={isMobile ? () => setIsMenuOpen(false) : undefined}
@@ -164,17 +175,17 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
 
   return (
     <nav className="sticky top-0 z-40 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-3 py-3 sm:px-4 lg:px-5 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-8">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-3 py-3 sm:px-4 lg:px-5 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-14">
         <Link href="/" className="flex shrink-0 items-center gap-3 justify-self-start">
-          <span className="text-lg font-black tracking-[0.3em] text-white">
+          <span className="text-lg font-black tracking-[0.3em] text-white md:text-[1.05rem]">
             FAIR PLAY
           </span>
         </Link>
 
-        <div className="hidden min-w-0 items-center justify-start gap-5 md:flex">
+        <div className="hidden min-w-0 items-center justify-start gap-5 border-r border-zinc-800/50 pr-7 md:flex">
           {accountNavLinks.length > 0 ? (
             <div className="flex min-w-0 items-center gap-4 lg:gap-5">
-              {renderNavLinks(accountNavLinks)}
+              {renderNavLinks(accountNavLinks, false, true)}
             </div>
           ) : null}
         </div>

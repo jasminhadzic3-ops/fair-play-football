@@ -19,11 +19,13 @@ describe("navigation and my bookings source", () => {
     expect(navbarSource).toContain('...(isAdmin ? [{ label: "Admin", href: "/admin" }] : [])');
     expect(navbarSource).toContain("const mobileAccountNavLinks = [");
     expect(navbarSource).toContain("items-center justify-between gap-5 px-3 py-3");
-    expect(navbarSource).toContain("md:grid md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-8");
-    expect(navbarSource).toContain("hidden min-w-0 items-center justify-start gap-5 md:flex");
+    expect(navbarSource).toContain("md:grid md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-14");
+    expect(navbarSource).toContain("hidden min-w-0 items-center justify-start gap-5 border-r border-zinc-800/50 pr-7 md:flex");
+    expect(navbarSource).toContain("font-semibold text-zinc-200 hover:text-white");
+    expect(navbarSource).toContain("renderNavLinks(accountNavLinks, false, true)");
     expect(navbarSource).toContain("{renderNavLinks(publicNavLinks)}");
     expect(navbarSource).toContain("{renderNavLinks(adminNavLinks)}");
-    expect(navbarSource).toContain("text-lg font-black tracking-[0.3em] text-white");
+    expect(navbarSource).toContain("text-lg font-black tracking-[0.3em] text-white md:text-[1.05rem]");
     expect(navbarSource).toContain('renderMobileNavGroup("Browse", publicNavLinks)');
     expect(navbarSource).toContain('renderMobileNavGroup("Account", mobileAccountNavLinks)');
     expect(navbarSource).toContain("h-4 w-px bg-zinc-800/70");
