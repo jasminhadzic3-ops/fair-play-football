@@ -51,4 +51,19 @@ describe("navigation and my bookings source", () => {
     expect(myBookingsSource).toContain("event.stopPropagation()");
     expect(myBookingsSource).not.toContain("import GameDetails");
   });
+
+  it("filters My Bookings to actionable game lifecycles", () => {
+    expect(myBookingsSource).toContain('import { canPlayerLeave } from "@/lib/gameLifecycle"');
+    expect(myBookingsSource).toContain("id, title, location, time, price, status, starts_at, archived_at");
+    expect(myBookingsSource).toContain("const now = new Date()");
+    expect(myBookingsSource).toContain("game && canPlayerLeave(game, { now })");
+  });
+
+  it("relies on the shared lifecycle helper for active, completed, cancelled, archived and full states", () => {
+    expect(myBookingsSource).toContain("canPlayerLeave(game, { now })");
+    expect(myBookingsSource).not.toContain("game.status ===");
+    expect(myBookingsSource).not.toContain("new Date(game.starts_at");
+    expect(myBookingsSource).not.toContain("starts_at <=");
+    expect(myBookingsSource).not.toContain("archived_at ===");
+  });
 });

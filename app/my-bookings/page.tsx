@@ -3,6 +3,7 @@
 import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { canPlayerLeave } from "@/lib/gameLifecycle";
 import { supabase } from "@/lib/supabase";
 
 interface Booking {
@@ -17,6 +18,9 @@ interface Game {
   location: string;
   time?: string;
   price?: number;
+  status?: string | null;
+  starts_at?: string | null;
+  archived_at?: string | null;
 }
 
 interface JoinedBooking {
@@ -70,7 +74,7 @@ export default function MyBookingsPage() {
 
     const { data: gameData, error: gameError } = await supabase
       .from("games")
-      .select("id, title, location, time, price")
+      .select("id, title, location, time, price, status, starts_at, archived_at")
       .in("id", gameIds);
 
     if (gameError) {
@@ -81,11 +85,12 @@ export default function MyBookingsPage() {
     }
 
     const gamesById = new Map((gameData ?? []).map((game) => [game.id, game]));
+    const now = new Date();
 
     const joinedBookings = (bookingData ?? []).reduce<JoinedBooking[]>((items, booking) => {
       const game = gamesById.get(booking.game_id);
 
-      if (game) {
+      if (game && canPlayerLeave(game, { now })) {
         items.push({ booking, game });
       }
 
