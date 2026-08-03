@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { buildAdminFinancialRecordsByGame } from "@/lib/adminFinancialRecords";
-import { buildAdminGameSafetySummary } from "@/lib/adminGameSafety";
+import { buildAdminGameSafetySummary, getAdminGameLifecycle } from "@/lib/adminGameSafety";
 import { buildAdminRefundCandidates } from "@/lib/adminRefundCandidates";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -25,13 +25,14 @@ type Game = {
   title: string | null;
   max_players?: number | null;
   status?: string | null;
+  starts_at?: string | null;
   archived_at?: string | null;
 };
 
 type Booking = {
   id: number;
   game_id?: number | null;
-  user_id?: string | null;
+  user_id: string | null;
   player_name: string | null;
 };
 
@@ -232,7 +233,15 @@ export async function GET(request: NextRequest) {
     }
 
     const games = gamesResult.data ?? [];
-    const bookings = bookingsResult.data ?? [];
+    const allBookings = bookingsResult.data ?? [];
+    const actionableGameIds = new Set(
+      (games as Game[])
+        .filter((game) => getAdminGameLifecycle(game) === "active_upcoming")
+        .map((game) => game.id)
+    );
+    const bookings = (allBookings as Booking[]).filter((booking) =>
+      actionableGameIds.has(Number(booking.game_id))
+    );
     const profiles = profilesResult.data ?? [];
     const bookingPayments = paymentsResult.data ?? [];
     const safeBookingPayments = (bookingPayments as Payment[]).map((payment) => ({
@@ -253,7 +262,7 @@ export async function GET(request: NextRequest) {
     const waitingListNotifications = (waitingListNotificationsResult.data ?? []) as WaitingListSummaryEntry[];
     const profileById = new Map((profiles as Profile[]).map((profile) => [profile.id, profile]));
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
-    const bookingById = new Map((bookings as Booking[]).map((booking) => [booking.id, booking]));
+    const bookingById = new Map((allBookings as Booking[]).map((booking) => [booking.id, booking]));
     const paymentById = new Map((bookingPayments as Payment[]).map((payment) => [payment.id, payment]));
     const refundRequestGameById = new Map<number, number>();
     const latestAttemptByRequestId = new Map<number, SumUpRefundAttempt>();
@@ -277,7 +286,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    (bookings as Booking[]).forEach((booking) => increment(bookingsByGame, booking.game_id));
+    (allBookings as Booking[]).forEach((booking) => increment(bookingsByGame, booking.game_id));
 
     (bookingPayments as Payment[]).forEach((payment) => increment(paymentRecordsByGame, payment.game_id));
 
@@ -385,7 +394,7 @@ export async function GET(request: NextRequest) {
 
     const refundCandidates = buildAdminRefundCandidates({
       games: games as Game[],
-      bookings: bookings as Booking[],
+      bookings: allBookings as Booking[],
       profiles: profiles as Profile[],
       bookingPayments: bookingPayments as Payment[],
       walletTransactions: walletSummaryTransactions,
@@ -394,7 +403,7 @@ export async function GET(request: NextRequest) {
     const refundCandidatesByGame = new Map<number, typeof refundCandidates>();
     const financialRecordsByGame = buildAdminFinancialRecordsByGame({
       games: games as Game[],
-      bookings: bookings as Booking[],
+      bookings: allBookings as Booking[],
       bookingPayments: bookingPayments as Payment[],
       walletTransactions: walletSummaryTransactions,
       sumUpRefundAttempts: (sumUpRefundAttemptsResult.data ?? []) as SumUpRefundAttempt[],

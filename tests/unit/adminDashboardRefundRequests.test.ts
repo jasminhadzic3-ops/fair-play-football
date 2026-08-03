@@ -183,6 +183,100 @@ beforeEach(() => {
 });
 
 describe("admin dashboard refund requests", () => {
+  it("returns only bookings from active upcoming games while preserving historical safety counts", async () => {
+    state.games = [
+      {
+        id: 10,
+        title: "Actionable Football",
+        location: "Pitch 1",
+        time: "15 Jul 2099, 20:30",
+        starts_at: "2099-07-15T19:30:00.000Z",
+        max_players: 12,
+        status: "active",
+        archived_at: null,
+      },
+      {
+        id: 11,
+        title: "Completed Football",
+        location: "Pitch 2",
+        time: "15 Jul 2020, 20:30",
+        starts_at: "2020-07-15T19:30:00.000Z",
+        max_players: 12,
+        status: "active",
+        archived_at: null,
+      },
+      {
+        id: 12,
+        title: "Cancelled Football",
+        location: "Pitch 3",
+        time: "15 Jul 2099, 20:30",
+        starts_at: "2099-07-15T19:30:00.000Z",
+        max_players: 12,
+        status: "cancelled",
+        archived_at: null,
+      },
+      {
+        id: 13,
+        title: "Archived Football",
+        location: "Pitch 4",
+        time: "15 Jul 2099, 20:30",
+        starts_at: "2099-07-15T19:30:00.000Z",
+        max_players: 12,
+        status: "active",
+        archived_at: "2099-07-16T10:00:00.000Z",
+      },
+    ];
+    state.bookings = [
+      { id: 100, game_id: 10, user_id: "user-1", player_name: "Active Player" },
+      { id: 101, game_id: 11, user_id: "user-2", player_name: "Completed Player" },
+      { id: 102, game_id: 12, user_id: "user-3", player_name: "Cancelled Player" },
+      { id: 103, game_id: 13, user_id: "user-4", player_name: "Archived Player" },
+    ];
+    state.profiles = [];
+    state.booking_payments = [];
+    state.wallet_transactions = [];
+
+    const request = new Request("http://localhost/api/admin/dashboard", {
+      headers: {
+        Authorization: "Bearer token",
+      },
+    });
+
+    const response = await GET(request as Parameters<typeof GET>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.bookings).toEqual([
+      expect.objectContaining({
+        id: 100,
+        game_id: 10,
+        player_name: "Active Player",
+      }),
+    ]);
+    expect(body.summary).toEqual(
+      expect.objectContaining({
+        bookings_count: 1,
+        players_count: 1,
+      })
+    );
+    expect(body.games).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 11,
+          admin_safety: expect.objectContaining({ bookings_count: 1 }),
+        }),
+        expect.objectContaining({
+          id: 12,
+          admin_safety: expect.objectContaining({ bookings_count: 1 }),
+        }),
+        expect.objectContaining({
+          id: 13,
+          admin_safety: expect.objectContaining({ bookings_count: 1 }),
+        }),
+      ])
+    );
+  });
+
   it("includes pending refund requests enriched with profile details", async () => {
     const request = new Request("http://localhost/api/admin/dashboard", {
       headers: {
