@@ -114,7 +114,7 @@ describe("sendWaitingListSpotAvailableEmail", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "Waiting List: Friday Football",
+        subject: "Spot available: Friday Football",
         idempotencyKey: "waiting_list_spot_available:notification:700",
       })
     );

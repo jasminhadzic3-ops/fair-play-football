@@ -95,7 +95,7 @@ export async function sendBookingConfirmedEmail(params: BookingConfirmedEmailPar
 
   const html = renderEmailLayout({
     previewText: `Your booking is confirmed for ${gameTitle}.`,
-    title: "Booking confirmed",
+    title: "You're booked",
     ctaHref: bookingUrl,
     ctaLabel: "View booking",
     bodyHtml: `

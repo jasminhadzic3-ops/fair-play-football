@@ -57,7 +57,7 @@ export function renderEmailLayout({
   bodyHtml,
   ctaHref,
   ctaLabel,
-  footerText = "Questions? Reply to this email.",
+  footerText = "Fair Play Football will keep you updated.",
 }: EmailLayoutParams) {
   const escapedPreviewText = escapeHtml(previewText);
   const escapedTitle = escapeHtml(title);

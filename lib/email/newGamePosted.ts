@@ -125,7 +125,7 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
       "",
       "A new Fair Play Football game is now available to book.",
       "",
-      `Click "View Game" below to view the match details and secure your spot.`,
+      "View the match details and book your spot.",
       "",
       "Places are limited and confirmed on a first paid, first served basis.",
       "",
@@ -141,8 +141,8 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
       previewText: `A new game has been added to Fair Play Football: ${gameTitle}.`,
       title: "New game available",
       ctaHref: gameUrl,
-      ctaLabel: "View Game",
-      footerText: "Questions? Simply reply to this email and we'll be happy to help.",
+      ctaLabel: "View game",
+      footerText: "Fair Play Football will keep you updated.",
       bodyHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
           Hi ${escapeHtml(greetingName)},
@@ -151,7 +151,7 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
           A new Fair Play Football game is now available to book.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          Click <strong style="color:#ffffff;">"View Game"</strong> below to view the match details and secure your spot.
+          View the match details and book your spot.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
           Places are limited and confirmed on a <strong style="color:#ffffff;">first paid, first served</strong> basis.

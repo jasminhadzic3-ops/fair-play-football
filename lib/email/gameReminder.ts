@@ -44,7 +44,7 @@ export async function sendGameReminderEmail({
     "",
     "Please arrive 15 minutes before kick-off so everyone is ready to start on time.",
     "",
-    `Click "View game" to see all the match details, including the rules, player list, and everything else you need to know if you haven't already.`,
+    "View the game details before you travel, including the rules and player list.",
     "",
     "We look forward to seeing you on the pitch.",
     "",
@@ -69,7 +69,7 @@ export async function sendGameReminderEmail({
         Please arrive 15 minutes before kick-off so everyone is ready to start on time.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
-        Click <strong style="color:#ffffff;">"View game"</strong> to see all the match details, including the rules, player list, and everything else you need to know if you haven't already.
+        View the game details before you travel, including the rules and player list.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
         We look forward to seeing you on the pitch.

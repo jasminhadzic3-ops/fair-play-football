@@ -173,6 +173,7 @@ describe("sendGameCancelledEmails", () => {
       1,
       expect.objectContaining({
         to: "profile@example.com",
+        subject: "Game cancelled: Friday Football",
         idempotencyKey: "game_cancelled:game:10:recipient:user-with-profile-email",
       })
     );
@@ -183,5 +184,22 @@ describe("sendGameCancelledEmails", () => {
         idempotencyKey: "game_cancelled:game:10:recipient:user-with-auth-email",
       })
     );
+    const firstEmail = sendResendEmailMock.mock.calls[0][0] as {
+      html: string;
+      text: string;
+    };
+
+    expect(firstEmail.text).toContain("Hi Profile,");
+    expect(firstEmail.text).toContain("Unfortunately, Friday Football has been cancelled.");
+    expect(firstEmail.text).toContain("£8.00 has been added to your Fair Play Wallet and is ready to use immediately.");
+    expect(firstEmail.text).toContain("Location: Test Pitch");
+    expect(firstEmail.text).toContain("Kick-off: Friday 7pm");
+    expect(firstEmail.text).toContain("Wallet credit: £8.00");
+    expect(firstEmail.text).toContain("View wallet: http://localhost:3000/wallet");
+    expect(firstEmail.text).toContain("Browse games: http://localhost:3000/#games");
+    expect(firstEmail.html).toContain("Your credit is ready");
+    expect(firstEmail.html).toContain("View wallet");
+    expect(`${firstEmail.text}\n${firstEmail.html}`).not.toMatch(/automatic(?:ally)? refund/i);
+    expect(`${firstEmail.text}\n${firstEmail.html}`).not.toMatch(/reply to this email/i);
   });
 });

@@ -68,13 +68,13 @@ export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotA
   const gameTime = game.time || "TBD";
   const gamePrice = formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(params.gameId);
-  const subject = `Waiting List: ${gameTitle}`;
+  const subject = `Spot available: ${gameTitle}`;
   const idempotencyKey = `waiting_list_spot_available:notification:${params.notificationId}`;
 
   const text = [
     `Hi ${playerName},`,
     "",
-    `Good news! A spot may now be available for ${gameTitle}.`,
+    `A spot may now be available for ${gameTitle}.`,
     "",
     "If you'd still like to play, open the game and complete your booking.",
     "",
@@ -98,7 +98,7 @@ export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotA
         Hi ${escapeHtml(playerName)},
       </p>
       <p style="margin:0 0 18px;color:#d4d4d8;">
-        Good news! A spot may now be available for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
+        A spot may now be available for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
         If you'd still like to play, open the game and complete your booking.

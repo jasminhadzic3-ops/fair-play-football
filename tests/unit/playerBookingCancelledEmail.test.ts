@@ -133,32 +133,48 @@ describe("sendPlayerBookingCancelledEmail", () => {
   it.each([
     [
       "wallet_restored",
-      "Booking cancelled: Thursday Football - wallet credit added",
-      "Your booking has been cancelled and £8.00 has been added to your Fair Play Wallet. You can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.",
+      "Booking cancelled: Thursday Football",
+      "Your booking for Thursday Football has been cancelled.",
+      "£8.00 has been added to your Fair Play Wallet and is ready to use immediately.",
     ],
     [
       "no_refund_within_24h",
-      "Booking cancelled: Thursday Football - booking cancelled",
-      "Your booking has been cancelled. As the cancellation was made within 24 hours of kick-off, no refund is available.",
+      "Booking cancelled: Thursday Football",
+      "Your booking for Thursday Football has been cancelled.",
+      "As the cancellation was made within 24 hours of kick-off, no refund is available.",
     ],
-  ] satisfies Array<[PlayerBookingCancellationEmailOutcome, string, string]>)(
+  ] satisfies Array<[PlayerBookingCancellationEmailOutcome, string, string, string]>)(
     "renders the %s outcome",
-    async (outcome, subject, explanation) => {
+    async (outcome, subject, firstParagraph, secondParagraph) => {
       const email = await sendForOutcome(outcome);
 
       expect(email.to).toBe("profile@example.com");
       expect(email.subject).toBe(subject);
       expect(email.text).toContain("Hi Jasmin,");
-      expect(email.text).toContain(explanation);
-      expect(email.html).toContain(explanation);
+      expect(email.text).toContain(firstParagraph);
+      expect(email.text).toContain(secondParagraph);
+      expect(email.html).toContain(firstParagraph);
+      expect(email.html).toContain(secondParagraph);
       expect(email.text).toContain("Date: Thursday, 30 July 2026");
-      expect(email.text).toContain("Kick-off: 19:00");
-      expect(email.text).toContain("Location: Whittington Park");
-      expect(email.text).toContain("Browse upcoming games: https://www.fairplayfootball.co.uk/#games");
-      expect(email.html).toContain("Browse Upcoming Games");
+      expect(email.text).toContain("Time: 19:00");
+      expect(email.text).toContain("Venue: Whittington Park");
+      expect(email.text).toContain("View wallet: https://www.fairplayfootball.co.uk/wallet");
+      expect(email.text).toContain("Browse games: https://www.fairplayfootball.co.uk/#games");
+      expect(email.html).toContain("View wallet");
       expect(email.idempotencyKey).toBe(`player_booking_cancelled:cancellation:600:outcome:${outcome}`);
     }
   );
+
+  it("does not include automatic card refund, reply, or organiser-contact wording for wallet credits", async () => {
+    const email = await sendForOutcome("wallet_restored");
+    const combined = `${email.subject}\n${email.text}\n${email.html}`;
+
+    expect(combined).not.toMatch(/automatic(?:ally)? refund/i);
+    expect(combined).not.toMatch(/refund remains reserved/i);
+    expect(combined).not.toMatch(/reply to this email/i);
+    expect(combined).not.toMatch(/contact the organiser/i);
+    expect(combined).not.toMatch(/card refund is already processing/i);
+  });
 
   it("falls back to Player and Supabase Auth email when profile details are missing", async () => {
     state.profile = {
@@ -181,6 +197,6 @@ describe("sendPlayerBookingCancelledEmail", () => {
     const email = await sendForOutcome("wallet_restored");
 
     expect(email.text).toContain("Date: Friday 7pm");
-    expect(email.text).toContain("Kick-off: Friday 7pm");
+    expect(email.text).toContain("Time: Friday 7pm");
   });
 });

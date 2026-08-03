@@ -2,7 +2,7 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
-import { escapeHtml, formatPrice, getGameUrl, renderEmailLayout } from "./shared";
+import { escapeHtml, formatPrice, getSiteUrl, renderEmailLayout } from "./shared";
 
 type GameCancelledEmailParams = {
   gameId: number;
@@ -39,6 +39,10 @@ function isGameCancelledEmailEnabled() {
 
 function getBroadcastTestRecipient() {
   return process.env.EMAIL_BROADCAST_TEST_RECIPIENT?.trim() || null;
+}
+
+function getFirstName(playerName: string | null | undefined) {
+  return playerName?.trim().split(/\s+/)[0] || "Player";
 }
 
 async function getGameCancelledRecipients(gameId: number): Promise<EmailRecipient[]> {
@@ -149,61 +153,61 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
   const gameLocation = game.location || "TBD";
   const gameTime = game.time || "TBD";
   const gamePrice = formatPrice(game.price, "GBP");
-  const gameUrl = getGameUrl(game.id);
+  const walletUrl = `${getSiteUrl()}/wallet`;
+  const browseGamesUrl = `${getSiteUrl()}/#games`;
   const subject = `Game cancelled: ${gameTitle}`;
   let sentCount = 0;
 
   for (const recipient of recipients) {
+    const firstName = getFirstName(recipient.playerName);
     const text = [
-      `Hi ${recipient.playerName},`,
+      `Hi ${firstName},`,
       "",
-      "Unfortunately, this game has been cancelled.",
+      `Unfortunately, ${gameTitle} has been cancelled.`,
       "",
-      "Your payment has been automatically added to your Fair Play Football wallet and is ready to use for your next booking.",
+      `${gamePrice} has been added to your Fair Play Wallet and is ready to use immediately.`,
       "",
-      "If you'd prefer a refund, you can request one from your wallet at any time.",
-      "",
-      "We apologise for the inconvenience and hope to see you at another Fair Play Football game soon.",
+      "You can use your credit to book another game. Prefer the money back on your original payment method? You can request a refund directly from your Wallet on the Fair Play Football website.",
       "",
       `Game: ${gameTitle}`,
       `Location: ${gameLocation}`,
       `Kick-off: ${gameTime}`,
-      `Price: ${gamePrice}`,
+      `Wallet credit: ${gamePrice}`,
       "",
-      `View game: ${gameUrl}`,
-    ].join("\n");
+      `View wallet: ${walletUrl}`,
+      `Browse games: ${browseGamesUrl}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const html = renderEmailLayout({
-      previewText: `This game has been cancelled: ${gameTitle}.`,
-      title: "Game cancelled",
-      ctaHref: gameUrl,
-      ctaLabel: "View game",
+      previewText: `${gamePrice} has been added to your Fair Play Wallet and is ready to use immediately.`,
+      title: "Your credit is ready",
+      ctaHref: walletUrl,
+      ctaLabel: "View wallet",
+      footerText: "Fair Play Football will keep your Wallet updated.",
       bodyHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
-          Hi ${escapeHtml(recipient.playerName)},
+          Hi ${escapeHtml(firstName)},
         </p>
         <p style="margin:0 0 18px;color:#d4d4d8;">
-          Unfortunately, this game has been cancelled.
+          Unfortunately, ${escapeHtml(gameTitle)} has been cancelled.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          Your payment has been automatically added to your Fair Play Football wallet and is ready to use for your next booking.
+          ${escapeHtml(gamePrice)} has been added to your Fair Play Wallet and is ready to use immediately.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          If you'd prefer a refund, you can request one from your wallet at any time.
+          You can use your credit to book another game. Prefer the money back on your original payment method? You can request a refund directly from your Wallet on the Fair Play Football website.
         </p>
-        <p style="margin:0 0 22px;color:#d4d4d8;">
-          We apologise for the inconvenience and hope to see you at another Fair Play Football game soon.
-        </p>
-
         <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
           <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-            Match details
+            Game details
           </p>
           <div style="margin:0;">
             <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Game:</strong> ${escapeHtml(gameTitle)}</p>
             <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Location:</strong> ${escapeHtml(gameLocation)}</p>
             <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Kick-off:</strong> ${escapeHtml(gameTime)}</p>
-            <p style="margin:0;color:#f4f4f5;"><strong>Price:</strong> ${escapeHtml(gamePrice)}</p>
+            <p style="margin:0;color:#f4f4f5;"><strong>Wallet credit:</strong> ${escapeHtml(gamePrice)}</p>
           </div>
         </div>
       `,

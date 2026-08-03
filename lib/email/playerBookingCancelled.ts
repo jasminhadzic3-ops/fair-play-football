@@ -74,22 +74,32 @@ function getKickoffDetails(game: GameEmailData) {
 
 function getOutcomeCopy(
   outcome: PlayerBookingCancellationEmailOutcome,
-  formattedAmount: string | null
+  formattedAmount: string | null,
+  gameTitle: string
 ) {
-  const amount = formattedAmount || "your";
+  const amount = formattedAmount || "Credit";
 
   switch (outcome) {
     case "wallet_restored":
       return {
-        subjectSuffix: "wallet credit added",
-        heading: "Booking Cancelled",
-        explanation: `Your booking has been cancelled and ${amount} has been added to your Fair Play Wallet. You can use this credit to book another game straight away. Prefer the money back on your card? Request a refund from your Wallet.`,
+        subject: `Booking cancelled: ${gameTitle}`,
+        heading: "Your credit is ready",
+        previewText: `${amount} has been added to your Fair Play Wallet and is ready to use immediately.`,
+        paragraphs: [
+          `Your booking for ${gameTitle} has been cancelled.`,
+          `${amount} has been added to your Fair Play Wallet and is ready to use immediately.`,
+          "You can use your credit to book another Fair Play Football game. Prefer the money back on your original payment method? You can request a refund directly from your Wallet on the Fair Play Football website.",
+        ],
       };
     case "no_refund_within_24h":
       return {
-        subjectSuffix: "booking cancelled",
+        subject: `Booking cancelled: ${gameTitle}`,
         heading: "Booking cancelled",
-        explanation: "Your booking has been cancelled. As the cancellation was made within 24 hours of kick-off, no refund is available.",
+        previewText: "Your booking has been cancelled. No refund is available within 24 hours of kick-off.",
+        paragraphs: [
+          `Your booking for ${gameTitle} has been cancelled.`,
+          "As the cancellation was made within 24 hours of kick-off, no refund is available.",
+        ],
       };
   }
 }
@@ -145,61 +155,63 @@ export async function sendPlayerBookingCancelledEmail({
   const gameLocation = game.location || "TBD";
   const kickoff = getKickoffDetails(game);
   const formattedAmount = amount === null ? null : formatPrice(amount, currency || "GBP");
-  const outcomeCopy = getOutcomeCopy(outcome, formattedAmount);
+  const outcomeCopy = getOutcomeCopy(outcome, formattedAmount, gameTitle);
+  const walletUrl = `${getSiteUrl()}/wallet`;
   const browseGamesUrl = `${getSiteUrl()}/#games`;
-  const subject = `Booking cancelled: ${gameTitle} - ${outcomeCopy.subjectSuffix}`;
   const idempotencyKey = `player_booking_cancelled:cancellation:${cancellationId}:outcome:${outcome}`;
 
   const text = [
     `Hi ${playerName},`,
     "",
-    outcomeCopy.explanation,
+    ...outcomeCopy.paragraphs.flatMap((paragraph) => [paragraph, ""]),
     "",
     `Game: ${gameTitle}`,
     `Date: ${kickoff.date}`,
-    `Kick-off: ${kickoff.time}`,
-    `Location: ${gameLocation}`,
-    formattedAmount ? `Refund amount: ${formattedAmount}` : null,
+    `Time: ${kickoff.time}`,
+    `Venue: ${gameLocation}`,
+    formattedAmount ? `Wallet credit: ${formattedAmount}` : null,
     `Booking ID: ${bookingId}`,
     "",
-    `Browse upcoming games: ${browseGamesUrl}`,
+    `View wallet: ${walletUrl}`,
+    `Browse games: ${browseGamesUrl}`,
   ]
     .filter(Boolean)
     .join("\n");
 
   const html = renderEmailLayout({
-    previewText: outcomeCopy.explanation,
-    title: "Booking cancelled",
-    ctaHref: browseGamesUrl,
-    ctaLabel: "Browse Upcoming Games",
-    footerText: "Need help? Reply to this email and Fair Play Football will help.",
+    previewText: outcomeCopy.previewText,
+    title: outcomeCopy.heading,
+    ctaHref: walletUrl,
+    ctaLabel: "View wallet",
+    footerText: "Fair Play Football will keep your Wallet updated.",
     bodyHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(playerName)},
       </p>
-      <p style="margin:0 0 10px;font-size:13px;line-height:18px;letter-spacing:0.18em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-        ${escapeHtml(outcomeCopy.heading)}
-      </p>
-      <p style="margin:0 0 22px;color:#d4d4d8;">
-        ${escapeHtml(outcomeCopy.explanation)}
-      </p>
+      ${outcomeCopy.paragraphs
+        .map(
+          (paragraph) => `<p style="margin:0 0 18px;color:#d4d4d8;">
+            ${escapeHtml(paragraph)}
+          </p>`
+        )
+        .join("")}
 
       <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
         <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-          Match details
+          Game details
         </p>
         <div style="margin:0;">
           <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Game:</strong> ${escapeHtml(gameTitle)}</p>
           <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Date:</strong> ${escapeHtml(kickoff.date)}</p>
-          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Kick-off:</strong> ${escapeHtml(kickoff.time)}</p>
-          <p style="margin:0;color:#f4f4f5;"><strong>Location:</strong> ${escapeHtml(gameLocation)}</p>
+          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Time:</strong> ${escapeHtml(kickoff.time)}</p>
+          <p style="margin:0;color:#f4f4f5;"><strong>Venue:</strong> ${escapeHtml(gameLocation)}</p>
         </div>
       </div>
 
       ${
         formattedAmount
           ? `<div style="border-top:1px solid #27272a;padding-top:18px;color:#a1a1aa;font-size:13px;line-height:21px;">
-              <p style="margin:0 0 6px;">Refund amount: ${escapeHtml(formattedAmount)}</p>
+              <p style="margin:0 0 6px;">Wallet credit: ${escapeHtml(formattedAmount)}</p>
               <p style="margin:0;">Booking ID: ${bookingId}</p>
             </div>`
           : `<div style="border-top:1px solid #27272a;padding-top:18px;color:#a1a1aa;font-size:13px;line-height:21px;">
@@ -211,7 +223,7 @@ export async function sendPlayerBookingCancelledEmail({
 
   return sendResendEmail({
     to: recipientEmail,
-    subject,
+    subject: outcomeCopy.subject,
     html,
     text,
     idempotencyKey,
