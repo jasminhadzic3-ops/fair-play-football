@@ -4,6 +4,7 @@ import {
   getDefaultSelectedDateKey,
   getGameLondonDateKey,
   getLondonDateKey,
+  getUserBookedVisibleDateKeys,
   getWeekDateKeys,
   isCalendarCountableGame,
   sortGamesByStartsAt,
@@ -64,5 +65,80 @@ describe("game calendar helpers", () => {
   it("returns null date keys for legacy or invalid games", () => {
     expect(getGameLondonDateKey({ id: 1, status: "active", archived_at: null, starts_at: null })).toBeNull();
     expect(getLondonDateKey("not-a-date")).toBeNull();
+  });
+
+  it("shows a booking tick only for the signed-in player's visible upcoming games", () => {
+    const bookedDateKeys = getUserBookedVisibleDateKeys(
+      [{ game_id: 1, user_id: "player-1" }],
+      [{ id: 1, status: "active", archived_at: null, starts_at: "2026-07-29T18:00:00.000Z" }],
+      "player-1",
+      "2026-07-27"
+    );
+
+    expect(bookedDateKeys).toEqual(new Set(["2026-07-29"]));
+  });
+
+  it("hides booking ticks when the booked game is deleted or otherwise not visible", () => {
+    const bookings = [
+      { game_id: 1, user_id: "player-1" },
+      { game_id: 2, user_id: "player-1" },
+      { game_id: 3, user_id: "player-1" },
+      { game_id: 4, user_id: "player-1" },
+      { game_id: 5, user_id: "player-1" },
+      { game_id: 6, user_id: "other-player" },
+    ];
+    const games = [
+      { id: 2, status: "cancelled", archived_at: null, starts_at: "2026-07-29T18:00:00.000Z" },
+      { id: 3, status: "active", archived_at: "2026-07-20T10:00:00.000Z", starts_at: "2026-07-29T18:00:00.000Z" },
+      { id: 4, status: "hidden", archived_at: null, starts_at: "2026-07-29T18:00:00.000Z" },
+      { id: 5, status: "active", archived_at: null, starts_at: "2026-07-26T18:00:00.000Z" },
+      { id: 6, status: "active", archived_at: null, starts_at: "2026-07-29T18:00:00.000Z" },
+    ];
+
+    expect(getUserBookedVisibleDateKeys(bookings, games, "player-1", "2026-07-27")).toEqual(
+      new Set()
+    );
+  });
+
+  it("hides the booking tick once the booking is removed", () => {
+    const bookedGame = {
+      id: 1,
+      status: "active",
+      archived_at: null,
+      starts_at: "2026-07-29T18:00:00.000Z",
+    };
+
+    expect(getUserBookedVisibleDateKeys([], [bookedGame], "player-1", "2026-07-27")).toEqual(
+      new Set()
+    );
+  });
+
+  it("keeps same-date booking ticks until the last visible booked game disappears", () => {
+    const bookings = [
+      { game_id: 1, user_id: "player-1" },
+      { game_id: 2, user_id: "player-1" },
+    ];
+    const firstVisibleGame = {
+      id: 1,
+      status: "active",
+      archived_at: null,
+      starts_at: "2026-07-29T18:00:00.000Z",
+    };
+    const secondVisibleGame = {
+      id: 2,
+      status: "active",
+      archived_at: null,
+      starts_at: "2026-07-29T20:00:00.000Z",
+    };
+
+    expect(
+      getUserBookedVisibleDateKeys(bookings, [firstVisibleGame, secondVisibleGame], "player-1", "2026-07-27")
+    ).toEqual(new Set(["2026-07-29"]));
+    expect(
+      getUserBookedVisibleDateKeys(bookings, [secondVisibleGame], "player-1", "2026-07-27")
+    ).toEqual(new Set(["2026-07-29"]));
+    expect(getUserBookedVisibleDateKeys(bookings, [], "player-1", "2026-07-27")).toEqual(
+      new Set()
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { signInWithEmail } from "./helpers/auth";
 import { createE2ESupabaseClient } from "./helpers/moneySeed";
 import {
@@ -205,6 +205,38 @@ async function seedCalendarBooking(params: {
   return data.id as number;
 }
 
+async function seedAdditionalCalendarGame(params: {
+  runId: string;
+  title: string;
+  dateKey: string;
+}) {
+  const supabase = createE2ESupabaseClient(requireDatabaseMutationE2EEnv());
+  const { data, error } = await supabase
+    .from("games")
+    .insert({
+      title: params.title,
+      location: "E2E Calendar Pitch",
+      time: displayTimeFromDateKey(params.dateKey),
+      starts_at: startsAtFromDateKey(params.dateKey),
+      price: 5,
+      max_players: 16,
+      status: "active",
+      archived_at: null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    throw new Error(`seed additional calendar game ${params.runId}: ${error?.message || "no game returned"}`);
+  }
+
+  return data.id as number;
+}
+
+async function refreshCalendarWithoutHardReload(page: Page) {
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+}
+
 async function cleanupCalendarSeed(runId: string, userIds: string[] = []) {
   const supabase = createE2ESupabaseClient(requireDatabaseMutationE2EEnv());
   await supabase.from("bookings").delete().like("player_name", `Calendar % ${runId.slice(-6)}`);
@@ -311,6 +343,50 @@ test.describe("Games calendar navigation", () => {
       await expect(page.getByTestId(`calendar-game-count-${seed.firstDateKey}`)).not.toHaveText("0");
     } finally {
       await cleanupCalendarSeed(runId, [player.id, otherPlayer.id]);
+    }
+  });
+
+  test("booking ticks follow visible games after deletion without a hard refresh", async ({
+    page,
+  }) => {
+    const runId = uniqueRunId();
+    const titleRunLabel = runId.replaceAll("_", " ");
+    const seed = await seedCalendarGames(runId);
+    const player = await seedCalendarUser(runId, "deletion");
+    const sameDateGameId = await seedAdditionalCalendarGame({
+      runId,
+      title: `${titleRunLabel} Visible Same Date`,
+      dateKey: seed.firstDateKey,
+    });
+    await seedCalendarBooking({
+      gameId: seed.firstGameId,
+      userId: player.id,
+      playerName: player.username,
+    });
+    await seedCalendarBooking({
+      gameId: sameDateGameId,
+      userId: player.id,
+      playerName: player.username,
+    });
+
+    try {
+      await signInWithEmail(page, player.email, player.password);
+      await page.getByRole("link", { name: "Find Games" }).first().click();
+      await expect(page.locator("#games")).toBeVisible();
+      await expect(page.getByTestId(`calendar-game-count-${seed.firstDateKey}`)).toHaveText("2");
+      await expect(page.getByTestId(`calendar-booked-tick-${seed.firstDateKey}`)).toBeVisible();
+
+      await seed.supabase.from("games").delete().eq("id", seed.firstGameId);
+      await refreshCalendarWithoutHardReload(page);
+      await expect(page.getByTestId(`calendar-game-count-${seed.firstDateKey}`)).toHaveText("1");
+      await expect(page.getByTestId(`calendar-booked-tick-${seed.firstDateKey}`)).toBeVisible();
+
+      await seed.supabase.from("games").delete().eq("id", sameDateGameId);
+      await refreshCalendarWithoutHardReload(page);
+      await expect(page.getByTestId(`calendar-game-count-${seed.firstDateKey}`)).toHaveText("0");
+      await expect(page.getByTestId(`calendar-booked-tick-${seed.firstDateKey}`)).toHaveCount(0);
+    } finally {
+      await cleanupCalendarSeed(runId, [player.id]);
     }
   });
 

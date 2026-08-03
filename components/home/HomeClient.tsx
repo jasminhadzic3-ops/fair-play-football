@@ -19,6 +19,7 @@ import {
   getDefaultSelectedDateKey,
   getGameLondonDateKey,
   getTodayLondonDateKey,
+  getUserBookedVisibleDateKeys,
   getWeekDateKeys,
   sortGamesByStartsAt,
 } from "@/lib/gameCalendar";
@@ -96,12 +97,11 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     map.set(dateKey, [...(map.get(dateKey) ?? []), game]);
     return map;
   }, new Map<string, any[]>());
-  const userBookedDateKeys = new Set(
-    bookings
-      .filter((booking) => user?.id && booking.user_id === user.id)
-      .map((booking) => games.find((game) => game.id === booking.game_id))
-      .map((game) => game ? getGameLondonDateKey(game) : null)
-      .filter((dateKey): dateKey is string => Boolean(dateKey))
+  const userBookedDateKeys = getUserBookedVisibleDateKeys(
+    bookings,
+    calendarGames,
+    user?.id,
+    todayDateKey
   );
   const selectedDatedGames = showAllGames
     ? sortGamesByStartsAt(calendarGames)
@@ -576,6 +576,11 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     openGameFromNotification();
 
     let listenerSubscription: { unsubscribe: () => void } | undefined;
+    const refreshGamesWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void fetchGames();
+      }
+    };
 
     const initializeAuth = async () => {
       const {
@@ -610,9 +615,13 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     };
 
     initializeAuth();
+    window.addEventListener("focus", refreshGamesWhenVisible);
+    document.addEventListener("visibilitychange", refreshGamesWhenVisible);
 
     return () => {
       listenerSubscription?.unsubscribe();
+      window.removeEventListener("focus", refreshGamesWhenVisible);
+      document.removeEventListener("visibilitychange", refreshGamesWhenVisible);
     };
   }, []);
 

@@ -5,6 +5,11 @@ export type CalendarGameLike = {
   archived_at?: string | null;
 };
 
+export type CalendarBookingLike = {
+  game_id?: number | null;
+  user_id?: string | null;
+};
+
 const londonTimeZone = "Europe/London";
 
 const londonDateFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -102,6 +107,36 @@ export function sortGamesByStartsAt<T extends CalendarGameLike>(games: T[]) {
 
     return aTime - bTime;
   });
+}
+
+export function getUserBookedVisibleDateKeys(
+  bookings: CalendarBookingLike[],
+  games: CalendarGameLike[],
+  userId: string | null | undefined,
+  todayDateKey = getTodayLondonDateKey()
+) {
+  if (!userId) {
+    return new Set<string>();
+  }
+
+  const visibleUpcomingGameDateById = new Map<number, string>();
+
+  games.forEach((game) => {
+    const dateKey = getGameLondonDateKey(game);
+
+    if (dateKey && dateKey >= todayDateKey) {
+      visibleUpcomingGameDateById.set(game.id, dateKey);
+    }
+  });
+
+  return new Set(
+    bookings
+      .filter((booking) => booking.user_id === userId)
+      .map((booking) =>
+        booking.game_id ? visibleUpcomingGameDateById.get(booking.game_id) ?? null : null
+      )
+      .filter((dateKey): dateKey is string => Boolean(dateKey))
+  );
 }
 
 export function getDefaultSelectedDateKey(
