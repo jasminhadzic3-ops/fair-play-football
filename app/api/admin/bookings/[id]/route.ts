@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
+import { getBookingActionLifecycleBlock } from "@/lib/bookingActionLifecycle";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { notifyWaitingListForOpenSpace } from "@/lib/waitingListNotifications";
 
@@ -43,12 +44,21 @@ export async function DELETE(
 
     const { data: sourceGame, error: sourceGameError } = await supabaseAdmin
       .from("games")
-      .select("id,max_players")
+      .select("id,max_players,status,starts_at,archived_at")
       .eq("id", booking.game_id)
       .maybeSingle();
 
     if (sourceGameError) {
       return Response.json({ error: sourceGameError.message }, { status: 500 });
+    }
+
+    const lifecycleBlock = getBookingActionLifecycleBlock(sourceGame);
+
+    if (lifecycleBlock) {
+      return Response.json(
+        { error: lifecycleBlock.message, reason: lifecycleBlock.reason },
+        { status: lifecycleBlock.status }
+      );
     }
 
     const { count: bookingCountBeforeRemove, error: countBeforeError } = await supabaseAdmin

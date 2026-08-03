@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getBookingActionLifecycleBlock } from "@/lib/bookingActionLifecycle";
 import { cancelPlayerBookingWithRefundPolicy } from "@/lib/playerBookingCancellation";
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmin";
 import { notifyWaitingListForOpenSpace } from "@/lib/waitingListNotifications";
@@ -43,6 +44,42 @@ export async function DELETE(
 
     if (!bookingId) {
       return Response.json({ error: "Invalid booking id." }, { status: 400 });
+    }
+
+    const { data: booking, error: bookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id,game_id,user_id")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (bookingError) {
+      return Response.json({ error: bookingError.message }, { status: 500 });
+    }
+
+    if (!booking || booking.user_id !== user.id) {
+      return Response.json(
+        { error: "Booking not found.", reason: "booking_not_found" },
+        { status: 404 }
+      );
+    }
+
+    const { data: sourceGame, error: sourceGameError } = await supabaseAdmin
+      .from("games")
+      .select("id,status,starts_at,archived_at")
+      .eq("id", booking.game_id)
+      .maybeSingle();
+
+    if (sourceGameError) {
+      return Response.json({ error: sourceGameError.message }, { status: 500 });
+    }
+
+    const lifecycleBlock = getBookingActionLifecycleBlock(sourceGame);
+
+    if (lifecycleBlock) {
+      return Response.json(
+        { error: lifecycleBlock.message, reason: lifecycleBlock.reason },
+        { status: lifecycleBlock.status }
+      );
     }
 
     const result = await cancelPlayerBookingWithRefundPolicy({

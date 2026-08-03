@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const assertSupabaseAdminConfiguredMock = vi.hoisted(() => vi.fn());
 const getUserMock = vi.hoisted(() => vi.fn());
+const supabaseFromMock = vi.hoisted(() => vi.fn());
 const cancelPlayerBookingWithRefundPolicyMock = vi.hoisted(() => vi.fn());
 const notifyWaitingListForOpenSpaceMock = vi.hoisted(() => vi.fn());
 
@@ -11,6 +12,7 @@ vi.mock("@/lib/supabaseAdmin", () => ({
     auth: {
       getUser: getUserMock,
     },
+    from: supabaseFromMock,
   },
 }));
 
@@ -23,6 +25,36 @@ vi.mock("@/lib/waitingListNotifications", () => ({
 }));
 
 import { DELETE } from "@/app/api/bookings/[id]/route";
+
+let bookingRow: { id: number; game_id: number; user_id: string } | null;
+let gameRow: { id: number; status: string; starts_at: string | null; archived_at: string | null } | null;
+
+class MockSupabaseQuery {
+  private filters: Record<string, unknown> = {};
+
+  constructor(private table: string) {}
+
+  select() {
+    return this;
+  }
+
+  eq(field: string, value: unknown) {
+    this.filters[field] = value;
+    return this;
+  }
+
+  async maybeSingle() {
+    if (this.table === "bookings") {
+      return { data: bookingRow, error: null };
+    }
+
+    if (this.table === "games") {
+      return { data: gameRow, error: null };
+    }
+
+    return { data: null, error: null };
+  }
+}
 
 function cancellationResult(overrides: Record<string, unknown> = {}) {
   return {
@@ -67,6 +99,14 @@ async function deleteBooking(id = "100") {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  bookingRow = { id: 100, game_id: 10, user_id: "user-1" };
+  gameRow = {
+    id: 10,
+    status: "active",
+    starts_at: "2099-08-03T20:00:00.000Z",
+    archived_at: null,
+  };
+  supabaseFromMock.mockImplementation((table: string) => new MockSupabaseQuery(table));
   getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
   cancelPlayerBookingWithRefundPolicyMock.mockResolvedValue(cancellationResult());
   notifyWaitingListForOpenSpaceMock.mockResolvedValue({ notifiedCount: 1 });
@@ -99,6 +139,39 @@ describe("player booking cancellation route", () => {
       payment_method: "wallet",
       wallet_restoration_transaction_id: 700,
     });
+  });
+
+  it.each([
+    [
+      "completed",
+      { id: 10, status: "active", starts_at: "2020-08-03T20:00:00.000Z", archived_at: null },
+      "source_game_completed",
+    ],
+    [
+      "cancelled",
+      { id: 10, status: "cancelled", starts_at: "2099-08-03T20:00:00.000Z", archived_at: null },
+      "source_game_cancelled",
+    ],
+    [
+      "archived",
+      {
+        id: 10,
+        status: "active",
+        starts_at: "2099-08-03T20:00:00.000Z",
+        archived_at: "2099-08-04T10:00:00.000Z",
+      },
+      "source_game_archived",
+    ],
+  ])("rejects player leave for %s source games", async (_label, sourceGame, reason) => {
+    gameRow = sourceGame;
+
+    const response = await deleteBooking();
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.reason).toBe(reason);
+    expect(cancelPlayerBookingWithRefundPolicyMock).not.toHaveBeenCalled();
+    expect(notifyWaitingListForOpenSpaceMock).not.toHaveBeenCalled();
   });
 
   it("returns safe support-required messages without releasing the booking", async () => {
