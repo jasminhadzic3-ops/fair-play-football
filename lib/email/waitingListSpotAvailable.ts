@@ -68,43 +68,43 @@ export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotA
   const gameTime = game.time || "TBD";
   const gamePrice = formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(params.gameId);
-  const subject = `Spot available: ${gameTitle}`;
+  const subject = `Place Available: ${gameTitle}`;
   const idempotencyKey = `waiting_list_spot_available:notification:${params.notificationId}`;
 
   const text = [
     `Hi ${playerName},`,
     "",
-    `A spot may now be available for ${gameTitle}.`,
+    `A place is available for ${gameTitle}.`,
     "",
-    "If you'd still like to play, open the game and complete your booking.",
+    "Open the game to book your place.",
     "",
-    "Places are allocated on a first paid, first served basis. This email does not reserve or guarantee a place.",
+    "It is not reserved. Places are first paid, first confirmed.",
     "",
     `Location: ${gameLocation}`,
     `Kick-off: ${gameTime}`,
     `Price: ${gamePrice}`,
     `Waiting list ID: ${params.waitingListId}`,
     "",
-    `View game: ${gameUrl}`,
+    `View game details: ${gameUrl}`,
   ].join("\n");
 
   const html = renderEmailLayout({
-    previewText: `A spot may now be available for ${gameTitle}. Places are allocated on a first paid, first served basis.`,
-    title: "A spot has opened",
+    previewText: `A place is available for ${gameTitle}. It is first paid, first confirmed.`,
+    title: "Place Available",
     ctaHref: gameUrl,
-    ctaLabel: "View game",
+    ctaLabel: "View game details",
     bodyHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(playerName)},
       </p>
       <p style="margin:0 0 18px;color:#d4d4d8;">
-        A spot may now be available for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
+        A place is available for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
-        If you'd still like to play, open the game and complete your booking.
+        Open the game to book your place.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
-        Places are allocated on a <strong style="color:#ffffff;">first paid, first served</strong> basis. This email does not reserve or guarantee a place.
+        It is not reserved. Places are <strong style="color:#ffffff;">first paid, first confirmed</strong>.
       </p>
 
       <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">

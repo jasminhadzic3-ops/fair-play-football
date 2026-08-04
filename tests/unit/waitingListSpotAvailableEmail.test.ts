@@ -114,10 +114,25 @@ describe("sendWaitingListSpotAvailableEmail", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "Spot available: Friday Football",
+        subject: "Place Available: Friday Football",
         idempotencyKey: "waiting_list_spot_available:notification:700",
       })
     );
+    const email = sendResendEmailMock.mock.calls[0][0] as {
+      html: string;
+      text: string;
+    };
+
+    expect(email.text).toContain("A place is available for Friday Football.");
+    expect(email.text).toContain("Open the game to book your place.");
+    expect(email.text).toContain("It is not reserved. Places are first paid, first confirmed.");
+    expect(email.text).toContain("Location: Test Pitch");
+    expect(email.text).toContain("Kick-off: Friday 7pm");
+    expect(email.text).toContain("Price: £8.00");
+    expect(email.text).toContain("View game details: http://localhost:3000/?open_game_id=10#games");
+    expect(email.html).toContain("Place Available");
+    expect(email.html).toContain("View game details");
+    expect(email.html).toContain("first paid, first confirmed");
   });
 
   it("falls back to Supabase Auth email when profile email is missing", async () => {
