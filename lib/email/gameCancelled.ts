@@ -155,7 +155,7 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
   const gamePrice = formatPrice(game.price, "GBP");
   const walletUrl = `${getSiteUrl()}/wallet`;
   const browseGamesUrl = `${getSiteUrl()}/#games`;
-  const subject = `Game cancelled: ${gameTitle}`;
+  const subject = `Game Cancelled: ${gameTitle}`;
   let sentCount = 0;
 
   for (const recipient of recipients) {
@@ -163,11 +163,11 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
     const text = [
       `Hi ${firstName},`,
       "",
-      `Unfortunately, ${gameTitle} has been cancelled.`,
+      `${gameTitle} has been cancelled.`,
       "",
-      `${gamePrice} has been added to your Fair Play Wallet and is ready to use immediately.`,
+      `${gamePrice} has been added to your Fair Play Wallet and is ready to use.`,
       "",
-      "You can use your credit to book another game. Prefer the money back on your original payment method? You can request a refund directly from your Wallet on the Fair Play Football website.",
+      "Use it for another game, or request a refund to your original payment method from Wallet.",
       "",
       `Game: ${gameTitle}`,
       `Location: ${gameLocation}`,
@@ -181,8 +181,8 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
       .join("\n");
 
     const html = renderEmailLayout({
-      previewText: `${gamePrice} has been added to your Fair Play Wallet and is ready to use immediately.`,
-      title: "Your credit is ready",
+      previewText: `Your Fair Play Wallet credit for ${gameTitle} is ready.`,
+      title: "Game Cancelled",
       ctaHref: walletUrl,
       ctaLabel: "View wallet",
       footerText: "Fair Play Football will keep your Wallet updated.",
@@ -191,13 +191,13 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
           Hi ${escapeHtml(firstName)},
         </p>
         <p style="margin:0 0 18px;color:#d4d4d8;">
-          Unfortunately, ${escapeHtml(gameTitle)} has been cancelled.
+          ${escapeHtml(gameTitle)} has been cancelled.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          ${escapeHtml(gamePrice)} has been added to your Fair Play Wallet and is ready to use immediately.
+          ${escapeHtml(gamePrice)} has been added to your Fair Play Wallet and is ready to use.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          You can use your credit to book another game. Prefer the money back on your original payment method? You can request a refund directly from your Wallet on the Fair Play Football website.
+          Use it for another game, or request a refund to your original payment method from Wallet.
         </p>
         <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
           <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">

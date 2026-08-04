@@ -133,15 +133,15 @@ describe("sendPlayerBookingCancelledEmail", () => {
   it.each([
     [
       "wallet_restored",
-      "Booking cancelled: Thursday Football",
+      "Booking Cancelled: Thursday Football",
       "Your booking for Thursday Football has been cancelled.",
-      "£8.00 has been added to your Fair Play Wallet and is ready to use immediately.",
+      "£8.00 has been added to your Fair Play Wallet and is ready to use.",
     ],
     [
       "no_refund_within_24h",
-      "Booking cancelled: Thursday Football",
+      "Booking Cancelled: Thursday Football",
       "Your booking for Thursday Football has been cancelled.",
-      "As the cancellation was made within 24 hours of kick-off, no refund is available.",
+      "No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.",
     ],
   ] satisfies Array<[PlayerBookingCancellationEmailOutcome, string, string, string]>)(
     "renders the %s outcome",
@@ -155,6 +155,7 @@ describe("sendPlayerBookingCancelledEmail", () => {
       expect(email.text).toContain(secondParagraph);
       expect(email.html).toContain(firstParagraph);
       expect(email.html).toContain(secondParagraph);
+      expect(email.html).toContain("Booking Cancelled");
       expect(email.text).toContain("Date: Thursday, 30 July 2026");
       expect(email.text).toContain("Time: 19:00");
       expect(email.text).toContain("Venue: Whittington Park");

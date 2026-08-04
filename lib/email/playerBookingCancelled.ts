@@ -82,23 +82,23 @@ function getOutcomeCopy(
   switch (outcome) {
     case "wallet_restored":
       return {
-        subject: `Booking cancelled: ${gameTitle}`,
-        heading: "Your credit is ready",
-        previewText: `${amount} has been added to your Fair Play Wallet and is ready to use immediately.`,
+        subject: `Booking Cancelled: ${gameTitle}`,
+        heading: "Booking Cancelled",
+        previewText: `Your Fair Play Wallet credit for ${gameTitle} is ready.`,
         paragraphs: [
           `Your booking for ${gameTitle} has been cancelled.`,
-          `${amount} has been added to your Fair Play Wallet and is ready to use immediately.`,
-          "You can use your credit to book another Fair Play Football game. Prefer the money back on your original payment method? You can request a refund directly from your Wallet on the Fair Play Football website.",
+          `${amount} has been added to your Fair Play Wallet and is ready to use.`,
+          "Use it for another game, or request a refund to your original payment method from Wallet.",
         ],
       };
     case "no_refund_within_24h":
       return {
-        subject: `Booking cancelled: ${gameTitle}`,
-        heading: "Booking cancelled",
-        previewText: "Your booking has been cancelled. No refund is available within 24 hours of kick-off.",
+        subject: `Booking Cancelled: ${gameTitle}`,
+        heading: "Booking Cancelled",
+        previewText: "Your booking has been cancelled. No wallet credit is available within 24 hours of kick-off.",
         paragraphs: [
           `Your booking for ${gameTitle} has been cancelled.`,
-          "As the cancellation was made within 24 hours of kick-off, no refund is available.",
+          "No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.",
         ],
       };
   }
