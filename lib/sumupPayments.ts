@@ -40,6 +40,18 @@ function hasPendingCheckoutTimedOut(createdAt?: string | null) {
   return Number.isFinite(createdAtMs) && Date.now() - createdAtMs >= ABANDONED_SUMUP_CHECKOUT_TIMEOUT_MS;
 }
 
+function serializeSumUpPaymentError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return error;
+}
+
 export type SumUpTransaction = {
   id: string;
   transaction_code: string;
@@ -637,27 +649,55 @@ export async function resolveAndStoreSumUpTransactionIdForPayment(
 }
 
 export async function retrieveSumUpCheckout(checkoutId: string) {
-  const response = await fetch(`${sumupApiBase}/checkouts/${checkoutId}`, {
-    headers: {
-      Authorization: `Bearer ${getSumUpApiKey()}`,
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${sumupApiBase}/checkouts/${checkoutId}`, {
+      headers: {
+        Authorization: `Bearer ${getSumUpApiKey()}`,
+      },
+    });
+  } catch (error) {
+    console.error("[SUMUP_DEBUG] SumUp checkout fetch threw", {
+      checkoutId,
+      error: serializeSumUpPaymentError(error),
+    });
+    throw error;
+  }
 
   const checkout = await readJsonResponse(response);
 
   if (!response.ok) {
+    console.error("[SUMUP_DEBUG] SumUp checkout fetch returned non-ok response", {
+      checkoutId,
+      httpStatus: response.status,
+      checkout,
+    });
     throw new Error(checkout?.message || checkout?.error_message || "Unable to retrieve SumUp checkout.");
   }
 
   if (!checkout) {
+    console.error("[SUMUP_DEBUG] SumUp checkout response was empty", {
+      checkoutId,
+      httpStatus: response.status,
+    });
     throw new Error("SumUp returned an empty checkout status response.");
   }
 
+  console.log("[SUMUP_DEBUG] SumUp checkout fetched", {
+    checkoutId,
+    httpStatus: response.status,
+    status: checkout.status,
+  });
   return checkout as SumUpCheckout;
 }
 
 export async function finalizeCheckoutPayment(checkoutId: string) {
   assertSupabaseAdminConfigured();
+
+  console.log("[SUMUP_DEBUG] entering finalizeCheckoutPayment", {
+    checkoutId,
+  });
 
   const checkout = await retrieveSumUpCheckout(checkoutId);
   const rawStatus = checkout.status.toLowerCase();
@@ -672,10 +712,17 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     .maybeSingle();
 
   if (paymentError) {
+    console.error("[SUMUP_DEBUG] booking_payments read failed inside finalizeCheckoutPayment", {
+      checkoutId,
+      error: paymentError,
+    });
     throw paymentError;
   }
 
   if (!payment) {
+    console.error("[SUMUP_DEBUG] booking_payments row missing inside finalizeCheckoutPayment", {
+      checkoutId,
+    });
     throw new Error("Payment record not found.");
   }
 
@@ -697,11 +744,33 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
     };
   }
 
-  if (status === "pending" && hasPendingCheckoutTimedOut(payment.created_at)) {
+  const createdAtMs = Date.parse(payment.created_at ?? "");
+  const pendingAgeMs = Number.isFinite(createdAtMs) ? Date.now() - createdAtMs : null;
+  const pendingTimedOut = hasPendingCheckoutTimedOut(payment.created_at);
+
+  console.log("[SUMUP_DEBUG] finalizeCheckoutPayment status decision", {
+    checkoutId,
+    paymentId: payment.id,
+    gameId: payment.game_id,
+    localPaymentStatus: payment.payment_status,
+    rawSumUpStatus: rawStatus,
+    normalizedStatus: status,
+    paymentCreatedAt: payment.created_at ?? null,
+    pendingAgeMs,
+    pendingTimedOut,
+  });
+
+  if (status === "pending" && pendingTimedOut) {
     status = "expired";
   }
 
   if (status !== "paid") {
+    console.log("[SUMUP_DEBUG] booking_payments update attempted inside finalizeCheckoutPayment", {
+      checkoutId,
+      paymentId: payment.id,
+      attemptedPaymentStatus: status,
+    });
+
     const { error: updateError } = await supabaseAdmin
       .from("booking_payments")
       .update({
@@ -713,9 +782,27 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
       .eq("id", payment.id);
 
     if (updateError) {
+      console.error("[SUMUP_DEBUG] booking_payments update failed inside finalizeCheckoutPayment", {
+        checkoutId,
+        paymentId: payment.id,
+        attemptedPaymentStatus: status,
+        error: updateError,
+      });
       throw updateError;
     }
 
+    console.log("[SUMUP_DEBUG] booking_payments update succeeded inside finalizeCheckoutPayment", {
+      checkoutId,
+      paymentId: payment.id,
+      updatedPaymentStatus: status,
+    });
+
+    console.log("[SUMUP_DEBUG] finalizeCheckoutPayment returning non-paid status", {
+      checkoutId,
+      paymentId: payment.id,
+      returnedPaymentStatus: status,
+      bookingId: payment.booking_id ?? null,
+    });
     return { paymentStatus: status, bookingId: payment.booking_id ?? null };
   }
 
