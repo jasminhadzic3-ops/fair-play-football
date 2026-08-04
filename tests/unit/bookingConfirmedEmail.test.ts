@@ -118,10 +118,20 @@ describe("sendBookingConfirmedEmail", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "Booking confirmed: Friday Football",
+        subject: "Booking Confirmed: Friday Football",
         idempotencyKey: "booking_confirmed:booking:123",
       })
     );
+    const email = sendResendEmailMock.mock.calls[0][0] as {
+      html: string;
+      text: string;
+    };
+
+    expect(email.text).toContain("Your place is confirmed for Friday Football.");
+    expect(email.text).toContain("View game details: http://localhost:3000/?open_game_id=10#games");
+    expect(email.html).toContain("Booking Confirmed");
+    expect(email.html).toContain("View game details");
+    expect(email.html).toContain("Your place is confirmed for");
   });
 
   it("falls back to Supabase Auth email when profile email is missing", async () => {

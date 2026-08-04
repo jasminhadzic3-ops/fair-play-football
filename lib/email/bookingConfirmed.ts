@@ -72,13 +72,13 @@ export async function sendBookingConfirmedEmail(params: BookingConfirmedEmailPar
   const gameTime = game.time || "TBD";
   const total = formatPrice(params.amount ?? game.price, params.currency);
   const bookingUrl = getGameUrl(params.gameId);
-  const subject = `Booking confirmed: ${gameTitle}`;
+  const subject = `Booking Confirmed: ${gameTitle}`;
   const idempotencyKey = `booking_confirmed:booking:${params.bookingId}`;
 
   const text = [
     `Hi ${playerName},`,
     "",
-    `Your booking is confirmed for ${gameTitle}.`,
+    `Your place is confirmed for ${gameTitle}.`,
     "",
     `Location: ${gameLocation}`,
     `Kick-off: ${gameTime}`,
@@ -88,22 +88,22 @@ export async function sendBookingConfirmedEmail(params: BookingConfirmedEmailPar
     params.checkoutId ? `Checkout ID: ${params.checkoutId}` : null,
     params.checkoutReference ? `Checkout reference: ${params.checkoutReference}` : null,
     "",
-    `View your booking: ${bookingUrl}`,
+    `View game details: ${bookingUrl}`,
   ]
     .filter(Boolean)
     .join("\n");
 
   const html = renderEmailLayout({
-    previewText: `Your booking is confirmed for ${gameTitle}.`,
-    title: "You're booked",
+    previewText: `Your place is confirmed for ${gameTitle}.`,
+    title: "Booking Confirmed",
     ctaHref: bookingUrl,
-    ctaLabel: "View booking",
+    ctaLabel: "View game details",
     bodyHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(playerName)},
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
-        You're booked in for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>. We'll see you on the pitch.
+        Your place is confirmed for <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>. We'll see you on the pitch.
       </p>
 
       <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
