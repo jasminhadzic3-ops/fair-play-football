@@ -37,42 +37,42 @@ export async function sendGameReminderEmail({
   const gameTime = game.time || "TBD";
   const gamePrice = formatPrice(Number(game.price ?? 0), "GBP");
   const gameUrl = getGameUrl(game.id);
-  const subject = "Ready for the match?";
+  const subject = `Game Reminder: ${gameTitle}`;
 
   const text = [
     `Hi ${recipient.playerName},`,
     "",
-    "Please arrive 15 minutes before kick-off so everyone is ready to start on time.",
+    `Your game starts soon: ${gameTitle}.`,
     "",
-    "View the game details before you travel, including the rules and player list.",
+    "Arrive 15 minutes before kick-off so the group can start on time.",
     "",
-    "We look forward to seeing you on the pitch.",
+    "Check the game details before you travel.",
     "",
     `Game: ${gameTitle}`,
     `Location: ${gameLocation}`,
     `Kick-off: ${gameTime}`,
     `Price: ${gamePrice}`,
     "",
-    `View game: ${gameUrl}`,
+    `View game details: ${gameUrl}`,
   ].join("\n");
 
   const html = renderEmailLayout({
     previewText: `Your game starts soon: ${gameTitle}.`,
-    title: "Your game starts soon",
+    title: "Game Reminder",
     ctaHref: gameUrl,
-    ctaLabel: "View game",
+    ctaLabel: "View game details",
     bodyHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(recipient.playerName)},
       </p>
       <p style="margin:0 0 18px;color:#d4d4d8;">
-        Please arrive 15 minutes before kick-off so everyone is ready to start on time.
+        Your game starts soon: <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
-        View the game details before you travel, including the rules and player list.
+        Arrive 15 minutes before kick-off so the group can start on time.
       </p>
       <p style="margin:0 0 22px;color:#d4d4d8;">
-        We look forward to seeing you on the pitch.
+        Check the game details before you travel.
       </p>
 
       <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
