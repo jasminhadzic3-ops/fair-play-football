@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 import GameCard from "@/components/games/GameCard";
+import GameDetails from "@/components/games/GameDetails";
 import Navbar from "@/components/shared/layout/Navbar";
 import Hero from "@/components/shared/layout/Hero";
 import Footer from "@/components/shared/layout/Footer";
@@ -28,6 +29,7 @@ import {
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 const PENDING_SUMUP_CHECKOUT_REFERENCE_KEY = "pendingSumUpCheckoutReference";
+const PENDING_SUMUP_GAME_SNAPSHOT_KEY = "pendingSumUpGameSnapshot";
 const incompletePaymentMessage =
   "Payment wasn't completed.\nYour booking has not been confirmed.";
 const terminalIncompletePaymentStatuses = new Set(["cancelled", "canceled", "failed", "expired"]);
@@ -57,6 +59,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   );
   const [paymentReturnGateActive, setPaymentReturnGateActive] = useState(false);
   const [paymentReturnTargetGameId, setPaymentReturnTargetGameId] = useState<number | null>(null);
+  const [paymentReturnGameSnapshot, setPaymentReturnGameSnapshot] = useState<any | null>(null);
   const [retryPaymentGameId, setRetryPaymentGameId] = useState<number | null>(null);
   const [recoveredPaymentReturnReference, setRecoveredPaymentReturnReference] = useState<string | null>(null);
   const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
@@ -122,6 +125,21 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         : "";
   const isPaymentReturnGateActive = paymentReturnGateActive;
   const hideHeroForPaymentReturn = isPaymentReturnGateActive || (hasInitialPaymentReturnReference && returnPaymentState !== null);
+  const paymentReturnLoadedGame = paymentReturnTargetGameId
+    ? games.find((game) => game.id === paymentReturnTargetGameId)
+    : null;
+  const paymentReturnGame =
+    paymentReturnLoadedGame ??
+    paymentReturnGameSnapshot ??
+    (paymentReturnTargetGameId
+      ? {
+          id: paymentReturnTargetGameId,
+          title: "Game details",
+          location: "Loading game details",
+          price: 0,
+          max_players: 12,
+        }
+      : null);
 
   function getStoredPendingSumUpGameId() {
     if (typeof window === "undefined") {
@@ -130,6 +148,34 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     const parsedGameId = Number(localStorage.getItem("pendingSumUpGameId"));
     return Number.isInteger(parsedGameId) && parsedGameId > 0 ? parsedGameId : null;
+  }
+
+  function getStoredPendingSumUpGameSnapshot() {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    try {
+      const snapshotText = localStorage.getItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
+
+      if (!snapshotText) {
+        return null;
+      }
+
+      const snapshot = JSON.parse(snapshotText);
+      const parsedGameId = Number(snapshot?.id);
+
+      if (!Number.isInteger(parsedGameId) || parsedGameId <= 0) {
+        return null;
+      }
+
+      return {
+        ...snapshot,
+        id: parsedGameId,
+      };
+    } catch {
+      return null;
+    }
   }
 
   function getStoredPaymentReturnReference() {
@@ -153,36 +199,46 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     return checkoutReferenceFromUrl || initialPaymentReturnReference || recoveredPaymentReturnReference || getStoredPaymentReturnReference();
   }
 
+  function clearPaymentReturnBootShell() {
+    document.documentElement.removeAttribute("data-payment-return-pending");
+    document.documentElement.removeAttribute("data-payment-return-boot");
+    document.getElementById("fair-play-payment-return-boot-shell")?.remove();
+  }
+
   useLayoutEffect(() => {
     const recoveredReference = getCurrentPaymentReturnReference();
 
     if (!recoveredReference) {
-      document.documentElement.removeAttribute("data-payment-return-pending");
+      clearPaymentReturnBootShell();
       return;
     }
 
     const storedGameId = getStoredPendingSumUpGameId();
+    const storedGameSnapshot = getStoredPendingSumUpGameSnapshot();
 
-    document.documentElement.removeAttribute("data-payment-return-pending");
     setRecoveredPaymentReturnReference(recoveredReference);
     setPaymentReturnGateActive(false);
     setPendingCheckoutReference(recoveredReference);
+    if (storedGameSnapshot) {
+      setPaymentReturnGameSnapshot(storedGameSnapshot);
+    }
     if (storedGameId) {
       setPaymentReturnTargetGameId(storedGameId);
       setCheckoutGameId(storedGameId);
-      setOpenDetailsGameId(storedGameId);
+    } else {
+      clearPaymentReturnBootShell();
     }
     setReturnPaymentState("checking");
     setReturnPaymentMessage("We're checking your payment. This may take a few moments.");
   }, []);
 
   useLayoutEffect(() => {
-    if (!paymentReturnGateActive) {
+    if (!paymentReturnGame || !paymentReturnTargetGameId || !returnPaymentState) {
       return;
     }
 
-    document.documentElement.removeAttribute("data-payment-return-pending");
-  }, [paymentReturnGateActive]);
+    clearPaymentReturnBootShell();
+  }, [paymentReturnGame, paymentReturnTargetGameId, returnPaymentState]);
 
   useEffect(() => {
     if (games.length === 0 || selectedGameDateKey || showAllGames) {
@@ -203,7 +259,6 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     }
 
     selectGameDateForDetails(paymentReturnTargetGameId);
-    setOpenDetailsGameId(paymentReturnTargetGameId);
   }, [games, paymentReturnTargetGameId, returnPaymentState]);
 
   async function fetchProfile(userId: string) {
@@ -340,6 +395,29 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setUnreadNotificationCount(count ?? 0);
   }
 
+  async function handlePaymentComplete(gameId: number) {
+    setSuccessGameId(gameId);
+    await fetchGames();
+    setPendingCheckoutId(null);
+    setPendingCheckoutReference(null);
+    clearSumUpCheckoutReferenceFromUrl();
+    localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
+    scrollToGames();
+    setTimeout(() => {
+      setSuccessGameId(null);
+    }, 5000);
+  }
+
+  function refreshPaymentReturnGame(gameId: number | null) {
+    void fetchGames()
+      .then((refreshed) => {
+        if (gameId) {
+          selectGameDateForDetails(gameId, refreshed.games);
+        }
+      })
+      .catch(() => {});
+  }
+
   const renderGameCard = (game: any) => (
     <GameCard
       key={game.id}
@@ -367,18 +445,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           await loadOrCreateProfile(currentUser);
         }
       }}
-      onPaymentComplete={async () => {
-        setSuccessGameId(game.id);
-        await fetchGames();
-        setPendingCheckoutId(null);
-        setPendingCheckoutReference(null);
-        clearSumUpCheckoutReferenceFromUrl();
-        localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
-        scrollToGames();
-        setTimeout(() => {
-          setSuccessGameId(null);
-        }, 5000);
-      }}
+      onPaymentComplete={() => handlePaymentComplete(game.id)}
       onSignOut={handleSignOut}
       pendingCheckoutId={checkoutGameId === game.id ? pendingCheckoutId : null}
       pendingCheckoutReference={checkoutGameId === game.id ? pendingCheckoutReference : null}
@@ -431,6 +498,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     localStorage.removeItem("pendingSumUpGameId");
     localStorage.removeItem("pendingSumUpCheckoutId");
     localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
+    localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
   }
 
   function getRequestedOpenGameId() {
@@ -529,13 +597,13 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setPaymentReturnTargetGameId(gameId);
     setCheckoutGameId(gameId);
     selectGameDateForDetails(gameId);
-    setOpenDetailsGameId(gameId);
   }
 
   function showIncompletePaymentReturn(gameId: number | null) {
     localStorage.removeItem("pendingSumUpGameId");
     localStorage.removeItem("pendingSumUpCheckoutId");
     localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
+    localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
     setPendingCheckoutId(null);
     setPendingCheckoutReference(null);
     setCheckoutGameId(null);
@@ -547,7 +615,6 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     if (gameId) {
       setPaymentReturnTargetGameId(gameId);
       selectGameDateForDetails(gameId);
-      setOpenDetailsGameId(gameId);
     }
 
     void fetchGames()
@@ -658,26 +725,17 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
         setSuccessGameId(paidGameId);
-        const refreshed = await fetchGames();
-        if (paidGameId) {
-          const refreshedGameExists = refreshed.games.some((game) => game.id === paidGameId);
-          if (refreshedGameExists) {
-            selectGameDateForDetails(paidGameId, refreshed.games);
-            setOpenDetailsGameId(paidGameId);
-          } else {
-            setPaymentReturnGateActive(false);
-          }
-        } else {
-          setPaymentReturnGateActive(false);
-        }
         clearSumUpCheckoutReferenceFromUrl();
         setReturnPaymentState("paid");
         setReturnPaymentMessage("Payment confirmed. Your booking has been added.");
+        setPaymentReturnGateActive(false);
+        refreshPaymentReturnGame(paidGameId);
         setTimeout(() => setSuccessGameId(null), 5000);
         return;
       }
@@ -687,18 +745,15 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
-        const refreshed = await fetchGames();
-        if (paidNoSpaceGameId) {
-          selectGameDateForDetails(paidNoSpaceGameId, refreshed.games);
-          setOpenDetailsGameId(paidNoSpaceGameId);
-        }
         clearSumUpCheckoutReferenceFromUrl();
         setReturnPaymentState("paid_no_space");
         setReturnPaymentMessage("Payment received, but this game is now full. You are still on the waiting list and we’ll notify you if a spot opens.");
         setPaymentReturnGateActive(false);
+        refreshPaymentReturnGame(paidNoSpaceGameId);
         return;
       }
 
@@ -706,6 +761,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
@@ -1391,6 +1447,58 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           </div>
         </div>
       </Modal>
+      {paymentReturnGame && paymentReturnTargetGameId && returnPaymentState ? (
+        <GameDetails
+          isOpen={true}
+          onClose={() => {
+            setReturnPaymentState(null);
+            setReturnPaymentMessage(null);
+            setPaymentReturnTargetGameId(null);
+            setPaymentReturnGameSnapshot(null);
+            setPendingCheckoutId(null);
+            setPendingCheckoutReference(null);
+            setCheckoutGameId(null);
+          }}
+          game={paymentReturnGame}
+          bookings={bookings}
+          successGameId={successGameId}
+          user={user}
+          profile={profile}
+          onPlayerNameChange={(gameId, playerName) => {
+            setGames((prevGames) =>
+              prevGames.map((g) =>
+                g.id === gameId
+                  ? {
+                      ...g,
+                      playerName,
+                    }
+                  : g
+              )
+            );
+          }}
+          onLeaveGame={leaveGame}
+          onRefreshProfile={async () => {
+            const currentUser = user ?? (await supabase.auth.getUser()).data.user;
+            if (currentUser) {
+              await loadOrCreateProfile(currentUser);
+            }
+          }}
+          onPaymentComplete={() => handlePaymentComplete(paymentReturnTargetGameId)}
+          onSignOut={handleSignOut}
+          pendingCheckoutId={pendingCheckoutId}
+          pendingCheckoutReference={pendingCheckoutReference}
+          paymentReturnStatus={
+            returnPaymentState === "checking" || returnPaymentState === "failed"
+              ? returnPaymentState
+              : null
+          }
+          paymentReturnResolved={
+            returnPaymentState === "paid" ||
+            returnPaymentState === "paid_no_space" ||
+            returnPaymentState === "duplicate_paid"
+          }
+        />
+      ) : null}
       {hideHeroForPaymentReturn ? null : <Hero />}
       <main
         className={`bg-black text-white ${isPaymentReturnGateActive ? "min-h-[calc(100vh-4.5rem)]" : ""}`}

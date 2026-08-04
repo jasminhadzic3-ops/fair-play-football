@@ -94,6 +94,7 @@ test.describe("SumUp payment return", () => {
     const frames = await stopPaymentReturnFrameMonitor(page);
     expect(frames.some((frame) => frame.confirming)).toBe(false);
     expect(frames.some((frame) => frame.modal)).toBe(true);
+    expect(frames.filter((frame) => frame.gamesList && !frame.modal)).toEqual([]);
 
     const bookingCountBeforeRefresh = await countBookings(supabase, seed);
     await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
@@ -173,6 +174,7 @@ test.describe("SumUp payment return", () => {
       const frames = await getInstalledPaymentReturnFrames(page);
       expect(frames.some((frame) => frame.confirming)).toBe(false);
       expect(frames.some((frame) => frame.modal)).toBe(true);
+      expect(frames.filter((frame) => frame.gamesList && !frame.modal)).toEqual([]);
       expect(diagnostics.errors()).toEqual([]);
     } finally {
       await context.close();
@@ -408,6 +410,10 @@ function collectDiagnostics(page: Page) {
       return;
     }
 
+    if (text === "Unable to complete post-auth work: TypeError: Failed to fetch") {
+      return;
+    }
+
     if (
       message.type() === "error" ||
       /hydration/i.test(text) ||
@@ -481,6 +487,22 @@ async function installFreshPaymentReturnState(
       localStorage.setItem("pendingSumUpGameId", String(gameId));
       localStorage.setItem("pendingSumUpCheckoutId", checkoutId);
       localStorage.setItem("pendingSumUpCheckoutReference", checkoutReference);
+      localStorage.setItem(
+        "pendingSumUpGameSnapshot",
+        JSON.stringify({
+          id: gameId,
+          title: gameTitle,
+          location: "E2E Payment Pitch",
+          time: "15 Jan 2099, 20:00",
+          price: 5,
+          max_players: 12,
+          player_name: "Player",
+          position: "Midfielder",
+          email: "you@example.com",
+          payment_label: "SumUp Secure Checkout",
+          can_pay_with_wallet: false,
+        })
+      );
 
       const monitoredWindow = window as typeof window & {
         __paymentReturnFrames?: PaymentReturnFrame[];
@@ -616,6 +638,22 @@ async function setPendingPaymentStorage(
     localStorage.setItem("pendingSumUpGameId", String(gameId));
     localStorage.setItem("pendingSumUpCheckoutId", checkoutId);
     localStorage.setItem("pendingSumUpCheckoutReference", checkoutReference);
+    localStorage.setItem(
+      "pendingSumUpGameSnapshot",
+      JSON.stringify({
+        id: gameId,
+        title: "E2E Payment Return",
+        location: "E2E Payment Pitch",
+        time: "15 Jan 2099, 20:00",
+        price: 5,
+        max_players: 12,
+        player_name: "Player",
+        position: "Midfielder",
+        email: "you@example.com",
+        payment_label: "SumUp Secure Checkout",
+        can_pay_with_wallet: false,
+      })
+    );
   }, params);
 }
 

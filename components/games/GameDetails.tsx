@@ -55,6 +55,7 @@ type WaitingListEntry = {
 };
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
+const PENDING_SUMUP_GAME_SNAPSHOT_KEY = "pendingSumUpGameSnapshot";
 const incompletePaymentMessage =
   "Payment wasn't completed.\nYour booking has not been confirmed.";
 const terminalIncompletePaymentStatuses = new Set(["cancelled", "canceled", "failed", "expired"]);
@@ -419,6 +420,27 @@ export default function GameDetails({
       localStorage.setItem("pendingSumUpGameId", String(game.id));
       localStorage.setItem("pendingSumUpCheckoutId", checkout.checkout_id);
       localStorage.setItem("pendingSumUpCheckoutReference", checkout.checkout_reference);
+      localStorage.setItem(
+        PENDING_SUMUP_GAME_SNAPSHOT_KEY,
+        JSON.stringify({
+          id: game.id,
+          title: game.title,
+          location: game.location,
+          time: game.time,
+          price: game.price,
+          format: game.format,
+          host: game.host,
+          max_players: game.max_players,
+          starts_at: game.starts_at,
+          status: game.status,
+          archived_at: game.archived_at,
+          player_name: profileName,
+          position: favouritePosition || "Midfielder",
+          email: profile?.email || user?.email || email || "you@example.com",
+          payment_label: canPayWithWallet ? "Wallet or SumUp Secure Checkout" : "SumUp Secure Checkout",
+          can_pay_with_wallet: canPayWithWallet,
+        })
+      );
       setPaymentCheckoutId(checkout.checkout_id);
       setPaymentCheckoutReference(checkout.checkout_reference);
       setPaymentStatus("pending");
@@ -633,6 +655,7 @@ export default function GameDetails({
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
         setPaymentStatus("paid");
         setPaymentMessage("Payment confirmed. Your booking has been added.");
@@ -645,6 +668,7 @@ export default function GameDetails({
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         setPaymentStatus("paid_no_space");
         setPaymentMessage(result.message || "This spot has already been taken. You are still on the waiting list.");
         await onPaymentComplete?.();
@@ -655,6 +679,7 @@ export default function GameDetails({
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         setPaymentStatus("duplicate_paid");
         setPaymentMessage(result.message || duplicatePaidPaymentMessage);
         return;
@@ -664,6 +689,7 @@ export default function GameDetails({
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         setPaymentCheckoutId(null);
         setPaymentCheckoutReference(null);
         setPaymentStatus(paymentStatusResult === "expired" ? "expired" : "failed");
@@ -679,6 +705,7 @@ export default function GameDetails({
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
+        localStorage.removeItem(PENDING_SUMUP_GAME_SNAPSHOT_KEY);
         setPaymentCheckoutId(null);
         setPaymentCheckoutReference(null);
         setPaymentStatus("failed");
