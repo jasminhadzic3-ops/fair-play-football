@@ -55,7 +55,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [returnPaymentState, setReturnPaymentState] = useState<"checking" | "paid" | "paid_no_space" | "duplicate_paid" | "pending" | "failed" | null>(
     hasInitialPaymentReturnReference ? "checking" : null
   );
-  const [paymentReturnGateActive, setPaymentReturnGateActive] = useState(hasInitialPaymentReturnReference);
+  const [paymentReturnGateActive, setPaymentReturnGateActive] = useState(false);
   const [paymentReturnTargetGameId, setPaymentReturnTargetGameId] = useState<number | null>(null);
   const [retryPaymentGameId, setRetryPaymentGameId] = useState<number | null>(null);
   const [recoveredPaymentReturnReference, setRecoveredPaymentReturnReference] = useState<string | null>(null);
@@ -123,6 +123,15 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const isPaymentReturnGateActive = paymentReturnGateActive;
   const hideHeroForPaymentReturn = isPaymentReturnGateActive || (hasInitialPaymentReturnReference && returnPaymentState !== null);
 
+  function getStoredPendingSumUpGameId() {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const parsedGameId = Number(localStorage.getItem("pendingSumUpGameId"));
+    return Number.isInteger(parsedGameId) && parsedGameId > 0 ? parsedGameId : null;
+  }
+
   function getStoredPaymentReturnReference() {
     if (typeof window === "undefined") {
       return null;
@@ -152,8 +161,17 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       return;
     }
 
+    const storedGameId = getStoredPendingSumUpGameId();
+
+    document.documentElement.removeAttribute("data-payment-return-pending");
     setRecoveredPaymentReturnReference(recoveredReference);
-    setPaymentReturnGateActive(true);
+    setPaymentReturnGateActive(false);
+    setPendingCheckoutReference(recoveredReference);
+    if (storedGameId) {
+      setPaymentReturnTargetGameId(storedGameId);
+      setCheckoutGameId(storedGameId);
+      setOpenDetailsGameId(storedGameId);
+    }
     setReturnPaymentState("checking");
     setReturnPaymentMessage("We're checking your payment. This may take a few moments.");
   }, []);
@@ -175,6 +193,18 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setSelectedGameDateKey(defaultDateKey);
     setVisibleWeekStartKey(defaultDateKey);
   }, [games, selectedGameDateKey, showAllGames]);
+
+  useEffect(() => {
+    if (
+      !paymentReturnTargetGameId ||
+      (returnPaymentState !== "checking" && returnPaymentState !== "failed")
+    ) {
+      return;
+    }
+
+    selectGameDateForDetails(paymentReturnTargetGameId);
+    setOpenDetailsGameId(paymentReturnTargetGameId);
+  }, [games, paymentReturnTargetGameId, returnPaymentState]);
 
   async function fetchProfile(userId: string) {
     const { data, error } = await supabase
@@ -359,6 +389,18 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
       }}
+      paymentReturnStatus={
+        paymentReturnTargetGameId === game.id &&
+        (returnPaymentState === "checking" || returnPaymentState === "failed")
+          ? returnPaymentState
+          : null
+      }
+      paymentReturnResolved={
+        paymentReturnTargetGameId === game.id &&
+        (returnPaymentState === "paid" ||
+          returnPaymentState === "paid_no_space" ||
+          returnPaymentState === "duplicate_paid")
+      }
       openDetails={openDetailsGameId === game.id}
       onOpenDetailsHandled={() => setOpenDetailsGameId(null)}
     />
@@ -471,24 +513,50 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
-  async function showIncompletePaymentReturn(gameId: number | null) {
+  function showPaymentReturnForGame(
+    gameId: number | null,
+    checkoutReference: string,
+    checkoutId?: string | null
+  ) {
+    setPaymentReturnGateActive(false);
+    setPendingCheckoutReference(checkoutReference);
+    setPendingCheckoutId(checkoutId ?? null);
+
+    if (!gameId) {
+      return;
+    }
+
+    setPaymentReturnTargetGameId(gameId);
+    setCheckoutGameId(gameId);
+    selectGameDateForDetails(gameId);
+    setOpenDetailsGameId(gameId);
+  }
+
+  function showIncompletePaymentReturn(gameId: number | null) {
     localStorage.removeItem("pendingSumUpGameId");
     localStorage.removeItem("pendingSumUpCheckoutId");
     localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
     setPendingCheckoutId(null);
     setPendingCheckoutReference(null);
     setCheckoutGameId(null);
-
-    const refreshed = await fetchGames();
-
-    if (gameId) {
-      selectGameDateForDetails(gameId, refreshed.games);
-    }
-
     clearSumUpCheckoutReferenceFromUrl();
     setPaymentReturnGateActive(false);
     setReturnPaymentState("failed");
-    setReturnPaymentMessage(incompletePaymentMessage);
+    setReturnPaymentMessage(null);
+
+    if (gameId) {
+      setPaymentReturnTargetGameId(gameId);
+      selectGameDateForDetails(gameId);
+      setOpenDetailsGameId(gameId);
+    }
+
+    void fetchGames()
+      .then((refreshed) => {
+        if (gameId) {
+          selectGameDateForDetails(gameId, refreshed.games);
+        }
+      })
+      .catch(() => {});
   }
 
   async function retryReturnedPayment() {
@@ -525,9 +593,11 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     returnPollingReference.current = checkoutReference;
     setRecoveredPaymentReturnReference(checkoutReference);
-    setPaymentReturnGateActive(true);
+    const storedGameId = getStoredPendingSumUpGameId();
+    const storedCheckoutId = localStorage.getItem("pendingSumUpCheckoutId");
+    showPaymentReturnForGame(storedGameId, checkoutReference, storedCheckoutId);
     setReturnPaymentState("checking");
-    setReturnPaymentMessage("Checking your payment...");
+    setReturnPaymentMessage(null);
 
     const deadline = Date.now() + 30000;
 
@@ -573,9 +643,17 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       }
 
       const paymentStatus = String(result?.paymentStatus || result?.payment_status || result?.status || "").toLowerCase();
+      const parsedResultGameId = Number(result?.gameId ?? localStorage.getItem("pendingSumUpGameId"));
+      const resultGameId = Number.isInteger(parsedResultGameId) && parsedResultGameId > 0
+        ? parsedResultGameId
+        : null;
+
+      if (resultGameId) {
+        showPaymentReturnForGame(resultGameId, checkoutReference, result?.checkoutId ?? null);
+      }
 
       if (paymentStatus === "paid" || paymentStatus === "successful") {
-        const paidGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
+        const paidGameId = resultGameId;
         setPaymentReturnTargetGameId(paidGameId);
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
@@ -605,7 +683,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       }
 
       if (paymentStatus === "paid_no_space") {
-        const paidNoSpaceGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
+        const paidNoSpaceGameId = resultGameId;
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
@@ -639,9 +717,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       }
 
       if (terminalIncompletePaymentStatuses.has(paymentStatus)) {
-        const incompleteGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
+        const incompleteGameId = resultGameId;
         setPaymentReturnTargetGameId(incompleteGameId);
-        await showIncompletePaymentReturn(incompleteGameId);
+        showIncompletePaymentReturn(incompleteGameId);
         return;
       }
 
@@ -650,7 +728,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     const incompleteGameId = Number(localStorage.getItem("pendingSumUpGameId")) || null;
     setPaymentReturnTargetGameId(incompleteGameId);
-    await showIncompletePaymentReturn(incompleteGameId);
+    showIncompletePaymentReturn(incompleteGameId);
   }
 
   async function runPostAuthWork(session: { user: User; access_token: string }) {

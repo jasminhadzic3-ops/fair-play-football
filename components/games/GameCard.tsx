@@ -35,6 +35,8 @@ interface GameCardProps {
   pendingCheckoutReference?: string | null;
   continueToPayment?: boolean;
   onContinueToPaymentHandled?: () => void;
+  paymentReturnStatus?: "checking" | "failed" | null;
+  paymentReturnResolved?: boolean;
   openDetails?: boolean;
   onOpenDetailsHandled?: () => void;
   openAuthModal?: boolean;
@@ -56,6 +58,8 @@ export default function GameCard({
   pendingCheckoutReference,
   continueToPayment,
   onContinueToPaymentHandled,
+  paymentReturnStatus,
+  paymentReturnResolved,
   openDetails,
   onOpenDetailsHandled,
   openAuthModal,
@@ -147,6 +151,8 @@ export default function GameCard({
         pendingCheckoutReference={pendingCheckoutReference}
         continueToPayment={continueToPayment}
         onContinueToPaymentHandled={onContinueToPaymentHandled}
+        paymentReturnStatus={paymentReturnStatus}
+        paymentReturnResolved={paymentReturnResolved}
         openAuthModal={openAuthModal}
         onOpenAuthModalHandled={onOpenAuthModalHandled}
       />

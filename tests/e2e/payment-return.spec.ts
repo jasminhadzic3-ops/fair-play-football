@@ -46,7 +46,7 @@ test.describe("SumUp payment return", () => {
     }
   });
 
-  test("shows processing immediately, hides the ordinary games page, and opens the paid game", async ({
+  test("opens checkout details immediately and opens the paid game", async ({
     page,
   }) => {
     const seed = await createSeed(supabase, { label: "paid", booked: true });
@@ -78,10 +78,10 @@ test.describe("SumUp payment return", () => {
 
     await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
 
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
-    await expect(page.getByText("We're checking your payment. This may take a few moments.")).toBeVisible();
-    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
-    await expect(page.getByText(seed.gameTitle)).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
+    await expect(page.getByText("Checking your payment...")).toBeVisible();
+    await expect(page.getByText("We're confirming whether your payment was completed.")).toBeVisible();
     await startPaymentReturnFrameMonitor(page, seed.gameTitle);
 
     await expect(page.getByText("Payment confirmed. Your booking has been added.").first()).toBeVisible();
@@ -92,21 +92,19 @@ test.describe("SumUp payment return", () => {
     await page.waitForTimeout(500);
     await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
     const frames = await stopPaymentReturnFrameMonitor(page);
-    expect(frames.some((frame) => frame.confirming)).toBe(true);
+    expect(frames.some((frame) => frame.confirming)).toBe(false);
     expect(frames.some((frame) => frame.modal)).toBe(true);
-    expect(frames.filter((frame) => frame.gamesList && !frame.modal)).toEqual([]);
-    expect(frames.filter((frame) => !frame.confirming && !frame.modal)).toEqual([]);
 
     const bookingCountBeforeRefresh = await countBookings(supabase, seed);
     await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
     await expect(page.getByText("Already Joined").first()).toBeVisible();
     await expect.poll(() => countBookings(supabase, seed)).toBe(bookingCountBeforeRefresh);
     expect(statusRequests).toBeGreaterThanOrEqual(2);
     expect(diagnostics.errors()).toEqual([]);
   });
 
-  test("keeps the return gate visible from a fresh browser return without a query flash", async ({
+  test("opens checkout details from a fresh browser return without the old return gate", async ({
     browser,
   }) => {
     const seed = await createSeed(supabase, { label: "fresh", booked: true });
@@ -161,9 +159,9 @@ test.describe("SumUp payment return", () => {
     try {
       await page.goto("/");
 
-      await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
-      await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
-      await expect(page.getByText(seed.gameTitle)).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
+      await expect(page.getByText("Checking your payment...")).toBeVisible();
       await expect.poll(() => statusRequests).toBeGreaterThan(0);
 
       await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
@@ -173,10 +171,8 @@ test.describe("SumUp payment return", () => {
       await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
 
       const frames = await getInstalledPaymentReturnFrames(page);
-      expect(frames.some((frame) => frame.confirming)).toBe(true);
+      expect(frames.some((frame) => frame.confirming)).toBe(false);
       expect(frames.some((frame) => frame.modal)).toBe(true);
-      expect(frames.filter((frame) => frame.gamesList && !frame.modal)).toEqual([]);
-      expect(frames.filter((frame) => !frame.confirming && !frame.modal)).toEqual([]);
       expect(diagnostics.errors()).toEqual([]);
     } finally {
       await context.close();
@@ -186,7 +182,7 @@ test.describe("SumUp payment return", () => {
   test("keeps slow verification on the processing state without showing the games page", async ({
     page,
   }) => {
-    const seed = await createSeed(supabase, { label: "slow", booked: true });
+    const seed = await createSeed(supabase, { label: "slow", booked: false });
     seeds.push(seed);
     const checkoutReference = `${seed.runId}_slow_reference`;
     const diagnostics = collectDiagnostics(page);
@@ -209,12 +205,14 @@ test.describe("SumUp payment return", () => {
 
     await page.goto(`/?sumup_checkout_reference=${checkoutReference}`);
 
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
-    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
-    await expect(page.getByText(seed.gameTitle)).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
+    await expect(page.getByText("Checking your payment...")).toBeVisible();
+    await expect(page.getByText("We're confirming whether your payment was completed.")).toBeVisible();
+    await expect(page.getByRole("button", { name: `Pay £5 with SumUp` })).toBeDisabled();
     await page.waitForTimeout(1000);
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
-    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Pay £5 with SumUp` })).toBeDisabled();
     expect(diagnostics.errors()).toEqual([]);
   });
 
@@ -245,25 +243,25 @@ test.describe("SumUp payment return", () => {
     await signInWithEmail(page, paidNoSpaceSeed.email, paidNoSpaceSeed.password);
     await page.goto(`/?sumup_checkout_reference=${paidNoSpaceSeed.runId}_paid_no_space_reference`);
 
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
     await expect(page.getByText("Payment received, but this game is now full.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
 
     await page.goto(`/?sumup_checkout_reference=${paidNoSpaceSeed.runId}_failed_reference`);
 
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
     await expect(page.getByText("Payment wasn't completed.")).toBeVisible();
     await expect(page.getByText("Your booking has not been confirmed.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Try Again" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Pay £5 with SumUp` })).toBeEnabled();
 
     await page.goto(`/?sumup_checkout_reference=${paidNoSpaceSeed.runId}_cancelled_reference`);
 
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
     await expect(page.getByText("Payment wasn't completed.")).toBeVisible();
     await expect(page.getByText("Your booking has not been confirmed.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Try Again" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Pay £5 with SumUp` })).toBeEnabled();
     expect(noSpaceDiagnostics.errors()).toEqual([]);
   });
 
@@ -371,15 +369,14 @@ test.describe("SumUp payment return", () => {
 
     await page.goto(`/?sumup_checkout_reference=${abandonedReference}`);
 
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
-    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
+    await expect(page.getByText("Checking your payment...")).toBeVisible();
     await page.reload();
     await expect(page.getByText("Payment wasn't completed.")).toBeVisible();
     await expect(page.getByText("Your booking has not been confirmed.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Try Again" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Pay £5 with SumUp` })).toBeEnabled();
 
-    await page.getByRole("button", { name: "Try Again" }).click();
     await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
     await page.getByRole("button", { name: /Pay £5 with SumUp|Pay by Card/ }).click();
     await expect.poll(() => retryCheckouts.length).toBe(1);
@@ -389,7 +386,7 @@ test.describe("SumUp payment return", () => {
 
     await page.goto(`/?sumup_checkout_reference=${retryCheckouts[0].checkoutReference}`);
 
-    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toHaveCount(0);
     await expect(page.getByText("Payment confirmed. Your booking has been added.").first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
     await expect(page.getByText("Already Joined").first()).toBeVisible();
@@ -509,8 +506,9 @@ async function installFreshPaymentReturnState(
         const confirming =
           document.documentElement.getAttribute("data-payment-return-pending") === "true" ||
           bodyText.includes("Confirming your booking");
-        const modal = Array.from(document.querySelectorAll("h2")).some(
-          (heading) => heading.textContent?.trim() === "Game Info" && isVisible(heading)
+        const modal = Array.from(document.querySelectorAll("h2")).some((heading) =>
+          ["Game Info", "Secure checkout"].includes(heading.textContent?.trim() ?? "") &&
+          isVisible(heading)
         );
         const gamesHeader = bodyText.includes("Browse premium football matches in one clean list.");
         const gameCard = Array.from(document.querySelectorAll("#games .cursor-pointer")).some(
@@ -574,8 +572,9 @@ async function startPaymentReturnFrameMonitor(page: Page, gameTitle: string) {
       const confirming =
         document.documentElement.getAttribute("data-payment-return-pending") === "true" ||
         bodyText.includes("Confirming your booking");
-      const modal = Array.from(document.querySelectorAll("h2")).some(
-        (heading) => heading.textContent?.trim() === "Game Info" && isVisible(heading)
+      const modal = Array.from(document.querySelectorAll("h2")).some((heading) =>
+        ["Game Info", "Secure checkout"].includes(heading.textContent?.trim() ?? "") &&
+        isVisible(heading)
       );
       const gamesHeader = bodyText.includes("Browse premium football matches in one clean list.");
       const gameCard = Array.from(document.querySelectorAll("#games .cursor-pointer")).some(

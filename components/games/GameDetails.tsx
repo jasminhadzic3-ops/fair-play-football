@@ -40,6 +40,8 @@ interface GameDetailsProps {
   pendingCheckoutReference?: string | null;
   continueToPayment?: boolean;
   onContinueToPaymentHandled?: () => void;
+  paymentReturnStatus?: "checking" | "failed" | null;
+  paymentReturnResolved?: boolean;
   openAuthModal?: boolean;
   onOpenAuthModalHandled?: () => void;
 }
@@ -85,6 +87,8 @@ export default function GameDetails({
   pendingCheckoutReference,
   continueToPayment,
   onContinueToPaymentHandled,
+  paymentReturnStatus,
+  paymentReturnResolved,
   openAuthModal,
   onOpenAuthModalHandled,
 }: GameDetailsProps) {
@@ -176,6 +180,7 @@ export default function GameDetails({
   const canPayWithWallet =
     isAuthenticated && walletBalance !== null && walletBalance >= gamePrice && gamePrice > 0;
   const showWalletSection = isAuthenticated && (walletBalanceLoading || walletBalance !== null);
+  const isReturnPaymentChecking = paymentReturnStatus === "checking";
 
   useEffect(() => {
     let isCancelled = false;
@@ -279,6 +284,33 @@ export default function GameDetails({
       onContinueToPaymentHandled?.();
     }
   }, [continueToPayment, onContinueToPaymentHandled, openPaymentModal]);
+
+  useEffect(() => {
+    if (!isOpen || !paymentReturnStatus) {
+      return;
+    }
+
+    setShowProfileModal(false);
+    setShowPaymentModal(true);
+
+    if (paymentReturnStatus === "checking") {
+      setPaymentStatus("pending");
+      setPaymentMessage(null);
+    } else {
+      setPaymentStatus("failed");
+      setPaymentMessage(incompletePaymentMessage);
+      setPaymentCheckoutId(null);
+      setPaymentCheckoutReference(null);
+    }
+  }, [isOpen, paymentReturnStatus]);
+
+  useEffect(() => {
+    if (!isOpen || !paymentReturnResolved) {
+      return;
+    }
+
+    setShowPaymentModal(false);
+  }, [isOpen, paymentReturnResolved]);
 
   useEffect(() => {
     if (openAuthModal && isOpen) {
@@ -1754,7 +1786,20 @@ export default function GameDetails({
             </div>
           </div>
 
-          {paymentMessage ? (
+          {isReturnPaymentChecking ? (
+            <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-center text-sm font-semibold text-amber-100">
+              <p className="text-base font-bold text-white">Checking your payment...</p>
+              <p className="mt-2 whitespace-pre-line text-sm font-medium leading-6 text-amber-100/85">
+                We&apos;re confirming whether your payment was completed.
+                {"\n"}
+                This usually takes a few seconds.
+              </p>
+              <div
+                className="mx-auto mt-4 h-6 w-6 animate-spin rounded-full border-2 border-amber-100/30 border-t-amber-100"
+                aria-hidden="true"
+              />
+            </div>
+          ) : paymentMessage ? (
             <div
               className={`whitespace-pre-line rounded-3xl border px-5 py-4 text-sm font-semibold ${
                 paymentStatus === "paid"
