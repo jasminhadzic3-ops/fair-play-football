@@ -832,6 +832,32 @@ export default function GameDetails({
     }
   };
 
+  const handleForgotPassword = async () => {
+    setAuthLoading(true);
+    clearAuthState();
+
+    const resetEmail = email.trim();
+
+    if (!resetEmail) {
+      setAuthError("Enter your email to reset your password.");
+      setAuthLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) {
+      setAuthError(error.message || "Unable to send password reset email.");
+      setAuthLoading(false);
+      return;
+    }
+
+    setStatusMessage("If an account exists for this email, we will send a secure reset link.");
+    setAuthLoading(false);
+  };
+
   const handleGoogleSignIn = async () => {
     setAuthLoading(true);
     clearAuthState();
@@ -1536,6 +1562,16 @@ export default function GameDetails({
                         {showPassword ? "Hide" : "Show"}
                       </button>
                     </div>
+                    {authMode === "signin" ? (
+                      <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        disabled={authLoading}
+                        className="mt-3 text-sm font-semibold text-stone-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Forgot password?
+                      </button>
+                    ) : null}
                   </div>
                   {authMode === "signup" ? (
                     <div>

@@ -835,6 +835,33 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     }
   };
 
+  const handleNavbarForgotPassword = async () => {
+    setNavbarAuthLoading(true);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+
+    const resetEmail = navbarAuthEmail.trim();
+
+    if (!resetEmail) {
+      setNavbarAuthError("Enter your email to reset your password.");
+      setNavbarAuthLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) {
+      setNavbarAuthError(error.message || "Unable to send password reset email.");
+      setNavbarAuthLoading(false);
+      return;
+    }
+
+    setNavbarAuthStatus("If an account exists for this email, we will send a secure reset link.");
+    setNavbarAuthLoading(false);
+  };
+
   const handleNavbarGoogleSignIn = async () => {
     setNavbarAuthLoading(true);
     setNavbarAuthError(null);
@@ -1153,6 +1180,16 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   {showNavbarAuthPassword ? "Hide" : "Show"}
                 </button>
               </div>
+              {navbarAuthMode === "signin" ? (
+                <button
+                  type="button"
+                  onClick={handleNavbarForgotPassword}
+                  disabled={navbarAuthLoading}
+                  className="mt-3 text-sm font-semibold text-stone-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Forgot password?
+                </button>
+              ) : null}
             </div>
             {navbarAuthMode === "signup" ? (
               <div>

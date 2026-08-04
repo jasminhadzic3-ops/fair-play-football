@@ -82,6 +82,28 @@ test("signed-out navbar auth modal validates required signup profile fields", as
   await expect(page.getByText("Please select your age.")).toBeVisible();
 });
 
+test("signed-out navbar exposes password reset and reset page fails safely without a token", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const navbar = page.getByRole("navigation");
+  await navbar.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Forgot password?" })).toBeVisible();
+
+  await page.goto("/reset-password");
+
+  await expect(page.getByRole("heading", { name: "Secure your account." })).toBeVisible();
+  await expect(
+    page.locator("div").filter({
+      hasText: /^This reset link is invalid or has expired\. Request a new password reset\.$/,
+    })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Update password" })).toHaveCount(0);
+});
+
 test("signed-out create account form validates password mismatch", async ({
   page,
 }) => {
