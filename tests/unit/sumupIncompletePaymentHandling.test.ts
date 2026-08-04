@@ -93,7 +93,8 @@ describe("SumUp incomplete payment handling", () => {
   it("normalizes raw SumUp cancelled statuses before persisting to the constrained payment status column", () => {
     const sumupPaymentsSource = readSource("lib/sumupPayments.ts");
 
-    expect(sumupPaymentsSource).toContain('rawStatus === "cancelled" || rawStatus === "canceled"');
-    expect(sumupPaymentsSource).toContain('? "failed" : rawStatus');
+    expect(sumupPaymentsSource).toContain("function normalizeSumUpCheckoutStatus");
+    expect(sumupPaymentsSource).toContain("return \"failed\";");
+    expect(sumupPaymentsSource).toContain("let status = normalizeSumUpCheckoutStatus(rawStatus)");
   });
 });

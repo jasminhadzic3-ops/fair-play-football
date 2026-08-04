@@ -41,6 +41,7 @@ type PaymentRow = {
   currency: string;
   transaction_code?: string | null;
   sumup_transaction_id?: string | null;
+  created_at?: string | null;
 };
 
 type RpcResult = {
@@ -466,6 +467,34 @@ describe("SumUp payment helpers", () => {
     });
     expect(rpcCalls).toHaveLength(0);
     expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+  });
+
+  it("expires abandoned pending SumUp checkouts after the polling timeout", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-04T16:00:31.000Z"));
+    paymentRow = defaultPayment({
+      payment_status: "pending",
+      booking_id: null,
+      created_at: "2026-08-04T16:00:00.000Z",
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "PENDING",
+        transactions: [],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({ paymentStatus: "expired", bookingId: null });
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]).toMatchObject({
+      payment_status: "expired",
+    });
+    expect(rpcCalls).toHaveLength(0);
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it("does not break paid checkout finalisation when transaction id lookup fails", async () => {

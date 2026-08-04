@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createSumUpCheckoutMock = vi.hoisted(() => vi.fn());
+const finalizeCheckoutPaymentMock = vi.hoisted(() => vi.fn());
 const getAuthenticatedUserMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sumupPayments", () => ({
   createSumUpCheckout: createSumUpCheckoutMock,
+  finalizeCheckoutPayment: finalizeCheckoutPaymentMock,
   getAuthenticatedUser: getAuthenticatedUserMock,
 }));
 
@@ -127,6 +129,10 @@ beforeEach(() => {
     id: `checkout-${createSumUpCheckoutMock.mock.calls.length}`,
     hosted_checkout_url: `https://checkout.sumup.test/${createSumUpCheckoutMock.mock.calls.length}`,
   }));
+  finalizeCheckoutPaymentMock.mockResolvedValue({
+    paymentStatus: "pending",
+    bookingId: null,
+  });
 });
 
 describe("SumUp checkout creation", () => {
@@ -339,7 +345,41 @@ describe("SumUp checkout creation", () => {
       hosted_checkout_url: "https://checkout.sumup.test/pending",
       payment_status: "pending",
     });
+    expect(finalizeCheckoutPaymentMock).toHaveBeenCalledWith("pending-checkout");
     expect(createSumUpCheckoutMock).not.toHaveBeenCalled();
+  });
+
+  it("creates a fresh checkout when the previous pending checkout refreshes to a terminal state", async () => {
+    activeGame();
+    finalizeCheckoutPaymentMock.mockResolvedValueOnce({
+      paymentStatus: "expired",
+      bookingId: null,
+    });
+    state.booking_payments = [
+      {
+        id: 201,
+        user_id: "user-1",
+        game_id: 10,
+        player_name: "Test Player",
+        booking_id: null,
+        checkout_id: "stale-checkout",
+        checkout_reference: "stale-reference",
+        hosted_checkout_url: "https://checkout.sumup.test/stale",
+        payment_status: "pending",
+        created_at: "2026-07-01T10:00:00.000Z",
+      },
+    ];
+
+    const response = await POST(checkoutRequest() as Parameters<typeof POST>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.checkout_id).toBe("checkout-1");
+    expect(body.checkout_reference).not.toBe("stale-reference");
+    expect(body.hosted_checkout_url).toBe("https://checkout.sumup.test/1");
+    expect(finalizeCheckoutPaymentMock).toHaveBeenCalledWith("stale-checkout");
+    expect(createSumUpCheckoutMock).toHaveBeenCalledTimes(1);
+    expect(state.booking_payments).toHaveLength(2);
   });
 
   it("blocks rebooking while a cancelled SumUp payment has an active refund request", async () => {

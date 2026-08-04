@@ -266,6 +266,138 @@ test.describe("SumUp payment return", () => {
     await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
     expect(noSpaceDiagnostics.errors()).toEqual([]);
   });
+
+  test("recovers abandoned hosted checkout with a fresh retry checkout and a single confirmed booking", async ({ page }) => {
+    const seed = await createSeed(supabase, { label: "retry", booked: false });
+    seeds.push(seed);
+    const diagnostics = collectDiagnostics(page);
+    const abandonedReference = `${seed.runId}_abandoned_reference`;
+    const abandonedCheckoutId = `${seed.runId}_abandoned_checkout`;
+    const retryCheckouts: Array<{ checkoutId: string; checkoutReference: string }> = [];
+    let abandonedStatusRequests = 0;
+    let bookingId: number | null = null;
+
+    await page.route("**/api/sumup/status?**", async (route) => {
+      const url = new URL(route.request().url());
+      const reference = url.searchParams.get("checkout_reference") ?? "";
+
+      if (reference === abandonedReference) {
+        abandonedStatusRequests += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            paymentStatus: abandonedStatusRequests === 1 ? "pending" : "expired",
+            gameId: seed.gameId,
+            bookingId: null,
+            checkoutId: abandonedCheckoutId,
+          }),
+        });
+        return;
+      }
+
+      const retryCheckout = retryCheckouts.find((checkout) => checkout.checkoutReference === reference);
+
+      if (!retryCheckout) {
+        await route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Unknown checkout reference." }),
+        });
+        return;
+      }
+
+      if (!bookingId) {
+        const booking = await insertSingle<{ id: number }>(
+          supabase
+            .from("bookings")
+            .insert({
+              game_id: seed.gameId,
+              user_id: seed.userId,
+              player_name: seed.username,
+            })
+            .select("id")
+            .single(),
+          "insert retry payment return booking"
+        );
+        bookingId = booking.id;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          paymentStatus: "paid",
+          gameId: seed.gameId,
+          bookingId,
+          checkoutId: retryCheckout.checkoutId,
+        }),
+      });
+    });
+
+    await page.route("**/api/sumup/create-checkout", async (route) => {
+      const requestNumber = retryCheckouts.length + 1;
+      const checkout = {
+        checkoutId: `${seed.runId}_retry_checkout_${requestNumber}`,
+        checkoutReference: `${seed.runId}_retry_reference_${requestNumber}`,
+      };
+      retryCheckouts.push(checkout);
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          checkout_id: checkout.checkoutId,
+          checkout_reference: checkout.checkoutReference,
+          hosted_checkout_url: `/sumup-e2e-hosted-checkout?checkout_reference=${checkout.checkoutReference}`,
+          payment_status: "pending",
+        }),
+      });
+    });
+    await page.route("**/sumup-e2e-hosted-checkout?**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Mock SumUp checkout</title><h1>Mock SumUp checkout</h1>",
+      });
+    });
+
+    await signInWithEmail(page, seed.email, seed.password);
+    await setPendingPaymentStorage(page, {
+      checkoutReference: abandonedReference,
+      checkoutId: abandonedCheckoutId,
+      gameId: seed.gameId,
+    });
+
+    await page.goto(`/?sumup_checkout_reference=${abandonedReference}`);
+
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("Browse premium football matches in one clean list.")).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText("Payment wasn't completed.")).toBeVisible();
+    await expect(page.getByText("Your booking has not been confirmed.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try Again" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Try Again" }).click();
+    await expect(page.getByRole("heading", { name: "Secure checkout" })).toBeVisible();
+    await page.getByRole("button", { name: /Pay £5 with SumUp|Pay by Card/ }).click();
+    await expect.poll(() => retryCheckouts.length).toBe(1);
+    expect(retryCheckouts[0].checkoutReference).not.toBe(abandonedReference);
+    expect(retryCheckouts[0].checkoutId).not.toBe(abandonedCheckoutId);
+    await expect(page).toHaveURL(new RegExp(`/sumup-e2e-hosted-checkout\\?checkout_reference=${retryCheckouts[0].checkoutReference}$`));
+
+    await page.goto(`/?sumup_checkout_reference=${retryCheckouts[0].checkoutReference}`);
+
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("Payment confirmed. Your booking has been added.").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Game Info" })).toBeVisible();
+    await expect(page.getByText("Already Joined").first()).toBeVisible();
+    await expect.poll(() => countBookings(supabase, seed)).toBe(1);
+    await expect.poll(() => countPayments(supabase, seed)).toBe(0);
+    expect(abandonedStatusRequests).toBeGreaterThanOrEqual(2);
+    expect(diagnostics.errors()).toEqual([]);
+  });
 });
 
 function collectDiagnostics(page: Page) {
@@ -628,6 +760,20 @@ async function countBookings(supabase: SupabaseClient, seed: PaymentReturnSeed) 
 
   if (error) {
     throw new Error(`count payment return bookings: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+async function countPayments(supabase: SupabaseClient, seed: PaymentReturnSeed) {
+  const { count, error } = await supabase
+    .from("booking_payments")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", seed.gameId)
+    .eq("user_id", seed.userId);
+
+  if (error) {
+    throw new Error(`count payment return payments: ${error.message}`);
   }
 
   return count ?? 0;

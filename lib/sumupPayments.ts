@@ -14,6 +14,32 @@ type SumUpCheckout = {
   }>;
 };
 
+const ABANDONED_SUMUP_CHECKOUT_TIMEOUT_MS = 30000;
+
+function normalizeSumUpCheckoutStatus(status: string) {
+  const normalizedStatus = status.toLowerCase();
+
+  if (normalizedStatus === "paid" || normalizedStatus === "successful") {
+    return "paid";
+  }
+
+  if (normalizedStatus === "pending") {
+    return "pending";
+  }
+
+  if (normalizedStatus === "expired") {
+    return "expired";
+  }
+
+  return "failed";
+}
+
+function hasPendingCheckoutTimedOut(createdAt?: string | null) {
+  const createdAtMs = Date.parse(createdAt ?? "");
+
+  return Number.isFinite(createdAtMs) && Date.now() - createdAtMs >= ABANDONED_SUMUP_CHECKOUT_TIMEOUT_MS;
+}
+
 export type SumUpTransaction = {
   id: string;
   transaction_code: string;
@@ -635,7 +661,7 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
 
   const checkout = await retrieveSumUpCheckout(checkoutId);
   const rawStatus = checkout.status.toLowerCase();
-  const status = rawStatus === "cancelled" || rawStatus === "canceled" ? "failed" : rawStatus;
+  let status = normalizeSumUpCheckoutStatus(rawStatus);
   const transactionCode = checkout.transactions?.find((transaction) => transaction.transaction_code)
     ?.transaction_code;
 
@@ -669,6 +695,10 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
       reason: "already_duplicate_payment_detected",
       message: duplicatePaymentMessage,
     };
+  }
+
+  if (status === "pending" && hasPendingCheckoutTimedOut(payment.created_at)) {
+    status = "expired";
   }
 
   if (status !== "paid") {

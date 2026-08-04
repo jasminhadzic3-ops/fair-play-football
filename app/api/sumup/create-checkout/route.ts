@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import { isBookable } from "@/lib/gameLifecycle";
-import { createSumUpCheckout, getAuthenticatedUser } from "@/lib/sumupPayments";
+import { createSumUpCheckout, finalizeCheckoutPayment, getAuthenticatedUser } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const requiredEnvVars = [
@@ -98,6 +98,17 @@ export async function POST(request: NextRequest) {
     }
 
     const activePendingPayment = existingPayments?.find((payment) => payment.payment_status === "pending");
+
+    if (activePendingPayment?.checkout_id) {
+      try {
+        const refreshedPayment = await finalizeCheckoutPayment(activePendingPayment.checkout_id);
+        activePendingPayment.payment_status = refreshedPayment.paymentStatus;
+        activePendingPayment.booking_id = refreshedPayment.bookingId;
+      } catch (statusError) {
+        console.error("Unable to refresh existing SumUp checkout before reuse:", statusError);
+      }
+    }
+
     const activePaidPayment = existingPayments?.find(
       (payment) => payment.payment_status === "paid" && payment.booking_id
     );
@@ -108,7 +119,7 @@ export async function POST(request: NextRequest) {
       (payment) => payment.payment_status === "duplicate_paid"
     );
 
-    if (activePendingPayment) {
+    if (activePendingPayment?.payment_status === "pending") {
       return Response.json({
         checkout_id: activePendingPayment.checkout_id,
         checkout_reference: activePendingPayment.checkout_reference,

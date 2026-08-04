@@ -483,7 +483,6 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     if (gameId) {
       selectGameDateForDetails(gameId, refreshed.games);
-      setOpenDetailsGameId(gameId);
     }
 
     clearSumUpCheckoutReferenceFromUrl();
