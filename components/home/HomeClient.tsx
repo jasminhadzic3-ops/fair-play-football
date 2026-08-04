@@ -251,7 +251,16 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       .select("*")
       .eq("status", "active")
       .is("archived_at", null);
-    const bookingsResponse = await fetch("/api/bookings");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const bookingsResponse = await fetch("/api/bookings", {
+      headers: session?.access_token
+        ? {
+            Authorization: `Bearer ${session.access_token}`,
+          }
+        : undefined,
+    });
     const bookingsResult = await bookingsResponse.json().catch(() => null);
 
     if (gamesData) {

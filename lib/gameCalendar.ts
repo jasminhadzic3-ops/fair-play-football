@@ -9,7 +9,7 @@ export type CalendarGameLike = {
 
 export type CalendarBookingLike = {
   game_id?: number | null;
-  user_id?: string | null;
+  is_current_user?: boolean | null;
 };
 
 const londonTimeZone = "Europe/London";
@@ -134,7 +134,7 @@ export function getUserBookedVisibleDateKeys(
 
   return new Set(
     bookings
-      .filter((booking) => booking.user_id === userId)
+      .filter((booking) => booking.is_current_user === true)
       .map((booking) =>
         booking.game_id ? visibleUpcomingGameDateById.get(booking.game_id) ?? null : null
       )

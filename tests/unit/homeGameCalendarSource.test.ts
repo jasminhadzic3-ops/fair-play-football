@@ -47,6 +47,7 @@ describe("homepage game calendar source", () => {
   it("uses green personal booking ticks and an all-games mode without changing the count badge", () => {
     expect(homePageSource).toContain("const [showAllGames, setShowAllGames] = useState(false)");
     expect(homePageSource).toContain("getUserBookedVisibleDateKeys");
+    expect(homePageSource).toContain('Authorization: `Bearer ${session.access_token}`');
     expect(homePageSource).toContain("calendarGames,");
     expect(homePageSource).toContain("setShowAllGames(true)");
     expect(homePageSource).toContain("setSelectedGameDateKey(null)");

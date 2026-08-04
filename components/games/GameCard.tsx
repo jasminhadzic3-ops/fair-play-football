@@ -21,8 +21,7 @@ interface GameCardProps {
     id: number;
     game_id: number;
     player_name: string;
-    user_id?: string | null;
-    avatar_url?: string | null;
+    is_current_user?: boolean | null;
   }>;
   successGameId: number | null;
   user: any | null;

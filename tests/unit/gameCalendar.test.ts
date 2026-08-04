@@ -72,7 +72,7 @@ describe("game calendar helpers", () => {
 
   it("shows a booking tick only for the signed-in player's visible upcoming games", () => {
     const bookedDateKeys = getUserBookedVisibleDateKeys(
-      [{ game_id: 1, user_id: "player-1" }],
+      [{ game_id: 1, is_current_user: true }],
       [{ id: 1, status: "active", archived_at: null, starts_at: "2026-07-29T18:00:00.000Z" }],
       "player-1",
       "2026-07-27",
@@ -84,12 +84,12 @@ describe("game calendar helpers", () => {
 
   it("hides booking ticks when the booked game is deleted or otherwise not visible", () => {
     const bookings = [
-      { game_id: 1, user_id: "player-1" },
-      { game_id: 2, user_id: "player-1" },
-      { game_id: 3, user_id: "player-1" },
-      { game_id: 4, user_id: "player-1" },
-      { game_id: 5, user_id: "player-1" },
-      { game_id: 6, user_id: "other-player" },
+      { game_id: 1, is_current_user: true },
+      { game_id: 2, is_current_user: true },
+      { game_id: 3, is_current_user: true },
+      { game_id: 4, is_current_user: true },
+      { game_id: 5, is_current_user: true },
+      { game_id: 6, is_current_user: false },
     ];
     const games = [
       { id: 2, status: "cancelled", archived_at: null, starts_at: "2026-07-29T18:00:00.000Z" },
@@ -119,8 +119,8 @@ describe("game calendar helpers", () => {
 
   it("keeps same-date booking ticks until the last visible booked game disappears", () => {
     const bookings = [
-      { game_id: 1, user_id: "player-1" },
-      { game_id: 2, user_id: "player-1" },
+      { game_id: 1, is_current_user: true },
+      { game_id: 2, is_current_user: true },
     ];
     const firstVisibleGame = {
       id: 1,

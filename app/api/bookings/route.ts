@@ -7,14 +7,26 @@ type BookingRow = {
   user_id: string | null;
 };
 
-type ProfileAvatarRow = {
-  id: string;
-  avatar_url: string | null;
-};
+async function getAuthenticatedUserId(authHeader: string | null) {
+  const token = authHeader?.replace("Bearer ", "").trim();
 
-export async function GET() {
+  if (!token) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data.user) {
+    return null;
+  }
+
+  return data.user.id;
+}
+
+export async function GET(request: Request) {
   try {
     assertSupabaseAdminConfigured();
+    const currentUserId = await getAuthenticatedUserId(request.headers.get("authorization"));
 
     const { data: bookings, error: bookingsError } = await supabaseAdmin
       .from("bookings")
@@ -26,40 +38,13 @@ export async function GET() {
     }
 
     const bookingRows = (bookings ?? []) as BookingRow[];
-    const userIds = Array.from(
-      new Set(
-        bookingRows
-          .map((booking) => booking.user_id)
-          .filter((userId): userId is string => Boolean(userId))
-      )
-    );
-    let avatarByUserId = new Map<string, string | null>();
-
-    if (userIds.length > 0) {
-      const { data: profiles, error: profilesError } = await supabaseAdmin
-        .from("profiles")
-        .select("id,avatar_url")
-        .in("id", userIds);
-
-      if (profilesError) {
-        return Response.json({ error: profilesError.message }, { status: 500 });
-      }
-
-      avatarByUserId = new Map(
-        ((profiles ?? []) as ProfileAvatarRow[]).map((profile) => [
-          profile.id,
-          profile.avatar_url,
-        ])
-      );
-    }
 
     return Response.json({
       bookings: bookingRows.map((booking) => ({
         id: booking.id,
         game_id: booking.game_id,
         player_name: booking.player_name,
-        user_id: booking.user_id,
-        avatar_url: booking.user_id ? avatarByUserId.get(booking.user_id) ?? null : null,
+        is_current_user: Boolean(currentUserId && booking.user_id === currentUserId),
       })),
     });
   } catch (error) {

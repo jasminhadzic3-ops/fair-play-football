@@ -4,8 +4,7 @@ interface Booking {
   id: number;
   game_id: number;
   player_name: string;
-  user_id?: string | null;
-  avatar_url?: string | null;
+  is_current_user?: boolean | null;
 }
 
 interface TeamListProps {
@@ -40,9 +39,8 @@ export default function TeamList({
       </div>
       <div className="space-y-3">
         {team.map((booking) => {
-          const avatarUrl =
-            booking.avatar_url ||
-            (currentUserId && booking.user_id === currentUserId ? currentUserAvatarUrl : null);
+          const isCurrentUserBooking = currentUserId && booking.is_current_user === true;
+          const avatarUrl = isCurrentUserBooking ? currentUserAvatarUrl : null;
           const initials = booking.player_name
             .split(" ")
             .map((part) => part.charAt(0).toUpperCase())
@@ -70,7 +68,7 @@ export default function TeamList({
                   {booking.player_name}
                 </span>
               </div>
-              {currentUserId && booking.user_id === currentUserId ? (
+              {isCurrentUserBooking ? (
                 <button
                   onClick={() => onLeaveGame(booking.id)}
                   className="px-3 py-2 text-xs uppercase tracking-[0.1em] text-zinc-300 hover:text-white transition"

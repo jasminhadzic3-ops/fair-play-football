@@ -26,8 +26,7 @@ interface GameDetailsProps {
     id: number;
     game_id: number;
     player_name: string;
-    user_id?: string | null;
-    avatar_url?: string | null;
+    is_current_user?: boolean | null;
   }>;
   successGameId: number | null;
   user: any | null;
@@ -165,7 +164,7 @@ export default function GameDetails({
   const normalizedProfileName = profileName.trim().toLowerCase();
   const isGameFull = spotsLeft <= 0;
   const alreadyJoined = user?.id
-    ? gameBookings.some((booking) => booking.user_id === user.id)
+    ? gameBookings.some((booking) => booking.is_current_user === true)
     : hasPlayerIdentity &&
       gameBookings.some(
         (booking) => booking.player_name.trim().toLowerCase() === normalizedProfileName
