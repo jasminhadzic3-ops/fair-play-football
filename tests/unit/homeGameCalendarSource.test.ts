@@ -96,4 +96,17 @@ describe("homepage game calendar source", () => {
     expect(homePageSource).toContain("selectedDatedGames.map(renderGameCard)");
     expect(homePageSource).toContain("legacyGames.map(renderGameCard)");
   });
+
+  it("selects the target game date before opening details from deep links and payment returns", () => {
+    expect(homePageSource).toContain("function getRequestedOpenGameId()");
+    expect(homePageSource).toContain("function selectGameDateForDetails(gameId: number, candidateGames = games)");
+    expect(homePageSource).toContain("const targetGameId = openDetailsGameId ?? getRequestedOpenGameId()");
+    expect(homePageSource).toContain("selectGameDateForDetails(targetGameId, gamesData)");
+    expect(homePageSource).toContain("setSelectedGameDateKey(targetDateKey)");
+    expect(homePageSource).toContain("setVisibleWeekStartKey(targetDateKey)");
+    expect(homePageSource).toContain("setShowAllGames(false)");
+    expect(homePageSource).toContain("selectGameDateForDetails(parsedGameId)");
+    expect(homePageSource).toContain("selectGameDateForDetails(paidGameId, refreshed.games)");
+    expect(homePageSource).toContain("selectGameDateForDetails(paidNoSpaceGameId, refreshed.games)");
+  });
 });

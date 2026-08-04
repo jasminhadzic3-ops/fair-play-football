@@ -557,6 +557,7 @@ test.describe("TEST-only launch QA flows", () => {
       await page.setViewportSize({ width: 1280, height: 720 });
     }
     await page.getByRole("link", { name: "Find Games" }).first().click();
+    await page.getByRole("button", { name: "All Games" }).click();
     const gameCard = page.locator("#games").locator(".cursor-pointer").filter({ hasText: game.title }).first();
     await expect(gameCard).toBeVisible();
     await gameCard.click();

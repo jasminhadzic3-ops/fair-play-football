@@ -256,6 +256,11 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     if (gamesData) {
       setGames(gamesData);
+      const targetGameId = openDetailsGameId ?? getRequestedOpenGameId();
+
+      if (targetGameId) {
+        selectGameDateForDetails(targetGameId, gamesData);
+      }
     }
 
     if (bookingsResponse.ok) {
@@ -371,20 +376,50 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
   }
 
-  function openGameFromNotification() {
+  function getRequestedOpenGameId() {
     const searchParams = new URLSearchParams(window.location.search);
     const gameId = searchParams.get("open_game_id") ?? searchParams.get("game");
 
     if (!gameId) {
-      return;
+      return null;
     }
 
     const parsedGameId = Number(gameId);
 
     if (!Number.isInteger(parsedGameId) || parsedGameId <= 0) {
+      return null;
+    }
+
+    return parsedGameId;
+  }
+
+  function selectGameDateForDetails(gameId: number, candidateGames = games) {
+    const targetGame = candidateGames.find((game) => game.id === gameId);
+
+    if (!targetGame) {
       return;
     }
 
+    const targetDateKey = getGameLondonDateKey(targetGame, new Date());
+
+    if (!targetDateKey) {
+      return;
+    }
+
+    setWeekNavigationDirection(null);
+    setShowAllGames(false);
+    setSelectedGameDateKey(targetDateKey);
+    setVisibleWeekStartKey(targetDateKey);
+  }
+
+  function openGameFromNotification() {
+    const parsedGameId = getRequestedOpenGameId();
+
+    if (!parsedGameId) {
+      return;
+    }
+
+    selectGameDateForDetails(parsedGameId);
     setOpenDetailsGameId(parsedGameId);
     window.setTimeout(scrollToGames, 0);
   }
@@ -397,7 +432,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     }
 
     localStorage.removeItem("pendingJoinGameId");
-    setOpenDetailsGameId(Number(pendingJoinGameId));
+    const parsedGameId = Number(pendingJoinGameId);
+    selectGameDateForDetails(parsedGameId);
+    setOpenDetailsGameId(parsedGameId);
   }
 
   async function continuePendingPayment() {
@@ -496,6 +533,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         if (paidGameId) {
           const refreshedGameExists = refreshed.games.some((game) => game.id === paidGameId);
           if (refreshedGameExists) {
+            selectGameDateForDetails(paidGameId, refreshed.games);
             setOpenDetailsGameId(paidGameId);
           } else {
             setPaymentReturnGateActive(false);
@@ -518,8 +556,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
         setCheckoutGameId(null);
-        await fetchGames();
+        const refreshed = await fetchGames();
         if (paidNoSpaceGameId) {
+          selectGameDateForDetails(paidNoSpaceGameId, refreshed.games);
           setOpenDetailsGameId(paidNoSpaceGameId);
         }
         clearSumUpCheckoutReferenceFromUrl();
