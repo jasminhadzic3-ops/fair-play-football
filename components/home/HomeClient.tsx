@@ -28,6 +28,9 @@ import {
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 const PENDING_SUMUP_CHECKOUT_REFERENCE_KEY = "pendingSumUpCheckoutReference";
+const incompletePaymentMessage =
+  "Payment wasn't completed.\nYour booking has not been confirmed.";
+const terminalIncompletePaymentStatuses = new Set(["cancelled", "canceled", "failed", "expired"]);
 
 type HomeClientProps = {
   initialPaymentReturnReference?: string | null;
@@ -54,6 +57,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   );
   const [paymentReturnGateActive, setPaymentReturnGateActive] = useState(hasInitialPaymentReturnReference);
   const [paymentReturnTargetGameId, setPaymentReturnTargetGameId] = useState<number | null>(null);
+  const [retryPaymentGameId, setRetryPaymentGameId] = useState<number | null>(null);
   const [recoveredPaymentReturnReference, setRecoveredPaymentReturnReference] = useState<string | null>(null);
   const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
   const [navbarAuthEmail, setNavbarAuthEmail] = useState("");
@@ -348,7 +352,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       onSignOut={handleSignOut}
       pendingCheckoutId={checkoutGameId === game.id ? pendingCheckoutId : null}
       pendingCheckoutReference={checkoutGameId === game.id ? pendingCheckoutReference : null}
+      continueToPayment={retryPaymentGameId === game.id}
       onContinueToPaymentHandled={() => {
+        setRetryPaymentGameId(null);
         setCheckoutGameId(null);
         setPendingCheckoutId(null);
         setPendingCheckoutReference(null);
@@ -463,6 +469,48 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     const url = new URL(window.location.href);
     url.searchParams.delete("sumup_checkout_reference");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  async function showIncompletePaymentReturn(gameId: number | null) {
+    localStorage.removeItem("pendingSumUpGameId");
+    localStorage.removeItem("pendingSumUpCheckoutId");
+    localStorage.removeItem(PENDING_SUMUP_CHECKOUT_REFERENCE_KEY);
+    setPendingCheckoutId(null);
+    setPendingCheckoutReference(null);
+    setCheckoutGameId(null);
+
+    const refreshed = await fetchGames();
+
+    if (gameId) {
+      selectGameDateForDetails(gameId, refreshed.games);
+      setOpenDetailsGameId(gameId);
+    }
+
+    clearSumUpCheckoutReferenceFromUrl();
+    setPaymentReturnGateActive(false);
+    setReturnPaymentState("failed");
+    setReturnPaymentMessage(incompletePaymentMessage);
+  }
+
+  async function retryReturnedPayment() {
+    const gameId = paymentReturnTargetGameId ?? openDetailsGameId ?? checkoutGameId;
+
+    if (!gameId) {
+      returnBackToGame();
+      return;
+    }
+
+    selectGameDateForDetails(gameId);
+    setOpenDetailsGameId(gameId);
+    setRetryPaymentGameId(gameId);
+    setReturnPaymentMessage(null);
+    setReturnPaymentState(null);
+  }
+
+  function returnBackToGame() {
+    setReturnPaymentMessage(null);
+    setReturnPaymentState(null);
+    scrollToGames();
   }
 
   function scrollToGames() {
@@ -591,19 +639,19 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         return;
       }
 
-      if (paymentStatus === "failed" || paymentStatus === "expired") {
-        setPaymentReturnGateActive(false);
-        setReturnPaymentState("failed");
-        setReturnPaymentMessage("SumUp could not complete the payment. Please try again.");
+      if (terminalIncompletePaymentStatuses.has(paymentStatus)) {
+        const incompleteGameId = result?.gameId ?? (Number(localStorage.getItem("pendingSumUpGameId")) || null);
+        setPaymentReturnTargetGameId(incompleteGameId);
+        await showIncompletePaymentReturn(incompleteGameId);
         return;
       }
 
       await new Promise((resolve) => window.setTimeout(resolve, 2000));
     }
 
-    setReturnPaymentState("pending");
-    setPaymentReturnGateActive(false);
-    setReturnPaymentMessage("Payment is still processing.");
+    const incompleteGameId = Number(localStorage.getItem("pendingSumUpGameId")) || null;
+    setPaymentReturnTargetGameId(incompleteGameId);
+    await showIncompletePaymentReturn(incompleteGameId);
   }
 
   async function runPostAuthWork(session: { user: User; access_token: string }) {
@@ -1312,7 +1360,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             <>
               {returnPaymentMessage ? (
                 <div
-                  className={`mb-6 rounded-3xl border px-5 py-4 text-sm font-semibold ${
+                  className={`mb-6 whitespace-pre-line rounded-3xl border px-5 py-4 text-sm font-semibold ${
                     returnPaymentState === "paid"
                       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
                       : returnPaymentState === "failed" || returnPaymentState === "paid_no_space" || returnPaymentState === "duplicate_paid"
@@ -1321,6 +1369,24 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   }`}
                 >
                   {returnPaymentMessage}
+                  {returnPaymentState === "failed" ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => void retryReturnedPayment()}
+                        className="rounded-full border border-stone-200/35 bg-stone-200 px-5 py-3 text-sm font-bold text-zinc-950 transition hover:border-stone-100 hover:bg-stone-100"
+                      >
+                        Try Again
+                      </button>
+                      <button
+                        type="button"
+                        onClick={returnBackToGame}
+                        className="rounded-full border border-zinc-700 bg-zinc-950 px-5 py-3 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-900"
+                      >
+                        Back to Game
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 

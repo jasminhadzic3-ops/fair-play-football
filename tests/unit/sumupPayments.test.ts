@@ -446,6 +446,28 @@ describe("SumUp payment helpers", () => {
     expect(updateCalls).toHaveLength(0);
   });
 
+  it("normalizes cancelled SumUp checkouts to failed before storing the terminal payment status", async () => {
+    paymentRow = defaultPayment({ payment_status: "pending", booking_id: null });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      okJson({
+        id: "checkout-1",
+        status: "CANCELLED",
+        transactions: [],
+      })
+    );
+
+    const result = await finalizeCheckoutPayment("checkout-1");
+
+    expect(result).toEqual({ paymentStatus: "failed", bookingId: null });
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]).toMatchObject({
+      payment_status: "failed",
+      transaction_code: undefined,
+    });
+    expect(rpcCalls).toHaveLength(0);
+    expect(runPostBookingActionsMock).not.toHaveBeenCalled();
+  });
+
   it("does not break paid checkout finalisation when transaction id lookup fails", async () => {
     paymentRow = defaultPayment();
     rpcResult = {

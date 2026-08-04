@@ -35,7 +35,7 @@ describe("duplicate paid checkout UI status", () => {
     const duplicateBranch = extractSection(
       pageSource,
       'if (paymentStatus === "duplicate_paid")',
-      'if (paymentStatus === "failed" || paymentStatus === "expired")'
+      "if (terminalIncompletePaymentStatuses.has(paymentStatus))"
     );
 
     expect(pageSource).toContain('"duplicate_paid" | "pending"');
@@ -52,8 +52,8 @@ describe("duplicate paid checkout UI status", () => {
     const detailsSource = readSource("components/games/GameDetails.tsx");
     const duplicateBranch = extractSection(
       detailsSource,
-      'if (result.paymentStatus === "duplicate_paid")',
-      'if (result.paymentStatus === "failed" || result.paymentStatus === "expired")'
+      'if (paymentStatusResult === "duplicate_paid")',
+      "if (terminalIncompletePaymentStatuses.has(paymentStatusResult))"
     );
 
     expect(detailsSource).toContain('"duplicate_paid" | "failed"');

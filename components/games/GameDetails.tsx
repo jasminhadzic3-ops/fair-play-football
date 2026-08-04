@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/shared/ui/Modal";
 import TeamList from "./TeamList";
@@ -53,6 +53,9 @@ type WaitingListEntry = {
 };
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
+const incompletePaymentMessage =
+  "Payment wasn't completed.\nYour booking has not been confirmed.";
+const terminalIncompletePaymentStatuses = new Set(["cancelled", "canceled", "failed", "expired"]);
 
 function formatWalletBalance(amount: number) {
   try {
@@ -254,7 +257,7 @@ export default function GameDetails({
     setStatusMessage(null);
   };
 
-  const openPaymentModal = (checkoutId?: string | null, checkoutReference?: string | null) => {
+  const openPaymentModal = useCallback((checkoutId?: string | null, checkoutReference?: string | null) => {
     if (!canBookGame) {
       return;
     }
@@ -268,13 +271,14 @@ export default function GameDetails({
         : null
     );
     setShowPaymentModal(true);
-  };
+  }, [canBookGame]);
 
   useEffect(() => {
     if (continueToPayment) {
+      openPaymentModal();
       onContinueToPaymentHandled?.();
     }
-  }, [continueToPayment, onContinueToPaymentHandled]);
+  }, [continueToPayment, onContinueToPaymentHandled, openPaymentModal]);
 
   useEffect(() => {
     if (openAuthModal && isOpen) {
@@ -591,7 +595,9 @@ export default function GameDetails({
         setPaymentCheckoutId(result.checkoutId);
       }
 
-      if (result.paymentStatus === "paid") {
+      const paymentStatusResult = String(result.paymentStatus || result.payment_status || result.status || "").toLowerCase();
+
+      if (paymentStatusResult === "paid") {
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
@@ -603,7 +609,7 @@ export default function GameDetails({
         return;
       }
 
-      if (result.paymentStatus === "paid_no_space") {
+      if (paymentStatusResult === "paid_no_space") {
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
@@ -613,7 +619,7 @@ export default function GameDetails({
         return;
       }
 
-      if (result.paymentStatus === "duplicate_paid") {
+      if (paymentStatusResult === "duplicate_paid") {
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
@@ -622,16 +628,14 @@ export default function GameDetails({
         return;
       }
 
-      if (result.paymentStatus === "failed" || result.paymentStatus === "expired") {
+      if (terminalIncompletePaymentStatuses.has(paymentStatusResult)) {
         localStorage.removeItem("pendingSumUpGameId");
         localStorage.removeItem("pendingSumUpCheckoutId");
         localStorage.removeItem("pendingSumUpCheckoutReference");
-        setPaymentStatus(result.paymentStatus);
-        setPaymentMessage(
-          result.paymentStatus === "expired"
-            ? "This SumUp checkout expired. Please start a new payment."
-            : "SumUp could not complete the payment. Please try again."
-        );
+        setPaymentCheckoutId(null);
+        setPaymentCheckoutReference(null);
+        setPaymentStatus(paymentStatusResult === "expired" ? "expired" : "failed");
+        setPaymentMessage(incompletePaymentMessage);
       }
     };
 
@@ -640,7 +644,13 @@ export default function GameDetails({
     const timeout = window.setTimeout(() => {
       if (!isCancelled) {
         window.clearInterval(interval);
-        setPaymentMessage("Payment is still processing. Please wait a moment and refresh if needed.");
+        localStorage.removeItem("pendingSumUpGameId");
+        localStorage.removeItem("pendingSumUpCheckoutId");
+        localStorage.removeItem("pendingSumUpCheckoutReference");
+        setPaymentCheckoutId(null);
+        setPaymentCheckoutReference(null);
+        setPaymentStatus("failed");
+        setPaymentMessage(incompletePaymentMessage);
       }
     }, 30000);
 
@@ -1746,7 +1756,7 @@ export default function GameDetails({
 
           {paymentMessage ? (
             <div
-              className={`rounded-3xl border px-5 py-4 text-sm font-semibold ${
+              className={`whitespace-pre-line rounded-3xl border px-5 py-4 text-sm font-semibold ${
                 paymentStatus === "paid"
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
                   : paymentStatus === "failed" || paymentStatus === "expired" || paymentStatus === "paid_no_space" || paymentStatus === "duplicate_paid"

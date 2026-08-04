@@ -227,12 +227,15 @@ test.describe("SumUp payment return", () => {
       const url = new URL(route.request().url());
       const reference = url.searchParams.get("checkout_reference") ?? "";
       const isFailed = reference.includes("failed");
+      const isCancelled = reference.includes("cancelled");
 
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(
-          isFailed
+          isCancelled
+            ? { paymentStatus: "cancelled", gameId: paidNoSpaceSeed.gameId }
+            : isFailed
             ? { paymentStatus: "failed", gameId: paidNoSpaceSeed.gameId }
             : { paymentStatus: "paid_no_space", gameId: paidNoSpaceSeed.gameId }
         ),
@@ -249,7 +252,18 @@ test.describe("SumUp payment return", () => {
     await page.goto(`/?sumup_checkout_reference=${paidNoSpaceSeed.runId}_failed_reference`);
 
     await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
-    await expect(page.getByText("SumUp could not complete the payment. Please try again.")).toBeVisible();
+    await expect(page.getByText("Payment wasn't completed.")).toBeVisible();
+    await expect(page.getByText("Your booking has not been confirmed.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try Again" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
+
+    await page.goto(`/?sumup_checkout_reference=${paidNoSpaceSeed.runId}_cancelled_reference`);
+
+    await expect(page.getByRole("heading", { name: "Confirming your booking" })).toBeVisible();
+    await expect(page.getByText("Payment wasn't completed.")).toBeVisible();
+    await expect(page.getByText("Your booking has not been confirmed.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try Again" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Back to Game" })).toBeVisible();
     expect(noSpaceDiagnostics.errors()).toEqual([]);
   });
 });

@@ -634,7 +634,8 @@ export async function finalizeCheckoutPayment(checkoutId: string) {
   assertSupabaseAdminConfigured();
 
   const checkout = await retrieveSumUpCheckout(checkoutId);
-  const status = checkout.status.toLowerCase();
+  const rawStatus = checkout.status.toLowerCase();
+  const status = rawStatus === "cancelled" || rawStatus === "canceled" ? "failed" : rawStatus;
   const transactionCode = checkout.transactions?.find((transaction) => transaction.transaction_code)
     ?.transaction_code;
 
