@@ -30,6 +30,8 @@ type GameRow = {
   title: string | null;
   price: number | null;
   status: string | null;
+  starts_at: string | null;
+  archived_at: string | null;
 };
 
 type ProfileRow = {
@@ -110,6 +112,8 @@ beforeEach(() => {
     title: "Friday Football",
     price: 8,
     status: "active",
+    starts_at: "2099-07-24T20:00:00.000Z",
+    archived_at: null,
   };
   state.profile = {
     id: "user-1",
@@ -222,6 +226,126 @@ describe("wallet booking route", () => {
 
     expect(response.status).toBe(409);
     expect(body.error).toBe("You have already joined this game.");
+    expect(bookGameWithWalletMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects completed games before debiting the wallet", async () => {
+    state.game = {
+      id: 10,
+      title: "Past Football",
+      price: 8,
+      status: "active",
+      starts_at: "2020-07-24T20:00:00.000Z",
+      archived_at: null,
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: 10,
+          playerName: "Wallet Player",
+        }),
+      }) as Parameters<typeof POST>[0]
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("This game is no longer available for booking.");
+    expect(bookGameWithWalletMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects archived games before debiting the wallet", async () => {
+    state.game = {
+      id: 10,
+      title: "Archived Football",
+      price: 8,
+      status: "active",
+      starts_at: "2099-07-24T20:00:00.000Z",
+      archived_at: "2026-07-22T10:00:00.000Z",
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: 10,
+          playerName: "Wallet Player",
+        }),
+      }) as Parameters<typeof POST>[0]
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("archived");
+    expect(bookGameWithWalletMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects inactive games before debiting the wallet", async () => {
+    state.game = {
+      id: 10,
+      title: "Draft Football",
+      price: 8,
+      status: "draft",
+      starts_at: "2099-07-24T20:00:00.000Z",
+      archived_at: null,
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: 10,
+          playerName: "Wallet Player",
+        }),
+      }) as Parameters<typeof POST>[0]
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("This game is no longer available for booking.");
+    expect(bookGameWithWalletMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects games with missing kickoff before debiting the wallet", async () => {
+    state.game = {
+      id: 10,
+      title: "Unscheduled Football",
+      price: 8,
+      status: "active",
+      starts_at: null,
+      archived_at: null,
+    };
+
+    const response = await POST(
+      new Request("http://localhost/api/wallet/bookings", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: 10,
+          playerName: "Wallet Player",
+        }),
+      }) as Parameters<typeof POST>[0]
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("This game is no longer available for booking.");
     expect(bookGameWithWalletMock).not.toHaveBeenCalled();
   });
 });

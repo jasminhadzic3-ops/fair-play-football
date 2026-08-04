@@ -32,6 +32,13 @@ describe("atomic paid checkout finalisation SQL", () => {
     expect(sql).toContain("duplicate_payment_detected");
     expect(sql).toContain("mixed_wallet_payment_detected");
     expect(sql).toContain("v_game_status = 'cancelled'");
+    expect(sql).toContain("v_game_archived_at is not null");
+    expect(sql).toContain("v_game_status <> 'active'");
+    expect(sql).toContain("v_game_starts_at is null");
+    expect(sql).toContain("v_game_starts_at <= now()");
+    expect(sql).toContain("'game_archived'");
+    expect(sql).toContain("'game_completed'");
+    expect(sql).toContain("'game_not_bookable'");
     expect(sql).toContain("revoke all on function public.finalize_paid_sumup_checkout");
     expect(sql).toContain("from authenticated");
     expect(sql).toContain("grant execute on function public.finalize_paid_sumup_checkout");

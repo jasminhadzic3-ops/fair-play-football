@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
+import { isBookable } from "@/lib/gameLifecycle";
 import { createSumUpCheckout, getAuthenticatedUser } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -11,6 +12,7 @@ const requiredEnvVars = [
 ];
 const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
 const archivedGameMessage = "This game has been archived and is no longer available for booking.";
+const unavailableGameMessage = "This game is no longer available for booking.";
 const activeRefundMessage = "Your previous refund for this game is still being processed. Please wait until it is completed before booking again.";
 
 function getMissingEnvVars() {
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     const { data: game, error: gameError } = await supabaseAdmin
       .from("games")
-      .select("id,title,location,time,price,status,archived_at")
+      .select("id,title,location,time,price,status,starts_at,archived_at")
       .eq("id", gameId)
       .single();
 
@@ -64,6 +66,10 @@ export async function POST(request: NextRequest) {
 
     if (game.archived_at) {
       return Response.json({ error: archivedGameMessage }, { status: 409 });
+    }
+
+    if (!isBookable(game)) {
+      return Response.json({ error: unavailableGameMessage }, { status: 409 });
     }
 
     const { data: existingBooking } = await supabaseAdmin

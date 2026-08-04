@@ -1338,6 +1338,8 @@ declare
   v_booking_id bigint;
   v_currency text;
   v_existing_transaction public.wallet_transactions%rowtype;
+  v_game_archived_at timestamptz;
+  v_game_starts_at timestamptz;
   v_game_status text;
   v_idempotency_key text;
   v_max_players integer;
@@ -1373,8 +1375,8 @@ begin
     return;
   end if;
 
-  select games.max_players, games.status
-  into v_max_players, v_game_status
+  select games.max_players, games.status, games.starts_at, games.archived_at
+  into v_max_players, v_game_status, v_game_starts_at, v_game_archived_at
   from public.games
   where games.id = p_game_id
   for update;
@@ -1386,6 +1388,26 @@ begin
 
   if v_game_status = 'cancelled' then
     return query select false, null::bigint, null::bigint, 'game_cancelled'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if v_game_archived_at is not null then
+    return query select false, null::bigint, null::bigint, 'game_archived'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if v_game_status <> 'active' then
+    return query select false, null::bigint, null::bigint, 'game_not_bookable'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if v_game_starts_at is null then
+    return query select false, null::bigint, null::bigint, 'game_not_bookable'::text, 0::numeric(10, 2);
+    return;
+  end if;
+
+  if v_game_starts_at <= now() then
+    return query select false, null::bigint, null::bigint, 'game_completed'::text, 0::numeric(10, 2);
     return;
   end if;
 

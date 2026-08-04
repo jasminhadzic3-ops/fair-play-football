@@ -139,6 +139,7 @@ describe("SumUp checkout creation", () => {
         time: "Friday 8pm",
         price: 5,
         status: "active",
+        starts_at: "2099-07-24T20:00:00.000Z",
         archived_at: null,
       },
     ];
@@ -153,6 +154,7 @@ describe("SumUp checkout creation", () => {
         time: "Friday 8pm",
         price: 5,
         status: "active",
+        starts_at: "2099-07-24T20:00:00.000Z",
         archived_at: "2026-07-22T10:00:00.000Z",
       },
     ];
@@ -162,6 +164,72 @@ describe("SumUp checkout creation", () => {
 
     expect(response.status).toBe(409);
     expect(body.error).toContain("archived");
+    expect(createSumUpCheckoutMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects completed games before creating a SumUp checkout", async () => {
+    state.games = [
+      {
+        id: 10,
+        title: "Past Football",
+        location: "Pitch 1",
+        time: "Friday 8pm",
+        price: 5,
+        status: "active",
+        starts_at: "2020-07-24T20:00:00.000Z",
+        archived_at: null,
+      },
+    ];
+
+    const response = await POST(checkoutRequest() as Parameters<typeof POST>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("This game is no longer available for booking.");
+    expect(createSumUpCheckoutMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects inactive games before creating a SumUp checkout", async () => {
+    state.games = [
+      {
+        id: 10,
+        title: "Draft Football",
+        location: "Pitch 1",
+        time: "Friday 8pm",
+        price: 5,
+        status: "draft",
+        starts_at: "2099-07-24T20:00:00.000Z",
+        archived_at: null,
+      },
+    ];
+
+    const response = await POST(checkoutRequest() as Parameters<typeof POST>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("This game is no longer available for booking.");
+    expect(createSumUpCheckoutMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects games with missing kickoff before creating a SumUp checkout", async () => {
+    state.games = [
+      {
+        id: 10,
+        title: "Unscheduled Football",
+        location: "Pitch 1",
+        time: "Friday 8pm",
+        price: 5,
+        status: "active",
+        starts_at: null,
+        archived_at: null,
+      },
+    ];
+
+    const response = await POST(checkoutRequest() as Parameters<typeof POST>[0]);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("This game is no longer available for booking.");
     expect(createSumUpCheckoutMock).not.toHaveBeenCalled();
   });
 

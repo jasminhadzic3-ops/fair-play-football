@@ -1,11 +1,14 @@
 import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
+import { isBookable } from "@/lib/gameLifecycle";
 import { runPostBookingActions } from "@/lib/postBookingActions";
 import { getAuthenticatedUser } from "@/lib/sumupPayments";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { bookGameWithWallet } from "@/lib/wallet";
 
 const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
+const archivedGameMessage = "This game has been archived and is no longer available for booking.";
+const unavailableGameMessage = "This game is no longer available for booking.";
 
 type WalletBookingPayload = {
   gameId?: unknown;
@@ -17,6 +20,8 @@ type GameData = {
   title: string | null;
   price: number | null;
   status: string | null;
+  starts_at: string | null;
+  archived_at: string | null;
 };
 
 type ProfileData = {
@@ -46,6 +51,9 @@ function getStatusForWalletReason(reason: string | null) {
     case "existing_booking":
     case "idempotency_key_conflict":
     case "game_cancelled":
+    case "game_archived":
+    case "game_completed":
+    case "game_not_bookable":
       return 409;
     case "game_not_found":
       return 404;
@@ -68,6 +76,11 @@ function getMessageForWalletReason(reason: string | null) {
       return "This game is already full.";
     case "game_cancelled":
       return cancelledGameMessage;
+    case "game_archived":
+      return archivedGameMessage;
+    case "game_completed":
+    case "game_not_bookable":
+      return unavailableGameMessage;
     case "existing_booking":
       return "You have already joined this game.";
     case "idempotency_key_conflict":
@@ -109,7 +122,7 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         supabaseAdmin
           .from("games")
-          .select("id,title,price,status")
+          .select("id,title,price,status,starts_at,archived_at")
           .eq("id", gameId)
           .maybeSingle<GameData>(),
         supabaseAdmin
@@ -143,6 +156,14 @@ export async function POST(request: NextRequest) {
 
     if (game.status === "cancelled") {
       return Response.json({ error: cancelledGameMessage }, { status: 409 });
+    }
+
+    if (game.archived_at) {
+      return Response.json({ error: archivedGameMessage }, { status: 409 });
+    }
+
+    if (!isBookable(game)) {
+      return Response.json({ error: unavailableGameMessage }, { status: 409 });
     }
 
     if (existingBooking) {

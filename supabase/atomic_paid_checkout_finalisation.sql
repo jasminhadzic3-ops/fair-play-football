@@ -94,7 +94,9 @@ as $$
 declare
   v_booking_count integer;
   v_booking_id bigint;
+  v_game_archived_at timestamptz;
   v_existing_paid_payment_id bigint;
+  v_game_starts_at timestamptz;
   v_game_status text;
   v_max_players integer;
   v_payment public.booking_payments%rowtype;
@@ -183,14 +185,41 @@ begin
     return;
   end if;
 
-  select games.max_players, games.status
-  into v_max_players, v_game_status
+  select games.max_players, games.status, games.starts_at, games.archived_at
+  into v_max_players, v_game_status, v_game_starts_at, v_game_archived_at
   from public.games
   where games.id = v_payment.game_id
   for update;
 
   if v_max_players is null then
     return query select false, v_payment.payment_status, v_payment.booking_id, 'game_not_found'::text, false;
+    return;
+  end if;
+
+  if v_game_status = 'cancelled' then
+    v_reason := 'game_cancelled';
+  elsif v_game_archived_at is not null then
+    v_reason := 'game_archived';
+  elsif v_game_status <> 'active' then
+    v_reason := 'game_not_bookable';
+  elsif v_game_starts_at is null then
+    v_reason := 'game_not_bookable';
+  elsif v_game_starts_at <= now() then
+    v_reason := 'game_completed';
+  end if;
+
+  if v_reason is not null then
+    update public.booking_payments
+    set
+      booking_id = null,
+      payment_status = 'paid_no_space',
+      raw_checkout = coalesce(p_raw_checkout, raw_checkout),
+      transaction_code = coalesce(v_transaction_code, transaction_code),
+      sumup_transaction_id = coalesce(v_sumup_transaction_id, sumup_transaction_id),
+      updated_at = now()
+    where id = v_payment.id;
+
+    return query select true, 'paid_no_space'::text, null::bigint, v_reason, false;
     return;
   end if;
 
@@ -204,20 +233,12 @@ begin
   limit 1;
 
   if v_booking_id is null then
-    if v_game_status = 'cancelled' then
-      v_reason := 'game_cancelled';
-    else
-      select count(*)
-      into v_booking_count
-      from public.bookings
-      where bookings.game_id = v_payment.game_id;
+    select count(*)
+    into v_booking_count
+    from public.bookings
+    where bookings.game_id = v_payment.game_id;
 
-      if v_booking_count >= v_max_players then
-        v_reason := 'game_full';
-      end if;
-    end if;
-
-    if v_reason is not null then
+    if v_booking_count >= v_max_players then
       update public.booking_payments
       set
         booking_id = null,
@@ -228,7 +249,7 @@ begin
         updated_at = now()
       where id = v_payment.id;
 
-      return query select true, 'paid_no_space'::text, null::bigint, v_reason, false;
+      return query select true, 'paid_no_space'::text, null::bigint, 'game_full'::text, false;
       return;
     end if;
 

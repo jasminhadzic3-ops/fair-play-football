@@ -39,4 +39,18 @@ describe("wallet SQL", () => {
     expect(sql).toContain("v_metadata := coalesce(v_refund_request.metadata, '{}'::jsonb) ||");
     expect(sql).toContain("'refund_completed_transaction_id', v_transaction_id");
   });
+
+  it("rejects wallet bookings for non-bookable game lifecycle states before debiting", () => {
+    expect(sql).toContain("create or replace function public.create_wallet_booking_if_balance");
+    expect(sql).toContain("games.starts_at, games.archived_at");
+    expect(sql).toContain("if v_game_status = 'cancelled' then");
+    expect(sql).toContain("'game_cancelled'");
+    expect(sql).toContain("if v_game_archived_at is not null then");
+    expect(sql).toContain("'game_archived'");
+    expect(sql).toContain("if v_game_status <> 'active' then");
+    expect(sql).toContain("'game_not_bookable'");
+    expect(sql).toContain("if v_game_starts_at is null then");
+    expect(sql).toContain("if v_game_starts_at <= now() then");
+    expect(sql).toContain("'game_completed'");
+  });
 });
