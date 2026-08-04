@@ -42,7 +42,24 @@ create policy "Waiting list rows are insertable by owner"
 on public.waiting_list
 for insert
 to authenticated
-with check (auth.uid() = user_id);
+with check (
+  auth.uid() = user_id
+  and status = 'waiting'
+  and exists (
+    select 1
+    from public.games
+    where games.id = waiting_list.game_id
+      and games.status = 'active'
+      and games.archived_at is null
+      and games.starts_at is not null
+      and games.starts_at > now()
+      and (
+        select count(*)
+        from public.bookings
+        where bookings.game_id = waiting_list.game_id
+      ) >= games.max_players
+  )
+);
 
 create policy "Waiting list rows are deletable by owner"
 on public.waiting_list

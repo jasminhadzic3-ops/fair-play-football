@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
+import { isBookable } from "@/lib/gameLifecycle";
 import { supabase } from "@/lib/supabase";
 
 interface Profile {
@@ -34,6 +35,9 @@ interface NotificationGame {
   location: string;
   time: string | null;
   max_players: number | null;
+  status?: string | null;
+  starts_at?: string | null;
+  archived_at?: string | null;
   is_full?: boolean;
 }
 
@@ -201,7 +205,7 @@ export default function ProfilePage() {
     if (gameIds.length > 0) {
       const { data: games, error: gamesError } = await supabase
         .from("games")
-        .select("id,title,location,time,max_players")
+        .select("id,title,location,time,max_players,status,starts_at,archived_at")
         .in("id", gameIds);
 
       if (gamesError) {
@@ -584,7 +588,7 @@ export default function ProfilePage() {
 
     const { data: game, error: gameError } = await supabase
       .from("games")
-      .select("id,max_players")
+      .select("id,max_players,status,starts_at,archived_at")
       .eq("id", notification.game_id)
       .maybeSingle();
 
@@ -608,7 +612,7 @@ export default function ProfilePage() {
       return;
     }
 
-    if ((bookingCount ?? 0) >= game.max_players) {
+    if (!isBookable(game, { bookingCount: bookingCount ?? 0 })) {
       showTemporaryNotificationMessage("This spot has already been taken.");
       return;
     }

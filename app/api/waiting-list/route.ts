@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
+import { getGameLifecycle } from "@/lib/gameLifecycle";
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const cancelledGameMessage = "This game has been cancelled and is no longer available for booking.";
+const archivedGameMessage = "This game has been archived and is no longer available for booking.";
+const unavailableGameMessage = "This game is no longer available for booking.";
 
 type WaitingListPayload = {
   game_id?: unknown;
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     const { data: game, error: gameError } = await supabaseAdmin
       .from("games")
-      .select("id,max_players,status")
+      .select("id,max_players,status,starts_at,archived_at")
       .eq("id", gameId)
       .maybeSingle();
 
@@ -69,10 +72,6 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Game not found." }, { status: 404 });
     }
 
-    if (game.status === "cancelled") {
-      return Response.json({ error: cancelledGameMessage }, { status: 409 });
-    }
-
     const { count: bookingCount, error: bookingCountError } = await supabaseAdmin
       .from("bookings")
       .select("id", { count: "exact", head: true })
@@ -82,11 +81,25 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: bookingCountError.message }, { status: 500 });
     }
 
-    if ((bookingCount ?? 0) < game.max_players) {
+    const lifecycle = getGameLifecycle(game, { bookingCount: bookingCount ?? 0 });
+
+    if (lifecycle === "cancelled") {
+      return Response.json({ error: cancelledGameMessage }, { status: 409 });
+    }
+
+    if (lifecycle === "archived") {
+      return Response.json({ error: archivedGameMessage }, { status: 409 });
+    }
+
+    if (lifecycle === "active_bookable") {
       return Response.json(
         { error: "This game still has spaces. Please book normally." },
         { status: 409 }
       );
+    }
+
+    if (lifecycle !== "full") {
+      return Response.json({ error: unavailableGameMessage }, { status: 409 });
     }
 
     const { data: existingBooking, error: existingBookingError } = await supabaseAdmin

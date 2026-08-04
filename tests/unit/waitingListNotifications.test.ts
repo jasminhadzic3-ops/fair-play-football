@@ -25,9 +25,19 @@ type WaitingListRow = {
 };
 
 const state: {
+  game: {
+    id: number;
+    status: string;
+    starts_at: string | null;
+    archived_at: string | null;
+    max_players: number;
+  } | null;
+  bookingCount: number;
   waitingRows: WaitingListRow[];
   insertedNotifications: Array<Record<string, unknown>>;
 } = {
+  game: null,
+  bookingCount: 0,
   waitingRows: [],
   insertedNotifications: [],
 };
@@ -56,6 +66,14 @@ class MockSupabaseQuery {
     return this;
   }
 
+  async maybeSingle<T>() {
+    if (this.table === "games") {
+      return { data: state.game as T | null, error: null };
+    }
+
+    return { data: null, error: null };
+  }
+
   async single<T>() {
     if (this.table !== "waiting_list_notifications" || !this.insertPayload) {
       throw new Error(`Unexpected single() call for ${this.table}`);
@@ -69,10 +87,14 @@ class MockSupabaseQuery {
     };
   }
 
-  then<TResult1 = { data: WaitingListRow[]; error: null }, TResult2 = never>(
-    onfulfilled?: ((value: { data: WaitingListRow[]; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+  then<TResult1 = { data?: WaitingListRow[]; count?: number; error: null }, TResult2 = never>(
+    onfulfilled?: ((value: { data?: WaitingListRow[]; count?: number; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ) {
+    if (this.table === "bookings") {
+      return Promise.resolve({ count: state.bookingCount, error: null }).then(onfulfilled, onrejected);
+    }
+
     const data = state.waitingRows.filter((row) =>
       this.filters.every((filter) => (row as Record<string, unknown>)[filter.field] === filter.value)
     );
@@ -85,6 +107,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   supabaseFromMock.mockImplementation((table: string) => new MockSupabaseQuery(table));
   sendWaitingListSpotAvailableEmailMock.mockResolvedValue({ id: "email-1" });
+  state.game = {
+    id: 10,
+    status: "active",
+    starts_at: "2099-08-03T20:00:00.000Z",
+    archived_at: null,
+    max_players: 10,
+  };
+  state.bookingCount = 9;
   state.waitingRows = [
     {
       id: 800,
@@ -127,5 +157,52 @@ describe("notifyWaitingListForOpenSpace", () => {
     expect(result).toEqual({ notifiedCount: 1 });
     expect(state.insertedNotifications).toHaveLength(1);
     expect(sendWaitingListSpotAvailableEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      "completed",
+      { id: 10, status: "active", starts_at: "2020-08-03T20:00:00.000Z", archived_at: null, max_players: 10 },
+    ],
+    [
+      "cancelled",
+      { id: 10, status: "cancelled", starts_at: "2099-08-03T20:00:00.000Z", archived_at: null, max_players: 10 },
+    ],
+    [
+      "archived",
+      {
+        id: 10,
+        status: "active",
+        starts_at: "2099-08-03T20:00:00.000Z",
+        archived_at: "2099-08-04T10:00:00.000Z",
+        max_players: 10,
+      },
+    ],
+    [
+      "inactive",
+      { id: 10, status: "draft", starts_at: "2099-08-03T20:00:00.000Z", archived_at: null, max_players: 10 },
+    ],
+    [
+      "missing kickoff",
+      { id: 10, status: "active", starts_at: null, archived_at: null, max_players: 10 },
+    ],
+  ])("does not notify waiting-list players for %s games", async (_label, game) => {
+    state.game = game;
+
+    const result = await notifyWaitingListForOpenSpace(10);
+
+    expect(result).toEqual({ notifiedCount: 0 });
+    expect(state.insertedNotifications).toHaveLength(0);
+    expect(sendWaitingListSpotAvailableEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("does not notify waiting-list players while the game is still full", async () => {
+    state.bookingCount = 10;
+
+    const result = await notifyWaitingListForOpenSpace(10);
+
+    expect(result).toEqual({ notifiedCount: 0 });
+    expect(state.insertedNotifications).toHaveLength(0);
+    expect(sendWaitingListSpotAvailableEmailMock).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "./supabaseAdmin";
 import { sendWaitingListSpotAvailableEmail } from "./email/waitingListSpotAvailable";
+import { isBookable } from "./gameLifecycle";
 
 const openSpaceMessage =
   "A space may be available for this game. Book now to try for the spot. Spots are first paid, first served.";
@@ -17,6 +18,33 @@ type WaitingListNotificationRow = {
 
 export async function notifyWaitingListForOpenSpace(gameId: number) {
   assertSupabaseAdminConfigured();
+
+  const { data: game, error: gameError } = await supabaseAdmin
+    .from("games")
+    .select("id,status,starts_at,archived_at,max_players")
+    .eq("id", gameId)
+    .maybeSingle();
+
+  if (gameError) {
+    throw gameError;
+  }
+
+  if (!game) {
+    return { notifiedCount: 0 };
+  }
+
+  const { count: bookingCount, error: bookingCountError } = await supabaseAdmin
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", gameId);
+
+  if (bookingCountError) {
+    throw bookingCountError;
+  }
+
+  if (!isBookable(game, { bookingCount: bookingCount ?? 0 })) {
+    return { notifiedCount: 0 };
+  }
 
   const { data: waitingRows, error: waitingRowsError } = await supabaseAdmin
     .from("waiting_list")

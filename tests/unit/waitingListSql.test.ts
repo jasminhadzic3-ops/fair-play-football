@@ -15,9 +15,20 @@ describe("waiting list SQL", () => {
   it("keeps authenticated writes constrained by owner RLS policies", () => {
     expect(sql).toContain("alter table public.waiting_list enable row level security");
     expect(sql).toContain("for insert");
-    expect(sql).toContain("with check (auth.uid() = user_id)");
+    expect(sql).toContain("auth.uid() = user_id");
+    expect(sql).toContain("status = 'waiting'");
     expect(sql).toContain("for delete");
     expect(sql).toContain("using (auth.uid() = user_id)");
     expect(sql).not.toContain("grant all on public.waiting_list to authenticated");
+  });
+
+  it("guards direct waiting-list inserts to full active upcoming games", () => {
+    expect(sql).toContain("games.status = 'active'");
+    expect(sql).toContain("games.archived_at is null");
+    expect(sql).toContain("games.starts_at is not null");
+    expect(sql).toContain("games.starts_at > now()");
+    expect(sql).toContain("from public.bookings");
+    expect(sql).toContain("bookings.game_id = waiting_list.game_id");
+    expect(sql).toContain(") >= games.max_players");
   });
 });
