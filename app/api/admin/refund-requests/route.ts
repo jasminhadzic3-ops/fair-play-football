@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { buildAdminRefundCandidates } from "@/lib/adminRefundCandidates";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
+import { sendWalletRefundEmail, type WalletRefundEmailOutcome } from "@/lib/email/walletRefund";
 import { getAutomaticRefundProcessorDependencies } from "@/lib/sumupRefundDependencies";
 import { processAutomaticSumUpRefund } from "@/lib/sumupRefundProcessing";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -25,6 +26,41 @@ type WalletTransactionRow = {
 };
 
 type RefundRequestRow = WalletTransactionRow;
+
+async function sendRefundEmail({
+  refundRequestId,
+  userId,
+  outcome,
+  amount,
+  currency,
+}: {
+  refundRequestId: number | null;
+  userId: string | null;
+  outcome: WalletRefundEmailOutcome;
+  amount: number | string | null;
+  currency: string | null;
+}) {
+  if (!refundRequestId || !userId) {
+    return;
+  }
+
+  try {
+    await sendWalletRefundEmail({
+      refundRequestId,
+      userId,
+      outcome,
+      amount: Math.abs(Number(amount ?? 0)),
+      currency: currency || "GBP",
+    });
+  } catch (emailError) {
+    console.error("Unable to send wallet refund email:", {
+      refundRequestId,
+      userId,
+      outcome,
+      error: emailError,
+    });
+  }
+}
 
 const failedAutomaticRefundRetryCooldownMs = 60 * 1000;
 
@@ -376,6 +412,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!refundRequestResult.alreadyExists) {
+      await sendRefundEmail({
+        refundRequestId: refundRequestResult.refundRequestId,
+        userId: candidate.user_id,
+        outcome: "requested",
+        amount: candidate.amount,
+        currency: candidate.currency,
+      });
+    }
+
     let automaticRefund = automaticRefundDisabled();
 
     if (refundRequestResult.alreadyExists) {
@@ -389,14 +435,32 @@ export async function POST(request: NextRequest) {
         if (await isRecentFailedAttemptCoolingDown(refundRequestResult.refundRequestId)) {
           automaticRefund = automaticRefundRetryCoolingDown();
         } else {
-          automaticRefund = automaticRefundFromProcessorResult(
-            await processAutomaticSumUpRefund({
+          const processorResult = await processAutomaticSumUpRefund({
               refundRequestId: refundRequestResult.refundRequestId,
               actorUserId: adminUser.id,
               initiatedBy: "admin",
               ...automaticRefundDependencies,
-            })
-          );
+          });
+
+          automaticRefund = automaticRefundFromProcessorResult(processorResult);
+
+          if (processorResult.outcome === "completed") {
+            await sendRefundEmail({
+              refundRequestId: refundRequestResult.refundRequestId,
+              userId: candidate.user_id,
+              outcome: "completed",
+              amount: candidate.amount,
+              currency: candidate.currency,
+            });
+          } else if (processorResult.outcome === "sumup_unknown") {
+            await sendRefundEmail({
+              refundRequestId: refundRequestResult.refundRequestId,
+              userId: candidate.user_id,
+              outcome: "manual_review",
+              amount: candidate.amount,
+              currency: candidate.currency,
+            });
+          }
         }
       }
     }

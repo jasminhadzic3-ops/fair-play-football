@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { sendWalletRefundEmail, type WalletRefundEmailOutcome } from "@/lib/email/walletRefund";
 import { getAutomaticRefundProcessorDependencies } from "@/lib/sumupRefundDependencies";
 import { processAutomaticSumUpRefund } from "@/lib/sumupRefundProcessing";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -13,6 +14,13 @@ type BalanceBreakdownRpcRow = {
   completed_balance?: number | string | null;
   reserved_refund_amount?: number | string | null;
   available_balance?: number | string | null;
+};
+
+type RefundRequestEmailRow = {
+  id: number;
+  user_id: string;
+  amount: number | string | null;
+  currency: string | null;
 };
 
 const failedAutomaticRefundRetryCooldownMs = 60 * 1000;
@@ -75,6 +83,59 @@ async function getRefundRequestStatus(refundRequestId: number, userId: string) {
   }
 
   return data?.status ?? null;
+}
+
+async function loadRefundRequestEmailRow(refundRequestId: number, userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("wallet_transactions")
+    .select("id,user_id,amount,currency")
+    .eq("id", refundRequestId)
+    .eq("user_id", userId)
+    .eq("transaction_type", "refund_requested")
+    .maybeSingle<RefundRequestEmailRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function sendRefundOutcomeEmail({
+  refundRequestId,
+  userId,
+  outcome,
+}: {
+  refundRequestId: number | null;
+  userId: string;
+  outcome: WalletRefundEmailOutcome;
+}) {
+  if (!refundRequestId) {
+    return;
+  }
+
+  try {
+    const refundRequest = await loadRefundRequestEmailRow(refundRequestId, userId);
+
+    if (!refundRequest) {
+      throw new Error("Refund request email row not found.");
+    }
+
+    await sendWalletRefundEmail({
+      refundRequestId,
+      userId: refundRequest.user_id,
+      outcome,
+      amount: Math.abs(Number(refundRequest.amount ?? 0)),
+      currency: refundRequest.currency || "GBP",
+    });
+  } catch (emailError) {
+    console.error("Unable to send wallet refund email:", {
+      refundRequestId,
+      userId,
+      outcome,
+      error: emailError,
+    });
+  }
 }
 
 function automaticRefundDisabled() {
@@ -267,6 +328,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!result.alreadyExists) {
+      await sendRefundOutcomeEmail({
+        refundRequestId: result.refundRequestId,
+        userId: user.id,
+        outcome: "requested",
+      });
+    }
+
     let automaticRefund:
       | ReturnType<typeof automaticRefundDisabled>
       | ReturnType<typeof automaticRefundAlreadyCompleted>
@@ -306,11 +375,27 @@ export async function POST(request: NextRequest) {
               reservedRefundAmount: processorResult.balanceBreakdown.reservedRefundAmount,
               availableBalance: processorResult.balanceBreakdown.availableBalance,
             };
+            await sendRefundOutcomeEmail({
+              refundRequestId: result.refundRequestId,
+              userId: user.id,
+              outcome: "completed",
+            });
           } else if (processorResult.outcome === "sumup_failed") {
             responseBalanceBreakdown = await releaseFailedRefundRequest(
               result.refundRequestId,
               user.id
             );
+            await sendRefundOutcomeEmail({
+              refundRequestId: result.refundRequestId,
+              userId: user.id,
+              outcome: "failed_credit_available",
+            });
+          } else if (processorResult.outcome === "sumup_unknown") {
+            await sendRefundOutcomeEmail({
+              refundRequestId: result.refundRequestId,
+              userId: user.id,
+              outcome: "manual_review",
+            });
           }
         }
       }

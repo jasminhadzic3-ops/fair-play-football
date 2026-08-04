@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
+import { sendWalletRefundEmail, type WalletRefundEmailOutcome } from "@/lib/email/walletRefund";
 import {
   processAutomaticSumUpRefund,
 } from "@/lib/sumupRefundProcessing";
@@ -30,6 +31,13 @@ type UpdatedRefundRequestRow = {
   status: string;
   admin_note: string | null;
   metadata: Record<string, unknown> | null;
+};
+
+type RefundRequestEmailRow = {
+  id: number;
+  user_id: string;
+  amount: number | string | null;
+  currency: string | null;
 };
 
 function parseRefundRequestId(id: string) {
@@ -100,6 +108,45 @@ async function loadPendingRefundRequest(refundRequestId: number) {
   }
 
   return refundRequest;
+}
+
+async function loadRefundRequestEmailRow(refundRequestId: number) {
+  const { data, error } = await supabaseAdmin
+    .from("wallet_transactions")
+    .select("id,user_id,amount,currency")
+    .eq("id", refundRequestId)
+    .eq("transaction_type", "refund_requested")
+    .maybeSingle<RefundRequestEmailRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function sendRefundOutcomeEmail(refundRequestId: number, outcome: WalletRefundEmailOutcome) {
+  try {
+    const refundRequest = await loadRefundRequestEmailRow(refundRequestId);
+
+    if (!refundRequest) {
+      throw new Error("Refund request email row not found.");
+    }
+
+    await sendWalletRefundEmail({
+      refundRequestId,
+      userId: refundRequest.user_id,
+      outcome,
+      amount: Math.abs(Number(refundRequest.amount ?? 0)),
+      currency: refundRequest.currency || "GBP",
+    });
+  } catch (emailError) {
+    console.error("Unable to send wallet refund email:", {
+      refundRequestId,
+      outcome,
+      error: emailError,
+    });
+  }
 }
 
 function getTestOnlyMockReconciliationEvidenceDependency(): SumUpRefundEvidenceDependency {
@@ -220,6 +267,12 @@ export async function PATCH(
         retrieveEvidence: mode === "test_mock" ? getTestOnlyMockReconciliationEvidenceDependency() : undefined,
       });
 
+      if (result.result === "refund_confirmed") {
+        await sendRefundOutcomeEmail(refundRequestId, "completed");
+      } else if (result.result === "manual_review") {
+        await sendRefundOutcomeEmail(refundRequestId, "manual_review");
+      }
+
       return Response.json(
         {
           message: result.message,
@@ -258,6 +311,8 @@ export async function PATCH(
       });
 
       if (result.outcome === "completed") {
+        await sendRefundOutcomeEmail(refundRequestId, "completed");
+
         return Response.json({
           message: result.message,
           refund_request: {
@@ -278,6 +333,10 @@ export async function PATCH(
             available_balance: result.balanceBreakdown.availableBalance,
           },
         });
+      }
+
+      if (result.outcome === "sumup_unknown") {
+        await sendRefundOutcomeEmail(refundRequestId, "manual_review");
       }
 
       return Response.json(
@@ -362,6 +421,8 @@ export async function PATCH(
         { status: getStatusForCompletionReason(completionResult.reason) }
       );
     }
+
+    await sendRefundOutcomeEmail(refundRequest.id, "completed");
 
     const { data: updatedRequest, error: updatedRequestError } = await supabaseAdmin
       .from("wallet_transactions")

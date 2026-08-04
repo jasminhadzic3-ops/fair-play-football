@@ -7,6 +7,7 @@ const getAutomaticRefundProcessorDependenciesMock = vi.hoisted(() => vi.fn());
 const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
 const createWalletRefundRequestMock = vi.hoisted(() => vi.fn());
 const getLatestSumUpRefundAttemptForRequestMock = vi.hoisted(() => vi.fn());
+const sendWalletRefundEmailMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/adminAuth", () => ({
   getAuthenticatedAdminUser: getAuthenticatedAdminUserMock,
@@ -28,6 +29,10 @@ vi.mock("@/lib/supabaseAdmin", () => ({
   supabaseAdmin: {
     from: supabaseFromMock,
   },
+}));
+
+vi.mock("@/lib/email/walletRefund", () => ({
+  sendWalletRefundEmail: sendWalletRefundEmailMock,
 }));
 
 vi.mock("@/lib/wallet", () => ({
@@ -167,6 +172,7 @@ beforeEach(() => {
     availableBalance: 0,
   });
   getLatestSumUpRefundAttemptForRequestMock.mockResolvedValue(null);
+  sendWalletRefundEmailMock.mockResolvedValue({ id: "email-1" });
   processAutomaticSumUpRefundMock.mockResolvedValue({
     outcome: "completed",
     status: 200,

@@ -5,11 +5,16 @@ const createWalletRefundRequestMock = vi.hoisted(() => vi.fn());
 const getLatestSumUpRefundAttemptForRequestMock = vi.hoisted(() => vi.fn());
 const getAutomaticRefundProcessorDependenciesMock = vi.hoisted(() => vi.fn());
 const processAutomaticSumUpRefundMock = vi.hoisted(() => vi.fn());
+const sendWalletRefundEmailMock = vi.hoisted(() => vi.fn());
 const supabaseFromMock = vi.hoisted(() => vi.fn());
 const supabaseRpcMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sumupPayments", () => ({
   getAuthenticatedUser: getAuthenticatedUserMock,
+}));
+
+vi.mock("@/lib/email/walletRefund", () => ({
+  sendWalletRefundEmail: sendWalletRefundEmailMock,
 }));
 
 vi.mock("@/lib/sumupRefundDependencies", () => ({
@@ -83,7 +88,13 @@ class MockSupabaseQuery {
 
   async maybeSingle<T>() {
     return {
-      data: { status: this.status } as T,
+      data: {
+        id: 123,
+        user_id: "user-1",
+        amount: -8,
+        currency: "GBP",
+        status: this.status,
+      } as T,
       error: null,
     };
   }
@@ -112,6 +123,7 @@ beforeEach(() => {
     },
     skippedSumUpRefundCall: false,
   });
+  sendWalletRefundEmailMock.mockResolvedValue({ id: "email-1" });
   supabaseFromMock.mockReturnValue(new MockSupabaseQuery());
   supabaseRpcMock.mockResolvedValue({
     data: [
@@ -171,6 +183,13 @@ describe("wallet refund request route", () => {
       },
     });
     expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
+    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
+      refundRequestId: 123,
+      userId: "user-1",
+      outcome: "requested",
+      amount: 8,
+      currency: "GBP",
+    });
   });
 
   it("runs automatic refund processing after the reservation when enabled", async () => {
@@ -212,6 +231,20 @@ describe("wallet refund request route", () => {
         reservedRefundAmount: 0,
         availableBalance: 4,
       },
+    });
+    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
+      refundRequestId: 123,
+      userId: "user-1",
+      outcome: "requested",
+      amount: 8,
+      currency: "GBP",
+    });
+    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
+      refundRequestId: 123,
+      userId: "user-1",
+      outcome: "completed",
+      amount: 8,
+      currency: "GBP",
     });
   });
 
@@ -259,6 +292,13 @@ describe("wallet refund request route", () => {
         availableBalance: 12,
       },
     });
+    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
+      refundRequestId: 123,
+      userId: "user-1",
+      outcome: "failed_credit_available",
+      amount: 8,
+      currency: "GBP",
+    });
     expect(serialized).not.toContain("secret raw body");
     expect(serialized).not.toContain("Bearer");
   });
@@ -293,6 +333,13 @@ describe("wallet refund request route", () => {
         },
       },
     });
+    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
+      refundRequestId: 123,
+      userId: "user-1",
+      outcome: "manual_review",
+      amount: 8,
+      currency: "GBP",
+    });
   });
 
   it("does not immediately retry a recently failed automatic refund attempt", async () => {
@@ -314,6 +361,16 @@ describe("wallet refund request route", () => {
       status: "failed",
       message: "Refund could not complete. The funds remain available in your Fair Play Wallet.",
     });
+    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
+      refundRequestId: 123,
+      userId: "user-1",
+      outcome: "requested",
+      amount: 8,
+      currency: "GBP",
+    });
+    expect(sendWalletRefundEmailMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "failed_credit_available" })
+    );
   });
 
   it("returns processing for duplicate requests while an attempt is already active", async () => {
@@ -351,6 +408,9 @@ describe("wallet refund request route", () => {
         },
       },
     });
+    expect(sendWalletRefundEmailMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "requested" })
+    );
   });
 
   it("does not process an existing completed refund request again", async () => {
@@ -434,6 +494,13 @@ describe("wallet refund request route", () => {
     });
     expect(firstBody.automatic_refund.status).toBe("completed");
     expect(secondBody.automatic_refund.status).toBe("processing");
+    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
+      refundRequestId: 55,
+      userId: "user-1",
+      outcome: "completed",
+      amount: 8,
+      currency: "GBP",
+    });
   });
 
   it("returns an existing active request without treating it as an error", async () => {
@@ -455,6 +522,9 @@ describe("wallet refund request route", () => {
       },
       already_exists: true,
     });
+    expect(sendWalletRefundEmailMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "requested" })
+    );
   });
 
   it("maps missing or unowned source credits to 404", async () => {
