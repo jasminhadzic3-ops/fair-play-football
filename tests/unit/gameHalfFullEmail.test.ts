@@ -161,9 +161,22 @@ describe("sendGameHalfFullEmails", () => {
 
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        subject: "Game Half Full: Friday Football",
         idempotencyKey: "game_half_full:game:10:recipient:user-1",
       })
     );
+    const email = sendResendEmailMock.mock.calls[0][0] as {
+      html: string;
+      text: string;
+    };
+
+    expect(email.text).toContain("Friday Football is half full.");
+    expect(email.text).toContain("Open the game to book your place.");
+    expect(email.text).toContain("Places are first paid, first confirmed.");
+    expect(email.text).toContain("View game details: http://localhost:3000/?open_game_id=10#games");
+    expect(email.html).toContain("Game Half Full");
+    expect(email.html).toContain("View game details");
+    expect(email.html).toContain("first paid, first confirmed");
   });
 
   it("uses a hashed test-recipient delivery key instead of storing the email address in the ledger key", async () => {

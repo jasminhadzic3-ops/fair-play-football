@@ -115,7 +115,7 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
   const gameTime = game.time || "TBD";
   const gamePrice = formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(game.id);
-  const subject = `New game available: ${gameTitle}`;
+  const subject = `Game Available: ${gameTitle}`;
   let sentCount = 0;
 
   for (const recipient of recipients) {
@@ -123,38 +123,38 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
     const text = [
       `Hi ${greetingName},`,
       "",
-      "A new Fair Play Football game is now available to book.",
+      `A new game is available: ${gameTitle}.`,
       "",
-      "View the match details and book your spot.",
+      "Open the game to book your place.",
       "",
-      "Places are limited and confirmed on a first paid, first served basis.",
+      "Places are first paid, first confirmed.",
       "",
       `Game: ${gameTitle}`,
       `Location: ${gameLocation}`,
       `Kick-off: ${gameTime}`,
       `Price: ${gamePrice}`,
       "",
-      `View game: ${gameUrl}`,
+      `View game details: ${gameUrl}`,
     ].join("\n");
 
     const html = renderEmailLayout({
-      previewText: `A new game has been added to Fair Play Football: ${gameTitle}.`,
-      title: "New game available",
+      previewText: `A new game is available: ${gameTitle}.`,
+      title: "Game Available",
       ctaHref: gameUrl,
-      ctaLabel: "View game",
+      ctaLabel: "View game details",
       footerText: "Fair Play Football will keep you updated.",
       bodyHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
           Hi ${escapeHtml(greetingName)},
         </p>
         <p style="margin:0 0 18px;color:#d4d4d8;">
-          A new Fair Play Football game is now available to book.
+          A new game is available: <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          View the match details and book your spot.
+          Open the game to book your place.
         </p>
         <p style="margin:0 0 22px;color:#d4d4d8;">
-          Places are limited and confirmed on a <strong style="color:#ffffff;">first paid, first served</strong> basis.
+          Places are <strong style="color:#ffffff;">first paid, first confirmed</strong>.
         </p>
 
         <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">

@@ -127,11 +127,24 @@ describe("sendNewGamePostedEmails test-recipient personalization", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "jasminhadzic3@gmail.com",
+        subject: "Game Available: Friday Football",
         idempotencyKey: "new_game_posted:game:10:recipient:jasminhadzic3@gmail.com",
         text: expect.stringContaining("Hi Jasmin,"),
         html: expect.stringContaining("Hi Jasmin,"),
       })
     );
+    const email = sendResendEmailMock.mock.calls[0][0] as {
+      html: string;
+      text: string;
+    };
+
+    expect(email.text).toContain("A new game is available: Friday Football.");
+    expect(email.text).toContain("Open the game to book your place.");
+    expect(email.text).toContain("Places are first paid, first confirmed.");
+    expect(email.text).toContain("View game details: http://localhost:3000/?open_game_id=10#games");
+    expect(email.html).toContain("Game Available");
+    expect(email.html).toContain("View game details");
+    expect(email.html).toContain("first paid, first confirmed");
   });
 
   it("falls back to Player when no matching test-recipient profile exists", async () => {
