@@ -18,6 +18,13 @@ type WalletTransaction = {
   created_at: string | null;
 };
 
+type WalletActivityGame = {
+  id: number;
+  title: string | null;
+  starts_at: string | null;
+  time: string | null;
+};
+
 type WalletBalanceBreakdown = {
   completed_balance?: number | string | null;
   reserved_refund_amount?: number | string | null;
@@ -76,6 +83,68 @@ function formatDate(dateValue: string | null) {
   });
 }
 
+function formatGameKickoff(game: WalletActivityGame | null | undefined) {
+  if (!game) {
+    return "";
+  }
+
+  if (!game.starts_at) {
+    return game.time?.trim() || "";
+  }
+
+  const startsAt = new Date(game.starts_at);
+
+  if (Number.isNaN(startsAt.getTime())) {
+    return game.time?.trim() || "";
+  }
+
+  const date = startsAt.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const time = startsAt.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  return `${date}, ${time}`;
+}
+
+function getMetadataPositiveInteger(metadata: Record<string, unknown> | null, key: string) {
+  const value = metadata?.[key];
+  const parsedValue = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function getWalletActivityGameId(transaction: WalletTransaction) {
+  return transaction.game_id ?? getMetadataPositiveInteger(transaction.metadata, "original_game_id");
+}
+
+function formatWalletActivityLedgerDate(transaction: WalletTransaction, ledgerDate: string) {
+  if (!ledgerDate) {
+    return "";
+  }
+
+  switch (transaction.transaction_type) {
+    case "wallet_booking_payment":
+      return `Paid on ${ledgerDate}`;
+    case "refund_requested":
+      return `Requested on ${ledgerDate}`;
+    case "refund_completed":
+      return `Refunded on ${ledgerDate}`;
+    case "game_cancelled_credit":
+    case "player_cancelled_credit":
+    case "admin_credit":
+    case "promotion_bonus":
+      return `Credited on ${ledgerDate}`;
+    default:
+      return `Activity on ${ledgerDate}`;
+  }
+}
+
 function formatTransactionType(transactionType: string | null) {
   if (!transactionType) {
     return "Wallet activity";
@@ -110,6 +179,7 @@ export default function WalletPage() {
   const [completedBalance, setCompletedBalance] = useState(0);
   const [reservedRefundAmount, setReservedRefundAmount] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [activityGamesById, setActivityGamesById] = useState<Record<number, WalletActivityGame>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [submittingRefundSourceId, setSubmittingRefundSourceId] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -129,6 +199,7 @@ export default function WalletPage() {
       setErrorMessage(userError.message);
       setUserId(null);
       setTransactions([]);
+      setActivityGamesById({});
       setAvailableBalance(0);
       setCompletedBalance(0);
       setReservedRefundAmount(0);
@@ -140,6 +211,7 @@ export default function WalletPage() {
 
     if (!user) {
       setTransactions([]);
+      setActivityGamesById({});
       setAvailableBalance(0);
       setCompletedBalance(0);
       setReservedRefundAmount(0);
@@ -161,6 +233,7 @@ export default function WalletPage() {
     if (balanceError || transactionError) {
       setErrorMessage(balanceError?.message || transactionError?.message || "Unable to load wallet.");
       setTransactions([]);
+      setActivityGamesById({});
       setAvailableBalance(0);
       setCompletedBalance(0);
       setReservedRefundAmount(0);
@@ -176,7 +249,29 @@ export default function WalletPage() {
     setAvailableBalance(Number(balanceBreakdown?.available_balance ?? 0));
     setCompletedBalance(Number(balanceBreakdown?.completed_balance ?? 0));
     setReservedRefundAmount(Number(balanceBreakdown?.reserved_refund_amount ?? 0));
-    setTransactions((transactionData ?? []) as WalletTransaction[]);
+    const loadedTransactions = (transactionData ?? []) as WalletTransaction[];
+    const gameIds = Array.from(
+      new Set(
+        loadedTransactions
+          .map(getWalletActivityGameId)
+          .filter((gameId): gameId is number => Number.isInteger(gameId))
+      )
+    );
+    let loadedGamesById: Record<number, WalletActivityGame> = {};
+
+    if (gameIds.length > 0) {
+      const { data: gameData } = await supabase
+        .from("games")
+        .select("id,title,starts_at,time")
+        .in("id", gameIds);
+
+      loadedGamesById = Object.fromEntries(
+        ((gameData ?? []) as WalletActivityGame[]).map((game) => [game.id, game])
+      );
+    }
+
+    setTransactions(loadedTransactions);
+    setActivityGamesById(loadedGamesById);
     setIsLoading(false);
   }, []);
 
@@ -396,7 +491,11 @@ export default function WalletPage() {
                     const amount = Number(transaction.amount ?? 0);
                     const description =
                       transaction.description?.trim() || formatTransactionType(transaction.transaction_type);
-                    const formattedDate = formatDate(transaction.created_at);
+                    const activityGameId = getWalletActivityGameId(transaction);
+                    const activityGame = activityGameId ? activityGamesById[activityGameId] : null;
+                    const gameKickoff = formatGameKickoff(activityGame);
+                    const ledgerDate = formatDate(transaction.created_at);
+                    const ledgerMetadata = formatWalletActivityLedgerDate(transaction, ledgerDate);
 
                     return (
                       <div
@@ -406,7 +505,9 @@ export default function WalletPage() {
                         <div className="min-w-0">
                           <p className="break-words text-sm font-bold text-white">{description}</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                            {formattedDate ? <span>{formattedDate}</span> : null}
+                            {activityGame?.title ? <span>{activityGame.title}</span> : null}
+                            {gameKickoff ? <span>{gameKickoff}</span> : ledgerDate ? <span>{ledgerDate}</span> : null}
+                            {activityGame && ledgerMetadata ? <span>{ledgerMetadata}</span> : null}
                             {transaction.status ? <span>{transaction.status}</span> : null}
                           </div>
                         </div>
