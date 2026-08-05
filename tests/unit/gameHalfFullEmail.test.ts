@@ -161,7 +161,7 @@ describe("sendGameHalfFullEmails", () => {
 
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: "Game Half Full: Friday Football",
+        subject: "Game Filling Up Fast ⚽",
         idempotencyKey: "game_half_full:game:10:recipient:user-1",
       })
     );
@@ -170,13 +170,16 @@ describe("sendGameHalfFullEmails", () => {
       text: string;
     };
 
-    expect(email.text).toContain("Friday Football is half full.");
-    expect(email.text).toContain("Open the game to book your place.");
-    expect(email.text).toContain("Places are first paid, first confirmed.");
-    expect(email.text).toContain("View game details: http://localhost:3000/?open_game_id=10#games");
-    expect(email.html).toContain("Game Half Full");
-    expect(email.html).toContain("View game details");
-    expect(email.html).toContain("first paid, first confirmed");
+    expect(email.text).toContain("This game is already over halfway full.");
+    expect(email.text).toContain("If you're planning to play, now's a good time to secure your spot.");
+    expect(email.text).toContain("📅 Friday 7pm");
+    expect(email.text).toContain("🕒 Friday 7pm");
+    expect(email.text).toContain("📍 Test Pitch");
+    expect(email.text).toContain("💷 £8.00");
+    expect(email.text).toContain("Book Now: http://localhost:3000/?open_game_id=10#games");
+    expect(email.html).toContain("Game Filling Up Fast ⚽");
+    expect(email.html).toContain("Book Now");
+    expect(email.html).toContain("booking@fairplayfootball.co.uk");
   });
 
   it("uses a hashed test-recipient delivery key instead of storing the email address in the ledger key", async () => {

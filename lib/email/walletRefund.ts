@@ -2,10 +2,16 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
-import { escapeHtml, formatPrice, getSiteUrl, renderEmailLayout } from "./shared";
+import {
+  escapeHtml,
+  formatPrice,
+  getSiteUrl,
+  renderEmailParagraphs,
+  renderPremiumEmailLayout,
+  renderPremiumInfoCard,
+} from "./shared";
 
 export type WalletRefundEmailOutcome =
-  | "requested"
   | "processing"
   | "completed"
   | "failed_credit_available"
@@ -30,19 +36,6 @@ function getFirstName(playerName: string | null | undefined) {
 
 function getOutcomeCopy(outcome: WalletRefundEmailOutcome, formattedAmount: string) {
   switch (outcome) {
-    case "requested":
-      return {
-        subject: "Refund Requested",
-        heading: "Refund Requested",
-        previewText: `We’ve received your request to refund ${formattedAmount}.`,
-        paragraphs: [
-          `We’ve received your request to refund ${formattedAmount} from your Fair Play Wallet to your original payment method.`,
-          "You can track the status from your Wallet.",
-        ],
-        amountLabel: "Refund amount",
-        statusLabel: "Refund Requested",
-        ctaLabel: "View refund status",
-      };
     case "processing":
       return {
         subject: "Refund Processing",
@@ -54,33 +47,34 @@ function getOutcomeCopy(outcome: WalletRefundEmailOutcome, formattedAmount: stri
         ],
         amountLabel: "Refund amount",
         statusLabel: "Refund Processing",
-        ctaLabel: "View refund status",
+        ctaLabel: "View Wallet",
       };
     case "completed":
       return {
-        subject: "Refund Completed",
-        heading: "Refund Completed",
-        previewText: `Your refund of ${formattedAmount} has been completed.`,
+        subject: "Your Refund Has Been Processed",
+        heading: "Your Refund Has Been Processed",
+        previewText: "Your refund has been processed successfully.",
         paragraphs: [
-          `Your refund of ${formattedAmount} has been completed to your original payment method.`,
-          "Your bank or card provider may take several working days to display the refund.",
+          "Your refund has been processed successfully.",
+          "Depending on your bank, it may take a few working days to appear in your account.",
         ],
         amountLabel: "Refund amount",
-        statusLabel: "Refund Completed",
-        ctaLabel: "View wallet",
+        statusLabel: "Returned to your original payment method",
+        ctaLabel: "View Wallet",
+        completedRefund: true,
       };
     case "failed_credit_available":
       return {
-        subject: "Refund Returned to Wallet",
-        heading: "Refund Returned to Wallet",
-        previewText: `Your ${formattedAmount} is available again in your Fair Play Wallet.`,
+        subject: "Credit Added To Your Wallet",
+        heading: "Credit Added To Your Wallet",
+        previewText: `${formattedAmount} has been added to your Fair Play Wallet.`,
         paragraphs: [
-          `We couldn’t complete your refund of ${formattedAmount} to your original payment method.`,
-          "The credit is available again in your Fair Play Wallet. You can use it for another game or request the refund again.",
+          `${formattedAmount} has been added to your Fair Play Wallet.`,
         ],
-        amountLabel: "Available wallet credit",
-        statusLabel: "Refund Returned to Wallet",
-        ctaLabel: "View wallet",
+        amountLabel: "Amount",
+        statusLabel: "Refund credited to your wallet",
+        ctaLabel: "View Wallet",
+        reason: "Refund credited to your wallet",
       };
     case "manual_review":
       return {
@@ -93,7 +87,7 @@ function getOutcomeCopy(outcome: WalletRefundEmailOutcome, formattedAmount: stri
         ],
         amountLabel: "Refund amount",
         statusLabel: "Refund Under Review",
-        ctaLabel: "View refund status",
+        ctaLabel: "View Wallet",
       };
   }
 }
@@ -138,43 +132,42 @@ export async function sendWalletRefundEmail({
     `Hi ${firstName},`,
     "",
     ...outcomeCopy.paragraphs.flatMap((paragraph) => [paragraph, ""]),
-    `${outcomeCopy.amountLabel}: ${formattedAmount}`,
-    outcomeCopy.statusLabel ? `Refund status: ${outcomeCopy.statusLabel}` : null,
+    "reason" in outcomeCopy && outcomeCopy.reason ? "Reason" : `${outcomeCopy.amountLabel}: ${formattedAmount}`,
+    "reason" in outcomeCopy && outcomeCopy.reason
+      ? outcomeCopy.reason
+      : "completedRefund" in outcomeCopy && outcomeCopy.completedRefund
+        ? outcomeCopy.statusLabel
+      : outcomeCopy.statusLabel
+        ? `Refund status: ${outcomeCopy.statusLabel}`
+        : null,
     "",
     `${outcomeCopy.ctaLabel}: ${walletUrl}`,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const html = renderEmailLayout({
+  const html = renderPremiumEmailLayout({
     previewText: outcomeCopy.previewText,
     title: outcomeCopy.heading,
     ctaHref: walletUrl,
     ctaLabel: outcomeCopy.ctaLabel,
-    footerText: "Fair Play Football will keep your Wallet updated.",
-    bodyHtml: `
+    introHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(firstName)},
       </p>
-      ${outcomeCopy.paragraphs
-        .map(
-          (paragraph) => `<p style="margin:0 0 18px;color:#d4d4d8;">
-            ${escapeHtml(paragraph)}
-          </p>`
-        )
-        .join("")}
-      <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
-        <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-          Refund details
-        </p>
-        <p style="margin:0 0 10px;color:#f4f4f5;"><strong>${escapeHtml(outcomeCopy.amountLabel)}:</strong> ${escapeHtml(formattedAmount)}</p>
-        ${
-          outcomeCopy.statusLabel
-            ? `<p style="margin:0;color:#f4f4f5;"><strong>Refund status:</strong> ${escapeHtml(outcomeCopy.statusLabel)}</p>`
-            : ""
-        }
-      </div>
+      ${renderEmailParagraphs(outcomeCopy.paragraphs)}
     `,
+    cardHtml: "reason" in outcomeCopy && outcomeCopy.reason
+      ? renderPremiumInfoCard("Reason", [{ value: outcomeCopy.reason }])
+      : "completedRefund" in outcomeCopy && outcomeCopy.completedRefund
+        ? renderPremiumInfoCard("Refund Details", [
+            { icon: "💷", value: formattedAmount },
+            { value: outcomeCopy.statusLabel },
+          ])
+      : renderPremiumInfoCard("Refund Details", [
+          { label: `${outcomeCopy.amountLabel}:`, value: formattedAmount },
+          { label: "Status:", value: outcomeCopy.statusLabel },
+        ]),
   });
 
   return sendResendEmail({

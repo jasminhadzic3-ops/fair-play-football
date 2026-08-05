@@ -2,7 +2,15 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
-import { escapeHtml, formatPrice, getGameUrl, renderEmailLayout } from "./shared";
+import {
+  escapeHtml,
+  formatEmailGameDateTime,
+  formatPrice,
+  getGameUrl,
+  renderEmailParagraphs,
+  renderPremiumEmailLayout,
+  renderPremiumGameDetailsCard,
+} from "./shared";
 
 type NewGamePostedEmailParams = {
   gameId: number;
@@ -13,6 +21,7 @@ type GameEmailData = {
   title: string | null;
   location: string | null;
   time: string | null;
+  starts_at: string | null;
   price: number | null;
 };
 
@@ -101,7 +110,7 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
 
   const { data: game, error: gameError } = await supabaseAdmin
     .from("games")
-    .select("id,title,location,time,price")
+    .select("id,title,location,time,starts_at,price")
     .eq("id", params.gameId)
     .maybeSingle<GameEmailData>();
 
@@ -114,12 +123,11 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
   }
 
   const recipients = await getNewGameRecipients();
-  const gameTitle = game.title || "New football match";
   const gameLocation = game.location || "TBD";
-  const gameTime = game.time || "TBD";
+  const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
   const gamePrice = formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(game.id);
-  const subject = `Game Available: ${gameTitle}`;
+  const subject = "New Game Available ⚽";
   let sentCount = 0;
 
   for (const recipient of recipients) {
@@ -127,52 +135,37 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
     const text = [
       `Hi ${greetingName},`,
       "",
-      `A new game is available: ${gameTitle}.`,
+      "A new Fair Play Football game has just been posted.",
       "",
-      "Open the game to book your place.",
+      "Game Details",
+      `📅 ${kickoff.date}`,
+      `🕒 ${kickoff.time}`,
+      `📍 ${gameLocation}`,
+      `💷 ${gamePrice}`,
       "",
-      "Places are first paid, first confirmed.",
+      `View & Book Your Spot: ${gameUrl}`,
       "",
-      `Game: ${gameTitle}`,
-      `Location: ${gameLocation}`,
-      `Kick-off: ${gameTime}`,
-      `Price: ${gamePrice}`,
-      "",
-      `View game details: ${gameUrl}`,
+      "Spots are allocated on a first come, first served basis.",
     ].join("\n");
 
-    const html = renderEmailLayout({
-      previewText: `A new game is available: ${gameTitle}.`,
-      title: "Game Available",
+    const html = renderPremiumEmailLayout({
+      previewText: "A new Fair Play Football game has just been posted.",
+      title: "New Game Available ⚽",
       ctaHref: gameUrl,
-      ctaLabel: "View game details",
-      footerText: "Fair Play Football will keep you updated.",
-      bodyHtml: `
+      ctaLabel: "View & Book Your Spot",
+      footerText: "Spots are allocated on a first come, first served basis.",
+      introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
           Hi ${escapeHtml(greetingName)},
         </p>
-        <p style="margin:0 0 18px;color:#d4d4d8;">
-          A new game is available: <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong>.
-        </p>
-        <p style="margin:0 0 22px;color:#d4d4d8;">
-          Open the game to book your place.
-        </p>
-        <p style="margin:0 0 22px;color:#d4d4d8;">
-          Places are <strong style="color:#ffffff;">first paid, first confirmed</strong>.
-        </p>
-
-        <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
-          <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-            Match details
-          </p>
-          <div style="margin:0;">
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Game:</strong> ${escapeHtml(gameTitle)}</p>
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Location:</strong> ${escapeHtml(gameLocation)}</p>
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Kick-off:</strong> ${escapeHtml(gameTime)}</p>
-            <p style="margin:0;color:#f4f4f5;"><strong>Price:</strong> ${escapeHtml(gamePrice)}</p>
-          </div>
-        </div>
+        ${renderEmailParagraphs(["A new Fair Play Football game has just been posted."])}
       `,
+      cardHtml: renderPremiumGameDetailsCard({
+        date: kickoff.date,
+        time: kickoff.time,
+        venue: gameLocation,
+        price: gamePrice,
+      }),
     });
 
     await sendResendEmail({

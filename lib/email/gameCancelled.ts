@@ -2,7 +2,14 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
-import { escapeHtml, formatPrice, getSiteUrl, renderEmailLayout } from "./shared";
+import {
+  escapeHtml,
+  formatEmailGameDateTime,
+  getSiteUrl,
+  renderEmailParagraphs,
+  renderPremiumEmailLayout,
+  renderPremiumGameDetailsCard,
+} from "./shared";
 
 type GameCancelledEmailParams = {
   gameId: number;
@@ -13,6 +20,7 @@ type GameEmailData = {
   title: string | null;
   location: string | null;
   time: string | null;
+  starts_at: string | null;
   price: number | null;
 };
 
@@ -136,7 +144,7 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
 
   const { data: game, error: gameError } = await supabaseAdmin
     .from("games")
-    .select("id,title,location,time,price")
+    .select("id,title,location,time,starts_at,price")
     .eq("id", params.gameId)
     .maybeSingle<GameEmailData>();
 
@@ -149,13 +157,10 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
   }
 
   const recipients = await getGameCancelledRecipients(game.id);
-  const gameTitle = game.title || "Your football match";
   const gameLocation = game.location || "TBD";
-  const gameTime = game.time || "TBD";
-  const gamePrice = formatPrice(game.price, "GBP");
+  const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
   const walletUrl = `${getSiteUrl()}/wallet`;
-  const browseGamesUrl = `${getSiteUrl()}/#games`;
-  const subject = `Game Cancelled: ${gameTitle}`;
+  const subject = "Your Game Has Been Cancelled";
   let sentCount = 0;
 
   for (const recipient of recipients) {
@@ -163,54 +168,42 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
     const text = [
       `Hi ${firstName},`,
       "",
-      `${gameTitle} has been cancelled.`,
+      "Unfortunately this game has been cancelled.",
       "",
-      `${gamePrice} has been added to your Fair Play Wallet and is ready to use.`,
+      "Your payment has already been returned to your Fair Play Wallet as credit.",
       "",
-      "Use it for another game, or request a refund to your original payment method from Wallet.",
+      "If you'd prefer a refund to your original payment method, you can request one from your Wallet.",
       "",
-      `Game: ${gameTitle}`,
-      `Location: ${gameLocation}`,
-      `Kick-off: ${gameTime}`,
-      `Wallet credit: ${gamePrice}`,
+      "Game Details",
+      `📅 ${kickoff.date}`,
+      `🕒 ${kickoff.time}`,
+      `📍 ${gameLocation}`,
       "",
-      `View wallet: ${walletUrl}`,
-      `Browse games: ${browseGamesUrl}`,
+      `Open My Wallet: ${walletUrl}`,
     ]
       .filter(Boolean)
       .join("\n");
 
-    const html = renderEmailLayout({
-      previewText: `Your Fair Play Wallet credit for ${gameTitle} is ready.`,
-      title: "Game Cancelled",
+    const html = renderPremiumEmailLayout({
+      previewText: "Unfortunately this game has been cancelled.",
+      title: "Your Game Has Been Cancelled",
       ctaHref: walletUrl,
-      ctaLabel: "View wallet",
-      footerText: "Fair Play Football will keep your Wallet updated.",
-      bodyHtml: `
+      ctaLabel: "Open My Wallet",
+      introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
           Hi ${escapeHtml(firstName)},
         </p>
-        <p style="margin:0 0 18px;color:#d4d4d8;">
-          ${escapeHtml(gameTitle)} has been cancelled.
-        </p>
-        <p style="margin:0 0 22px;color:#d4d4d8;">
-          ${escapeHtml(gamePrice)} has been added to your Fair Play Wallet and is ready to use.
-        </p>
-        <p style="margin:0 0 22px;color:#d4d4d8;">
-          Use it for another game, or request a refund to your original payment method from Wallet.
-        </p>
-        <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
-          <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-            Game details
-          </p>
-          <div style="margin:0;">
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Game:</strong> ${escapeHtml(gameTitle)}</p>
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Location:</strong> ${escapeHtml(gameLocation)}</p>
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Kick-off:</strong> ${escapeHtml(gameTime)}</p>
-            <p style="margin:0;color:#f4f4f5;"><strong>Wallet credit:</strong> ${escapeHtml(gamePrice)}</p>
-          </div>
-        </div>
+        ${renderEmailParagraphs([
+          "Unfortunately this game has been cancelled.",
+          "Your payment has already been returned to your Fair Play Wallet as credit.",
+          "If you'd prefer a refund to your original payment method, you can request one from your Wallet.",
+        ])}
       `,
+      cardHtml: renderPremiumGameDetailsCard({
+        date: kickoff.date,
+        time: kickoff.time,
+        venue: gameLocation,
+      }),
     });
 
     await sendResendEmail({

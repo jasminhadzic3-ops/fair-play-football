@@ -173,7 +173,7 @@ describe("sendGameCancelledEmails", () => {
       1,
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "Game Cancelled: Friday Football",
+        subject: "Your Game Has Been Cancelled",
         idempotencyKey: "game_cancelled:game:10:recipient:user-with-profile-email",
       })
     );
@@ -190,16 +190,16 @@ describe("sendGameCancelledEmails", () => {
     };
 
     expect(firstEmail.text).toContain("Hi Profile,");
-    expect(firstEmail.text).toContain("Friday Football has been cancelled.");
-    expect(firstEmail.text).toContain("£8.00 has been added to your Fair Play Wallet and is ready to use.");
-    expect(firstEmail.text).toContain("Use it for another game, or request a refund to your original payment method from Wallet.");
-    expect(firstEmail.text).toContain("Location: Test Pitch");
-    expect(firstEmail.text).toContain("Kick-off: Friday 7pm");
-    expect(firstEmail.text).toContain("Wallet credit: £8.00");
-    expect(firstEmail.text).toContain("View wallet: http://localhost:3000/wallet");
-    expect(firstEmail.text).toContain("Browse games: http://localhost:3000/#games");
-    expect(firstEmail.html).toContain("Game Cancelled");
-    expect(firstEmail.html).toContain("View wallet");
+    expect(firstEmail.text).toContain("Unfortunately this game has been cancelled.");
+    expect(firstEmail.text).toContain("Your payment has already been returned to your Fair Play Wallet as credit.");
+    expect(firstEmail.text).toContain("If you'd prefer a refund to your original payment method, you can request one from your Wallet.");
+    expect(firstEmail.text).toContain("📅 Friday 7pm");
+    expect(firstEmail.text).toContain("🕒 Friday 7pm");
+    expect(firstEmail.text).toContain("📍 Test Pitch");
+    expect(firstEmail.text).toContain("Open My Wallet: http://localhost:3000/wallet");
+    expect(firstEmail.html).toContain("Your Game Has Been Cancelled");
+    expect(firstEmail.html).toContain("Open My Wallet");
+    expect(firstEmail.html).toContain("booking@fairplayfootball.co.uk");
     expect(`${firstEmail.text}\n${firstEmail.html}`).not.toMatch(/automatic(?:ally)? refund/i);
     expect(`${firstEmail.text}\n${firstEmail.html}`).not.toMatch(/reply to this email/i);
   });

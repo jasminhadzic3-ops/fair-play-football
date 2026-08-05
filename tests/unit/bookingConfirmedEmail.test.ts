@@ -118,7 +118,7 @@ describe("sendBookingConfirmedEmail", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "Booking Confirmed: Friday Football",
+        subject: "You're Booked In ⚽",
         idempotencyKey: "booking_confirmed:booking:123",
       })
     );
@@ -127,11 +127,16 @@ describe("sendBookingConfirmedEmail", () => {
       text: string;
     };
 
-    expect(email.text).toContain("Your place is confirmed for Friday Football.");
-    expect(email.text).toContain("View game details: http://localhost:3000/?open_game_id=10#games");
-    expect(email.html).toContain("Booking Confirmed");
-    expect(email.html).toContain("View game details");
-    expect(email.html).toContain("Your place is confirmed for");
+    expect(email.text).toContain("Your spot is confirmed — we'll see you on the pitch. ⚽");
+    expect(email.text).toContain("📅 Friday 7pm");
+    expect(email.text).toContain("🕒 Friday 7pm");
+    expect(email.text).toContain("📍 Test Pitch");
+    expect(email.text).toContain("💷 £8.00");
+    expect(email.text).toContain("View Your Booking: http://localhost:3000/?open_game_id=10#games");
+    expect(email.text).toContain("We'll send you a reminder before kick-off.");
+    expect(email.html).toContain("You&#039;re Booked In ⚽");
+    expect(email.html).toContain("View Your Booking");
+    expect(email.html).toContain("booking@fairplayfootball.co.uk");
   });
 
   it("falls back to Supabase Auth email when profile email is missing", async () => {

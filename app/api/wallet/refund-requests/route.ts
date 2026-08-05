@@ -328,14 +328,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!result.alreadyExists) {
-      await sendRefundOutcomeEmail({
-        refundRequestId: result.refundRequestId,
-        userId: user.id,
-        outcome: "requested",
-      });
-    }
-
     let automaticRefund:
       | ReturnType<typeof automaticRefundDisabled>
       | ReturnType<typeof automaticRefundAlreadyCompleted>

@@ -2,7 +2,15 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
-import { escapeHtml, formatPrice, getSiteUrl, renderEmailLayout } from "./shared";
+import {
+  escapeHtml,
+  formatPrice,
+  getSiteUrl,
+  renderEmailParagraphs,
+  renderPremiumEmailLayout,
+  renderPremiumGameDetailsCard,
+  renderPremiumInfoCard,
+} from "./shared";
 
 export type PlayerBookingCancellationEmailOutcome =
   | "wallet_restored"
@@ -82,14 +90,17 @@ function getOutcomeCopy(
   switch (outcome) {
     case "wallet_restored":
       return {
-        subject: `Booking Cancelled: ${gameTitle}`,
-        heading: "Booking Cancelled",
-        previewText: `Your Fair Play Wallet credit for ${gameTitle} is ready.`,
+        subject: "Credit Added To Your Wallet",
+        heading: "Credit Added To Your Wallet",
+        previewText: `${amount} has been added to your Fair Play Wallet.`,
         paragraphs: [
-          `Your booking for ${gameTitle} has been cancelled.`,
           `${amount} has been added to your Fair Play Wallet and is ready to use.`,
-          "Use it for another game, or request a refund to your original payment method from Wallet.",
         ],
+        exactParagraphs: [
+          `${amount} has been added to your Fair Play Wallet.`,
+        ],
+        reason: "Player cancellation",
+        ctaLabel: "View Wallet",
       };
     case "no_refund_within_24h":
       return {
@@ -100,6 +111,12 @@ function getOutcomeCopy(
           `Your booking for ${gameTitle} has been cancelled.`,
           "No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.",
         ],
+        exactParagraphs: [
+          `Your booking for ${gameTitle} has been cancelled.`,
+          "No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.",
+        ],
+        reason: null,
+        ctaLabel: "View Wallet",
       };
   }
 }
@@ -157,68 +174,44 @@ export async function sendPlayerBookingCancelledEmail({
   const formattedAmount = amount === null ? null : formatPrice(amount, currency || "GBP");
   const outcomeCopy = getOutcomeCopy(outcome, formattedAmount, gameTitle);
   const walletUrl = `${getSiteUrl()}/wallet`;
-  const browseGamesUrl = `${getSiteUrl()}/#games`;
   const idempotencyKey = `player_booking_cancelled:cancellation:${cancellationId}:outcome:${outcome}`;
 
   const text = [
     `Hi ${playerName},`,
     "",
-    ...outcomeCopy.paragraphs.flatMap((paragraph) => [paragraph, ""]),
+    ...(outcomeCopy.exactParagraphs ?? outcomeCopy.paragraphs).flatMap((paragraph) => [paragraph, ""]),
+    outcomeCopy.reason ? "Reason" : null,
+    outcomeCopy.reason,
     "",
-    `Game: ${gameTitle}`,
-    `Date: ${kickoff.date}`,
-    `Time: ${kickoff.time}`,
-    `Venue: ${gameLocation}`,
-    formattedAmount ? `Wallet credit: ${formattedAmount}` : null,
+    outcomeCopy.reason ? null : "Game Details",
+    outcomeCopy.reason ? null : `📅 ${kickoff.date}`,
+    outcomeCopy.reason ? null : `🕒 ${kickoff.time}`,
+    outcomeCopy.reason ? null : `📍 ${gameLocation}`,
     `Booking ID: ${bookingId}`,
     "",
-    `View wallet: ${walletUrl}`,
-    `Browse games: ${browseGamesUrl}`,
+    `${outcomeCopy.ctaLabel}: ${walletUrl}`,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const html = renderEmailLayout({
+  const html = renderPremiumEmailLayout({
     previewText: outcomeCopy.previewText,
     title: outcomeCopy.heading,
     ctaHref: walletUrl,
-    ctaLabel: "View wallet",
-    footerText: "Fair Play Football will keep your Wallet updated.",
-    bodyHtml: `
+    ctaLabel: outcomeCopy.ctaLabel,
+    introHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(playerName)},
       </p>
-      ${outcomeCopy.paragraphs
-        .map(
-          (paragraph) => `<p style="margin:0 0 18px;color:#d4d4d8;">
-            ${escapeHtml(paragraph)}
-          </p>`
-        )
-        .join("")}
-
-      <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
-        <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-          Game details
-        </p>
-        <div style="margin:0;">
-          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Game:</strong> ${escapeHtml(gameTitle)}</p>
-          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Date:</strong> ${escapeHtml(kickoff.date)}</p>
-          <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Time:</strong> ${escapeHtml(kickoff.time)}</p>
-          <p style="margin:0;color:#f4f4f5;"><strong>Venue:</strong> ${escapeHtml(gameLocation)}</p>
-        </div>
-      </div>
-
-      ${
-        formattedAmount
-          ? `<div style="border-top:1px solid #27272a;padding-top:18px;color:#a1a1aa;font-size:13px;line-height:21px;">
-              <p style="margin:0 0 6px;">Wallet credit: ${escapeHtml(formattedAmount)}</p>
-              <p style="margin:0;">Booking ID: ${bookingId}</p>
-            </div>`
-          : `<div style="border-top:1px solid #27272a;padding-top:18px;color:#a1a1aa;font-size:13px;line-height:21px;">
-              <p style="margin:0;">Booking ID: ${bookingId}</p>
-            </div>`
-      }
+      ${renderEmailParagraphs(outcomeCopy.exactParagraphs ?? outcomeCopy.paragraphs)}
     `,
+    cardHtml: outcomeCopy.reason
+      ? renderPremiumInfoCard("Reason", [{ value: outcomeCopy.reason }])
+      : renderPremiumGameDetailsCard({
+          date: kickoff.date,
+          time: kickoff.time,
+          venue: gameLocation,
+        }),
   });
 
   return sendResendEmail({

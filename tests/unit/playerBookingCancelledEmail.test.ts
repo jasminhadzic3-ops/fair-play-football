@@ -130,41 +130,39 @@ beforeEach(() => {
 });
 
 describe("sendPlayerBookingCancelledEmail", () => {
-  it.each([
-    [
-      "wallet_restored",
-      "Booking Cancelled: Thursday Football",
-      "Your booking for Thursday Football has been cancelled.",
-      "£8.00 has been added to your Fair Play Wallet and is ready to use.",
-    ],
-    [
-      "no_refund_within_24h",
-      "Booking Cancelled: Thursday Football",
-      "Your booking for Thursday Football has been cancelled.",
-      "No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.",
-    ],
-  ] satisfies Array<[PlayerBookingCancellationEmailOutcome, string, string, string]>)(
-    "renders the %s outcome",
-    async (outcome, subject, firstParagraph, secondParagraph) => {
-      const email = await sendForOutcome(outcome);
+  it("renders wallet-restored cancellations as a credit-added email", async () => {
+    const email = await sendForOutcome("wallet_restored");
 
-      expect(email.to).toBe("profile@example.com");
-      expect(email.subject).toBe(subject);
-      expect(email.text).toContain("Hi Jasmin,");
-      expect(email.text).toContain(firstParagraph);
-      expect(email.text).toContain(secondParagraph);
-      expect(email.html).toContain(firstParagraph);
-      expect(email.html).toContain(secondParagraph);
-      expect(email.html).toContain("Booking Cancelled");
-      expect(email.text).toContain("Date: Thursday, 30 July 2026");
-      expect(email.text).toContain("Time: 19:00");
-      expect(email.text).toContain("Venue: Whittington Park");
-      expect(email.text).toContain("View wallet: https://www.fairplayfootball.co.uk/wallet");
-      expect(email.text).toContain("Browse games: https://www.fairplayfootball.co.uk/#games");
-      expect(email.html).toContain("View wallet");
-      expect(email.idempotencyKey).toBe(`player_booking_cancelled:cancellation:600:outcome:${outcome}`);
-    }
-  );
+    expect(email.to).toBe("profile@example.com");
+    expect(email.subject).toBe("Credit Added To Your Wallet");
+    expect(email.text).toContain("Hi Jasmin,");
+    expect(email.text).toContain("£8.00 has been added to your Fair Play Wallet.");
+    expect(email.text).toContain("Reason");
+    expect(email.text).toContain("Player cancellation");
+    expect(email.text).toContain("View Wallet: https://www.fairplayfootball.co.uk/wallet");
+    expect(email.html).toContain("Credit Added To Your Wallet");
+    expect(email.html).toContain("Player cancellation");
+    expect(email.html).toContain("View Wallet");
+    expect(email.html).toContain("booking@fairplayfootball.co.uk");
+    expect(email.idempotencyKey).toBe("player_booking_cancelled:cancellation:600:outcome:wallet_restored");
+  });
+
+  it("renders within-24h cancellations in the premium shell", async () => {
+    const email = await sendForOutcome("no_refund_within_24h");
+
+    expect(email.to).toBe("profile@example.com");
+    expect(email.subject).toBe("Booking Cancelled: Thursday Football");
+    expect(email.text).toContain("Hi Jasmin,");
+    expect(email.text).toContain("Your booking for Thursday Football has been cancelled.");
+    expect(email.text).toContain("No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.");
+    expect(email.text).toContain("📅 Thursday, 30 July");
+    expect(email.text).toContain("🕒 19:00");
+    expect(email.text).toContain("📍 Whittington Park");
+    expect(email.text).toContain("View Wallet: https://www.fairplayfootball.co.uk/wallet");
+    expect(email.html).toContain("Booking Cancelled");
+    expect(email.html).toContain("View Wallet");
+    expect(email.idempotencyKey).toBe("player_booking_cancelled:cancellation:600:outcome:no_refund_within_24h");
+  });
 
   it("does not include automatic card refund, reply, or organiser-contact wording for wallet credits", async () => {
     const email = await sendForOutcome("wallet_restored");
@@ -195,9 +193,9 @@ describe("sendPlayerBookingCancelledEmail", () => {
     state.game.starts_at = null;
     state.game.time = "Friday 7pm";
 
-    const email = await sendForOutcome("wallet_restored");
+    const email = await sendForOutcome("no_refund_within_24h");
 
-    expect(email.text).toContain("Date: Friday 7pm");
-    expect(email.text).toContain("Time: Friday 7pm");
+    expect(email.text).toContain("📅 Friday 7pm");
+    expect(email.text).toContain("🕒 Friday 7pm");
   });
 });

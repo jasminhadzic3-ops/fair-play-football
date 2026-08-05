@@ -5,7 +5,15 @@ import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmailWithDeliveryTracking } from "./deliveryTracking";
 import { sendResendEmail } from "./resend";
-import { escapeHtml, formatPrice, getGameUrl, renderEmailLayout } from "./shared";
+import {
+  escapeHtml,
+  formatEmailGameDateTime,
+  formatPrice,
+  getGameUrl,
+  renderEmailParagraphs,
+  renderPremiumEmailLayout,
+  renderPremiumGameDetailsCard,
+} from "./shared";
 
 type GameHalfFullEmailParams = {
   gameId: number;
@@ -16,6 +24,7 @@ type GameEmailData = {
   title: string | null;
   location: string | null;
   time: string | null;
+  starts_at: string | null;
   price: number | null;
   max_players: number | null;
 };
@@ -82,7 +91,7 @@ export async function sendGameHalfFullEmails(params: GameHalfFullEmailParams) {
 
   const { data: game, error: gameError } = await supabaseAdmin
     .from("games")
-    .select("id,title,location,time,price,max_players")
+    .select("id,title,location,time,starts_at,price,max_players")
     .eq("id", params.gameId)
     .maybeSingle<GameEmailData>();
 
@@ -115,63 +124,50 @@ export async function sendGameHalfFullEmails(params: GameHalfFullEmailParams) {
   }
 
   const recipients = await getGameHalfFullRecipients();
-  const gameTitle = game.title || "Your football match";
   const gameLocation = game.location || "TBD";
-  const gameTime = game.time || "TBD";
+  const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
   const gamePrice = formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(game.id);
-  const subject = `Game Half Full: ${gameTitle}`;
+  const subject = "Game Filling Up Fast ⚽";
   let sentCount = 0;
 
   for (const recipient of recipients) {
     const text = [
       `Hi ${recipient.playerName},`,
       "",
-      `${gameTitle} is half full.`,
+      "This game is already over halfway full.",
       "",
-      "Open the game to book your place.",
+      "If you're planning to play, now's a good time to secure your spot.",
       "",
-      "Places are first paid, first confirmed.",
+      "Game Details",
+      `📅 ${kickoff.date}`,
+      `🕒 ${kickoff.time}`,
+      `📍 ${gameLocation}`,
+      `💷 ${gamePrice}`,
       "",
-      `Game: ${gameTitle}`,
-      `Location: ${gameLocation}`,
-      `Kick-off: ${gameTime}`,
-      `Price: ${gamePrice}`,
-      "",
-      `View game details: ${gameUrl}`,
+      `Book Now: ${gameUrl}`,
     ].join("\n");
 
-    const html = renderEmailLayout({
-      previewText: `${gameTitle} is half full.`,
-      title: "Game Half Full",
+    const html = renderPremiumEmailLayout({
+      previewText: "This game is already over halfway full.",
+      title: "Game Filling Up Fast ⚽",
       ctaHref: gameUrl,
-      ctaLabel: "View game details",
-      bodyHtml: `
+      ctaLabel: "Book Now",
+      introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
           Hi ${escapeHtml(recipient.playerName)},
         </p>
-        <p style="margin:0 0 18px;color:#d4d4d8;">
-          <strong style="color:#ffffff;">${escapeHtml(gameTitle)}</strong> is half full.
-        </p>
-        <p style="margin:0 0 22px;color:#d4d4d8;">
-          Open the game to book your place.
-        </p>
-        <p style="margin:0 0 22px;color:#d4d4d8;">
-          Places are <strong style="color:#ffffff;">first paid, first confirmed</strong>.
-        </p>
-
-        <div style="border:1px solid #27272a;background:#111113;border-radius:22px;padding:18px;margin:0 0 22px;">
-          <p style="margin:0 0 14px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">
-            Match details
-          </p>
-          <div style="margin:0;">
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Game:</strong> ${escapeHtml(gameTitle)}</p>
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Location:</strong> ${escapeHtml(gameLocation)}</p>
-            <p style="margin:0 0 10px;color:#f4f4f5;"><strong>Kick-off:</strong> ${escapeHtml(gameTime)}</p>
-            <p style="margin:0;color:#f4f4f5;"><strong>Price:</strong> ${escapeHtml(gamePrice)}</p>
-          </div>
-        </div>
+        ${renderEmailParagraphs([
+          "This game is already over halfway full.",
+          "If you're planning to play, now's a good time to secure your spot.",
+        ])}
       `,
+      cardHtml: renderPremiumGameDetailsCard({
+        date: kickoff.date,
+        time: kickoff.time,
+        venue: gameLocation,
+        price: gamePrice,
+      }),
     });
 
     const idempotencyKey = `game_half_full:game:${game.id}:recipient:${recipient.idempotencyRecipientKey}`;

@@ -88,36 +88,28 @@ beforeEach(() => {
 describe("sendWalletRefundEmail", () => {
   it.each([
     [
-      "requested",
-      "Refund Requested",
-      "Refund Requested",
-      "We’ve received your request to refund £8.00 from your Fair Play Wallet to your original payment method.",
-      "Refund status: Refund Requested",
-      "View refund status",
-    ],
-    [
       "processing",
       "Refund Processing",
       "Refund Processing",
       "Your £8.00 refund is being processed to your original payment method.",
       "Refund status: Refund Processing",
-      "View refund status",
+      "View Wallet",
     ],
     [
       "completed",
-      "Refund Completed",
-      "Refund Completed",
-      "Your refund of £8.00 has been completed to your original payment method.",
-      "Refund status: Refund Completed",
-      "View wallet",
+      "Your Refund Has Been Processed",
+      "Your Refund Has Been Processed",
+      "Your refund has been processed successfully.",
+      "Returned to your original payment method",
+      "View Wallet",
     ],
     [
       "failed_credit_available",
-      "Refund Returned to Wallet",
-      "Refund Returned to Wallet",
-      "The credit is available again in your Fair Play Wallet.",
-      "Refund status: Refund Returned to Wallet",
-      "View wallet",
+      "Credit Added To Your Wallet",
+      "Credit Added To Your Wallet",
+      "£8.00 has been added to your Fair Play Wallet.",
+      "Refund credited to your wallet",
+      "View Wallet",
     ],
     [
       "manual_review",
@@ -125,7 +117,7 @@ describe("sendWalletRefundEmail", () => {
       "Refund Under Review",
       "Please don’t submit another refund request while this check is in progress.",
       "Refund status: Refund Under Review",
-      "View refund status",
+      "View Wallet",
     ],
   ] satisfies Array<[WalletRefundEmailOutcome, string, string, string, string, string]>)(
     "renders the %s outcome",
@@ -147,7 +139,6 @@ describe("sendWalletRefundEmail", () => {
 
   it("does not tell players to reply or contact the organiser for normal refund outcomes", async () => {
     const outcomes: WalletRefundEmailOutcome[] = [
-      "requested",
       "processing",
       "completed",
       "failed_credit_available",
@@ -170,10 +161,10 @@ describe("sendWalletRefundEmail", () => {
       username: null,
     };
 
-    const email = await sendForOutcome("requested", "8.5");
+    const email = await sendForOutcome("completed", "8.5");
 
     expect(email.to).toBe("auth@example.com");
     expect(email.text).toContain("Hi Player,");
-    expect(email.text).toContain("£8.50");
+    expect(email.text).toContain("Your refund has been processed successfully.");
   });
 });

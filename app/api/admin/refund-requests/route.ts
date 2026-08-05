@@ -412,16 +412,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!refundRequestResult.alreadyExists) {
-      await sendRefundEmail({
-        refundRequestId: refundRequestResult.refundRequestId,
-        userId: candidate.user_id,
-        outcome: "requested",
-        amount: candidate.amount,
-        currency: candidate.currency,
-      });
-    }
-
     let automaticRefund = automaticRefundDisabled();
 
     if (refundRequestResult.alreadyExists) {

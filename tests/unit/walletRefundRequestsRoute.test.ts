@@ -183,13 +183,7 @@ describe("wallet refund request route", () => {
       },
     });
     expect(processAutomaticSumUpRefundMock).not.toHaveBeenCalled();
-    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
-      refundRequestId: 123,
-      userId: "user-1",
-      outcome: "requested",
-      amount: 8,
-      currency: "GBP",
-    });
+    expect(sendWalletRefundEmailMock).not.toHaveBeenCalled();
   });
 
   it("runs automatic refund processing after the reservation when enabled", async () => {
@@ -231,13 +225,6 @@ describe("wallet refund request route", () => {
         reservedRefundAmount: 0,
         availableBalance: 4,
       },
-    });
-    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
-      refundRequestId: 123,
-      userId: "user-1",
-      outcome: "requested",
-      amount: 8,
-      currency: "GBP",
     });
     expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
       refundRequestId: 123,
@@ -361,13 +348,9 @@ describe("wallet refund request route", () => {
       status: "failed",
       message: "Refund could not complete. The funds remain available in your Fair Play Wallet.",
     });
-    expect(sendWalletRefundEmailMock).toHaveBeenCalledWith({
-      refundRequestId: 123,
-      userId: "user-1",
-      outcome: "requested",
-      amount: 8,
-      currency: "GBP",
-    });
+    expect(sendWalletRefundEmailMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "requested" })
+    );
     expect(sendWalletRefundEmailMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "failed_credit_available" })
     );
