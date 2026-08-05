@@ -6,6 +6,7 @@ import {
   sendGameReminderEmail,
   type GameReminderEmailGame,
 } from "@/lib/email/gameReminder";
+import { createBookingReminderNotification } from "@/lib/notifications";
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const reminderWindowStartHours = 6;
@@ -471,6 +472,19 @@ export async function runGameReminderScheduler({
           email: candidate.profile.email as string,
           playerName: candidate.profile.username || candidate.booking.player_name || "Player",
         },
+      });
+
+      await createBookingReminderNotification({
+        userId: candidate.profile.id,
+        bookingId: candidate.booking.id,
+        game: candidate.game,
+      }).catch((notificationError) => {
+        console.error("Unable to create booking reminder notification:", {
+          deliveryId: claimedDelivery.id,
+          gameId: claimedDelivery.game_id,
+          userId: claimedDelivery.user_id,
+          error: notificationError,
+        });
       });
 
       await markSent(claimedDelivery, emailResult.id ?? null);

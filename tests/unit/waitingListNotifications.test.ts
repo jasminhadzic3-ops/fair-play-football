@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseFromMock = vi.hoisted(() => vi.fn());
 const sendWaitingListSpotAvailableEmailMock = vi.hoisted(() => vi.fn());
+const createWaitingListSpotAvailableNotificationMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabaseAdmin", () => ({
   assertSupabaseAdminConfigured: vi.fn(),
@@ -12,6 +13,10 @@ vi.mock("@/lib/supabaseAdmin", () => ({
 
 vi.mock("@/lib/email/waitingListSpotAvailable", () => ({
   sendWaitingListSpotAvailableEmail: sendWaitingListSpotAvailableEmailMock,
+}));
+
+vi.mock("@/lib/notifications", () => ({
+  createWaitingListSpotAvailableNotification: createWaitingListSpotAvailableNotificationMock,
 }));
 
 import { notifyWaitingListForOpenSpace } from "@/lib/waitingListNotifications";
@@ -107,6 +112,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   supabaseFromMock.mockImplementation((table: string) => new MockSupabaseQuery(table));
   sendWaitingListSpotAvailableEmailMock.mockResolvedValue({ id: "email-1" });
+  createWaitingListSpotAvailableNotificationMock.mockResolvedValue({ skipped: false, notificationId: 1 });
   state.game = {
     id: 10,
     status: "active",

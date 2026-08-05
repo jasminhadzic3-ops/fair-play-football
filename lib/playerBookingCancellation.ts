@@ -4,6 +4,7 @@ import {
   sendPlayerBookingCancelledEmail,
   type PlayerBookingCancellationEmailOutcome,
 } from "@/lib/email/playerBookingCancelled";
+import { createWalletCreditNotification } from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export type PlayerBookingCancellationRpcResult = {
@@ -268,6 +269,24 @@ async function sendCancellationEmailAfterRelease(
     amount: result.amount,
     currency: result.currency,
   });
+
+  if (outcome === "wallet_restored" && result.sourceCreditTransactionId && result.amount) {
+    await createWalletCreditNotification({
+      userId,
+      walletTransactionId: result.sourceCreditTransactionId,
+      amount: result.amount,
+      reason: "Player cancellation",
+      gameId: result.gameId,
+    }).catch((notificationError) => {
+      console.error("Unable to create player cancellation wallet notification:", {
+        bookingId: result.bookingId,
+        gameId: result.gameId,
+        userId,
+        walletTransactionId: result.sourceCreditTransactionId,
+        error: notificationError,
+      });
+    });
+  }
 }
 
 export async function cancelPlayerBookingWithRefundPolicy({

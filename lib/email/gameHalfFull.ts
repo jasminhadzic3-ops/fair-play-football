@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { createGameHalfFullNotification } from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmailWithDeliveryTracking } from "./deliveryTracking";
 import { sendResendEmail } from "./resend";
@@ -36,6 +37,7 @@ type ProfileEmailData = {
 };
 
 type EmailRecipient = {
+  userId?: string;
   idempotencyRecipientKey: string;
   email: string;
   playerName: string;
@@ -78,6 +80,7 @@ async function getGameHalfFullRecipients(): Promise<EmailRecipient[]> {
   return ((profiles ?? []) as ProfileEmailData[])
     .filter((profile): profile is ProfileEmailData & { email: string } => Boolean(profile.email))
     .map((profile) => ({
+      userId: profile.id,
       idempotencyRecipientKey: profile.id,
       email: profile.email,
       playerName: profile.username || "Player",
@@ -191,6 +194,22 @@ export async function sendGameHalfFullEmails(params: GameHalfFullEmailParams) {
     });
 
     if (!delivery.skipped) {
+      if (recipient.userId) {
+        await createGameHalfFullNotification({
+          recipient: {
+            userId: recipient.userId,
+            playerName: recipient.playerName,
+          },
+          game,
+        }).catch((notificationError) => {
+          console.error("Unable to create game half full notification:", {
+            gameId: game.id,
+            userId: recipient.userId,
+            error: notificationError,
+          });
+        });
+      }
+
       sentCount += 1;
     }
   }

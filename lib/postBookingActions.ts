@@ -3,6 +3,7 @@ import "server-only";
 import { sendBookingConfirmedEmail } from "@/lib/email/bookingConfirmed";
 import { sendEmailWithDeliveryTracking } from "@/lib/email/deliveryTracking";
 import { sendGameHalfFullEmails } from "@/lib/email/gameHalfFull";
+import { createBookingConfirmedNotification } from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type RunPostBookingActionsParams = {
@@ -72,6 +73,33 @@ export async function runPostBookingActions({
         error: emailError,
       });
     }
+  }
+
+  try {
+    const { data: game, error: gameError } = await supabaseAdmin
+      .from("games")
+      .select("id,title,location,time,starts_at,price")
+      .eq("id", gameId)
+      .maybeSingle();
+
+    if (gameError) {
+      throw gameError;
+    }
+
+    if (game) {
+      await createBookingConfirmedNotification({
+        userId,
+        bookingId,
+        game,
+      });
+    }
+  } catch (notificationError) {
+    console.error("Unable to create booking confirmed notification:", {
+      bookingId,
+      gameId,
+      userId,
+      error: notificationError,
+    });
   }
 
   try {

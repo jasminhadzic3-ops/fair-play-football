@@ -58,9 +58,74 @@ html {
   animation: calendar-week-slide-previous 220ms ease-out;
 }
 
+@keyframes notification-dropdown-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes notification-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes notification-badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.75), 0 0 0 0 rgba(239, 68, 68, 0.34);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.75), 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes notification-unread-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.58;
+  }
+}
+
+.notification-dropdown-enter {
+  animation: notification-dropdown-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
+}
+
+.notification-card-enter {
+  animation: notification-card-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.notification-badge {
+  animation: notification-badge-pulse 2.8s ease-in-out infinite;
+}
+
+.notification-unread-dot {
+  animation: notification-unread-dot 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .calendar-week-slide-next,
-  .calendar-week-slide-previous {
+  .calendar-week-slide-previous,
+  .notification-dropdown-enter,
+  .notification-card-enter,
+  .notification-badge,
+  .notification-unread-dot {
     animation: none;
   }
 }

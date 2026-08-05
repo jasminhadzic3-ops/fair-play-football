@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 interface Profile {
   username?: string | null;
@@ -15,11 +16,20 @@ interface NavbarProps {
   profile: Profile | null;
   isAdmin?: boolean;
   unreadNotificationCount?: number;
+  onUnreadNotificationCountChange?: (count: number) => void;
   onLogout: () => void;
   onSignIn: () => void;
 }
 
-export default function Navbar({ user, profile, isAdmin = false, unreadNotificationCount = 0, onLogout, onSignIn }: NavbarProps) {
+export default function Navbar({
+  user,
+  profile,
+  isAdmin = false,
+  unreadNotificationCount = 0,
+  onUnreadNotificationCountChange,
+  onLogout,
+  onSignIn,
+}: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
   const displayName =
@@ -86,7 +96,6 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
     emphasizeDesktop = false
   ) =>
     links.map((link) => {
-      const showNotificationBadge = link.href === "/profile" && unreadNotificationCount > 0;
       const isActive = isActiveLink(link.href);
       const desktopLinkTone = emphasizeDesktop
         ? isActive
@@ -109,11 +118,6 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
         onClick={isMobile ? () => setIsMenuOpen(false) : undefined}
       >
         <span>{link.label}</span>
-        {showNotificationBadge ? (
-          <span className="inline-flex min-w-5 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-1.5 py-0.5 text-[0.65rem] font-bold leading-none text-stone-200">
-            {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
-          </span>
-        ) : null}
       </Link>
       );
     });
@@ -147,11 +151,6 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
             )}
           </span>
           <span className="min-w-0 max-w-[11rem] truncate">{displayName}</span>
-          {unreadNotificationCount > 0 ? (
-            <span className="inline-flex min-w-5 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-1.5 py-0.5 text-[0.65rem] font-bold leading-none text-stone-200">
-              {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
-            </span>
-          ) : null}
         </span>
         <button
           onClick={isMobile ? handleMobileLogout : onLogout}
@@ -196,20 +195,34 @@ export default function Navbar({ user, profile, isAdmin = false, unreadNotificat
             {renderNavLinks(adminNavLinks)}
           </div>
           {user ? <span className="h-4 w-px bg-zinc-800/70" aria-hidden="true" /> : null}
+          {user ? (
+            <NotificationBell
+              unreadCount={unreadNotificationCount}
+              onUnreadCountChange={onUnreadNotificationCountChange}
+            />
+          ) : null}
           {renderAuthControls()}
         </div>
 
-        <button
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="md:hidden flex h-11 w-11 items-center justify-center"
-          aria-label="Toggle navigation menu"
-        >
-          <div className="flex w-6 flex-col gap-1.5">
-            <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "rotate-45 translate-y-2" : ""}`} />
-            <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "opacity-0" : ""}`} />
-            <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "-rotate-45 -translate-y-2" : ""}`} />
-          </div>
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          {user ? (
+            <NotificationBell
+              unreadCount={unreadNotificationCount}
+              onUnreadCountChange={onUnreadNotificationCountChange}
+            />
+          ) : null}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="flex h-11 w-11 items-center justify-center"
+            aria-label="Toggle navigation menu"
+          >
+            <div className="flex w-6 flex-col gap-1.5">
+              <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "rotate-45 translate-y-2" : ""}`} />
+              <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "opacity-0" : ""}`} />
+              <div className={`w-full h-0.5 bg-white transition-all ${isMenuOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+            </div>
+          </button>
+        </div>
       </div>
 
       {isMenuOpen && (

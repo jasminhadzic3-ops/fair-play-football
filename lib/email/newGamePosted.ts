@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createNewGameAvailableNotification } from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
 import {
@@ -32,6 +33,7 @@ type ProfileEmailData = {
 };
 
 type EmailRecipient = {
+  userId?: string;
   idempotencyRecipientKey: string;
   email: string;
   playerName: string;
@@ -78,6 +80,7 @@ async function getNewGameRecipients(): Promise<EmailRecipient[]> {
 
     return [
       {
+        userId: profile?.id,
         idempotencyRecipientKey: testRecipient.toLowerCase(),
         email: testRecipient,
         playerName: profile?.username?.trim() || "Player",
@@ -97,6 +100,7 @@ async function getNewGameRecipients(): Promise<EmailRecipient[]> {
   return ((profiles ?? []) as ProfileEmailData[])
     .filter((profile): profile is ProfileEmailData & { email: string } => Boolean(profile.email))
     .map((profile) => ({
+      userId: profile.id,
       idempotencyRecipientKey: profile.id,
       email: profile.email,
       playerName: profile.username || "Player",
@@ -175,6 +179,22 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
       text,
       idempotencyKey: `new_game_posted:game:${game.id}:recipient:${recipient.idempotencyRecipientKey}`,
     });
+
+    if (recipient.userId) {
+      await createNewGameAvailableNotification({
+        recipient: {
+          userId: recipient.userId,
+          playerName: recipient.playerName,
+        },
+        game,
+      }).catch((notificationError) => {
+        console.error("Unable to create new game notification:", {
+          gameId: game.id,
+          userId: recipient.userId,
+          error: notificationError,
+        });
+      });
+    }
 
     sentCount += 1;
   }

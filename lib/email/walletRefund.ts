@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  createRefundProcessedNotification,
+  createWalletCreditNotification,
+} from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
 import {
@@ -170,11 +174,42 @@ export async function sendWalletRefundEmail({
         ]),
   });
 
-  return sendResendEmail({
+  const result = await sendResendEmail({
     to: recipientEmail,
     subject: outcomeCopy.subject,
     html,
     text,
     idempotencyKey,
   });
+
+  if (outcome === "completed") {
+    await createRefundProcessedNotification({
+      userId,
+      refundRequestId,
+      amount: Number(amount ?? 0),
+    }).catch((notificationError) => {
+      console.error("Unable to create refund processed notification:", {
+        refundRequestId,
+        userId,
+        error: notificationError,
+      });
+    });
+  }
+
+  if (outcome === "failed_credit_available") {
+    await createWalletCreditNotification({
+      userId,
+      amount: Number(amount ?? 0),
+      reason: "Refund credited to your wallet",
+      dedupeKey: `notification:wallet_credit_added:refund_request:${refundRequestId}`,
+    }).catch((notificationError) => {
+      console.error("Unable to create refund credited wallet notification:", {
+        refundRequestId,
+        userId,
+        error: notificationError,
+      });
+    });
+  }
+
+  return result;
 }

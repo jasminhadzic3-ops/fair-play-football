@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createGameCancelledNotification } from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendResendEmail } from "./resend";
 import {
@@ -36,6 +37,7 @@ type ProfileEmailData = {
 };
 
 type EmailRecipient = {
+  userId?: string;
   idempotencyRecipientKey: string;
   email: string;
   playerName: string;
@@ -129,12 +131,13 @@ async function getGameCancelledRecipients(gameId: number): Promise<EmailRecipien
       }
 
       return {
+        userId,
         idempotencyRecipientKey: userId,
         email,
         playerName: profile?.username || booking?.player_name || "Player",
       };
     })
-    .filter((recipient): recipient is EmailRecipient => Boolean(recipient));
+    .filter((recipient): recipient is EmailRecipient & { userId: string } => Boolean(recipient));
 }
 
 export async function sendGameCancelledEmails(params: GameCancelledEmailParams) {
@@ -213,6 +216,19 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
       text,
       idempotencyKey: `game_cancelled:game:${game.id}:recipient:${recipient.idempotencyRecipientKey}`,
     });
+
+    if (recipient.userId) {
+      await createGameCancelledNotification({
+        userId: recipient.userId,
+        game,
+      }).catch((notificationError) => {
+        console.error("Unable to create game cancelled notification:", {
+          gameId: game.id,
+          userId: recipient.userId,
+          error: notificationError,
+        });
+      });
+    }
 
     sentCount += 1;
   }

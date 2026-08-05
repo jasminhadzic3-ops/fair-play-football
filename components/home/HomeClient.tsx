@@ -381,18 +381,35 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   }
 
   async function fetchUnreadNotificationCount() {
-    const { count, error } = await supabase
-      .from("waiting_list_notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "unread");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    if (error) {
-      console.error("Unable to load unread notifications:", error.message);
+    if (!session?.access_token) {
       setUnreadNotificationCount(0);
       return;
     }
 
-    setUnreadNotificationCount(count ?? 0);
+    try {
+      const response = await fetch("/api/notifications/unread-count", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(result?.error || "Unable to load unread notifications.");
+      }
+
+      setUnreadNotificationCount(Number(result?.unread_count ?? 0));
+    } catch (error) {
+      console.error(
+        "Unable to load unread notifications:",
+        error instanceof Error ? error.message : error
+      );
+      setUnreadNotificationCount(0);
+    }
   }
 
   async function handlePaymentComplete(gameId: number) {
@@ -805,6 +822,25 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     openGameFromNotification();
 
     let listenerSubscription: { unsubscribe: () => void } | undefined;
+    let notificationSubscription: { unsubscribe: () => void } | undefined;
+    const subscribeToNotifications = (userId: string) => {
+      notificationSubscription?.unsubscribe();
+      notificationSubscription = supabase
+        .channel(`notifications:${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => {
+            void fetchUnreadNotificationCount();
+          }
+        )
+        .subscribe();
+    };
     const refreshGamesWhenVisible = () => {
       if (document.visibilityState === "visible") {
         void fetchGames();
@@ -818,6 +854,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
       setUser(session?.user ?? null);
       if (session?.user) {
+        subscribeToNotifications(session.user.id);
         void refreshAdminStatus(session.access_token);
         void runPostAuthWork(session);
       } else {
@@ -827,9 +864,12 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
+          subscribeToNotifications(session.user.id);
           void refreshAdminStatus(session.access_token);
           void runPostAuthWork(session);
         } else {
+          notificationSubscription?.unsubscribe();
+          notificationSubscription = undefined;
           setIsAdmin(false);
           setProfile(null);
           setUnreadNotificationCount(0);
@@ -849,6 +889,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     return () => {
       listenerSubscription?.unsubscribe();
+      notificationSubscription?.unsubscribe();
       window.removeEventListener("focus", refreshGamesWhenVisible);
       document.removeEventListener("visibilitychange", refreshGamesWhenVisible);
     };
@@ -1188,6 +1229,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         profile={profile}
         isAdmin={isAdmin}
         unreadNotificationCount={unreadNotificationCount}
+        onUnreadNotificationCountChange={setUnreadNotificationCount}
         onLogout={handleSignOut}
         onSignIn={handleNavbarSignIn}
       />

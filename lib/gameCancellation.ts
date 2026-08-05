@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sendGameCancelledEmails } from "@/lib/email/gameCancelled";
+import { createWalletCreditNotification } from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type CancelGameParams = {
@@ -36,6 +37,13 @@ type GameRow = {
 };
 
 type GameCancelledEmailResult = Awaited<ReturnType<typeof sendGameCancelledEmails>>;
+
+type GameCancelledCreditRow = {
+  id: number;
+  user_id: string;
+  amount: number | string | null;
+  game_id: number | null;
+};
 
 export type CancelGameResult = {
   game: GameRow;
@@ -113,6 +121,38 @@ async function sendCancellationEmails(gameId: number) {
   }
 }
 
+async function createGameCancellationCreditNotifications(gameId: number) {
+  const { data: credits, error } = await supabaseAdmin
+    .from("wallet_transactions")
+    .select("id,user_id,amount,game_id")
+    .eq("game_id", gameId)
+    .eq("transaction_type", "game_cancelled_credit")
+    .eq("status", "completed");
+
+  if (error) {
+    throw error;
+  }
+
+  await Promise.all(
+    ((credits ?? []) as GameCancelledCreditRow[]).map((credit) =>
+      createWalletCreditNotification({
+        userId: credit.user_id,
+        walletTransactionId: credit.id,
+        amount: Math.abs(Number(credit.amount ?? 0)),
+        reason: "Cancelled game",
+        gameId: credit.game_id,
+      }).catch((notificationError) => {
+        console.error("Unable to create game cancellation wallet notification:", {
+          gameId,
+          walletTransactionId: credit.id,
+          userId: credit.user_id,
+          error: notificationError,
+        });
+      })
+    )
+  );
+}
+
 function normalizeRpcResult(result: GameCancellationRpcResult, game: GameRow): CancelGameResult {
   return {
     game,
@@ -159,6 +199,13 @@ export async function cancelGameWithWalletCredits({
 
   if (rpcResult.email_should_send) {
     const emailWarning = await sendCancellationEmails(gameId);
+
+    await createGameCancellationCreditNotifications(gameId).catch((notificationError) => {
+      console.error("Unable to create game cancellation credit notifications:", {
+        gameId,
+        error: notificationError,
+      });
+    });
 
     if (emailWarning) {
       return {

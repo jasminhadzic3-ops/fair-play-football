@@ -1,6 +1,7 @@
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "./supabaseAdmin";
 import { sendWaitingListSpotAvailableEmail } from "./email/waitingListSpotAvailable";
 import { isBookable } from "./gameLifecycle";
+import { createWaitingListSpotAvailableNotification } from "./notifications";
 
 const openSpaceMessage =
   "A space may be available for this game. Book now to try for the spot. Spots are first paid, first served.";
@@ -21,7 +22,7 @@ export async function notifyWaitingListForOpenSpace(gameId: number) {
 
   const { data: game, error: gameError } = await supabaseAdmin
     .from("games")
-    .select("id,status,starts_at,archived_at,max_players")
+    .select("id,title,location,time,price,status,starts_at,archived_at,max_players")
     .eq("id", gameId)
     .maybeSingle();
 
@@ -83,6 +84,19 @@ export async function notifyWaitingListForOpenSpace(gameId: number) {
     }
 
     notifiedCount += 1;
+
+    await createWaitingListSpotAvailableNotification({
+      userId: waitingRow.user_id,
+      waitingListId: waitingRow.id,
+      game,
+    }).catch((notificationError) => {
+      console.error("Unable to create waiting-list notification centre item:", {
+        waitingListId: waitingRow.id,
+        gameId: waitingRow.game_id,
+        userId: waitingRow.user_id,
+        error: notificationError,
+      });
+    });
 
     try {
       await sendWaitingListSpotAvailableEmail({
