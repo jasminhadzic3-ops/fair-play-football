@@ -18,6 +18,9 @@ describe("wallet page source", () => {
     expect(walletPageSource).toContain("formatGameKickoff(activityGame)");
     expect(walletPageSource).toContain("const primaryLabel = activityGame?.title?.trim() || description");
     expect(walletPageSource).toContain("const activityDescription = activityGame ? description : \"\"");
+    expect(walletPageSource).toContain("const ledgerStatus = [ledgerMetadata, transaction.status].filter(Boolean).join(\" • \")");
+    expect(walletPageSource).toContain("activityGame ? (");
+    expect(walletPageSource).toContain("space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500");
     expect(walletPageSource).toContain("formatWalletActivityLedgerDate(transaction, ledgerDate)");
     expect(walletPageSource).toContain("Credited on ${ledgerDate}");
     expect(walletPageSource).toContain("Paid on ${ledgerDate}");

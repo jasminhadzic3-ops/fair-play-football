@@ -99,17 +99,18 @@ function formatGameKickoff(game: WalletActivityGame | null | undefined) {
   }
 
   const date = startsAt.toLocaleDateString("en-GB", {
+    weekday: "short",
     day: "numeric",
     month: "short",
     year: "numeric",
-  });
+  }).replace(",", "");
   const time = startsAt.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
 
-  return `${date}, ${time}`;
+  return `${date} • ${time}`;
 }
 
 function getMetadataPositiveInteger(metadata: Record<string, unknown> | null, key: string) {
@@ -498,6 +499,7 @@ export default function WalletPage() {
                     const ledgerMetadata = formatWalletActivityLedgerDate(transaction, ledgerDate);
                     const primaryLabel = activityGame?.title?.trim() || description;
                     const activityDescription = activityGame ? description : "";
+                    const ledgerStatus = [ledgerMetadata, transaction.status].filter(Boolean).join(" • ");
 
                     return (
                       <div
@@ -506,12 +508,18 @@ export default function WalletPage() {
                       >
                         <div className="min-w-0">
                           <p className="break-words text-sm font-bold text-white">{primaryLabel}</p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                            {gameKickoff ? <span>{gameKickoff}</span> : ledgerDate ? <span>{ledgerDate}</span> : null}
-                            {activityDescription ? <span>{activityDescription}</span> : null}
-                            {activityGame && ledgerMetadata ? <span>{ledgerMetadata}</span> : null}
-                            {transaction.status ? <span>{transaction.status}</span> : null}
-                          </div>
+                          {activityGame ? (
+                            <div className="mt-2 space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                              {gameKickoff ? <p>{gameKickoff}</p> : null}
+                              {activityDescription ? <p>{activityDescription}</p> : null}
+                              {ledgerStatus ? <p>{ledgerStatus}</p> : null}
+                            </div>
+                          ) : (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                              {ledgerDate ? <span>{ledgerDate}</span> : null}
+                              {transaction.status ? <span>{transaction.status}</span> : null}
+                            </div>
+                          )}
                         </div>
                         <p
                           className={`text-lg font-black ${
