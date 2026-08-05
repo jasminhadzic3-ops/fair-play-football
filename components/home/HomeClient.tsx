@@ -78,6 +78,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [showNavbarAuthPassword, setShowNavbarAuthPassword] = useState(false);
   const [openDetailsGameId, setOpenDetailsGameId] = useState<number | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notificationRealtimeVersion, setNotificationRealtimeVersion] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedGameDateKey, setSelectedGameDateKey] = useState<string | null>(null);
   const [showAllGames, setShowAllGames] = useState(false);
@@ -837,6 +838,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           },
           () => {
             void fetchUnreadNotificationCount();
+            setNotificationRealtimeVersion((version) => version + 1);
           }
         )
         .subscribe();
@@ -1229,6 +1231,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         profile={profile}
         isAdmin={isAdmin}
         unreadNotificationCount={unreadNotificationCount}
+        notificationRealtimeVersion={notificationRealtimeVersion}
         onUnreadNotificationCountChange={setUnreadNotificationCount}
         onLogout={handleSignOut}
         onSignIn={handleNavbarSignIn}

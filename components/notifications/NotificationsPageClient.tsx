@@ -163,6 +163,45 @@ export default function NotificationsPageClient() {
     return () => window.clearTimeout(timeout);
   }, [loadNotifications]);
 
+  useEffect(() => {
+    let subscription: { unsubscribe: () => void } | undefined;
+    let isMounted = true;
+
+    const subscribeToNotificationChanges = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      if (!isMounted || !userId) {
+        return;
+      }
+
+      subscription = supabase
+        .channel(`notifications-page:${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => {
+            void loadNotifications();
+          }
+        )
+        .subscribe();
+    };
+
+    void subscribeToNotificationChanges();
+
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe();
+    };
+  }, [loadNotifications]);
+
   const updateNotification = async (notificationId: number, action: "mark_read" | "archive") => {
     await fetchJsonWithAuth(`/api/notifications/${notificationId}`, {
       method: "PATCH",

@@ -19,6 +19,7 @@ type NotificationRow = {
 
 type NotificationBellProps = {
   unreadCount: number;
+  realtimeVersion?: number;
   onUnreadCountChange?: (count: number) => void;
 };
 
@@ -108,6 +109,7 @@ async function fetchJsonWithAuth(path: string, init: RequestInit = {}) {
 
 export default function NotificationBell({
   unreadCount,
+  realtimeVersion = 0,
   onUnreadCountChange,
 }: NotificationBellProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -143,6 +145,18 @@ export default function NotificationBell({
 
     return () => window.clearTimeout(timeout);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || realtimeVersion <= 0) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadNotifications();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [isOpen, realtimeVersion]);
 
   useEffect(() => {
     if (!isOpen) {

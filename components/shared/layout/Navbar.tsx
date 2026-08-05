@@ -16,6 +16,7 @@ interface NavbarProps {
   profile: Profile | null;
   isAdmin?: boolean;
   unreadNotificationCount?: number;
+  notificationRealtimeVersion?: number;
   onUnreadNotificationCountChange?: (count: number) => void;
   onLogout: () => void;
   onSignIn: () => void;
@@ -26,6 +27,7 @@ export default function Navbar({
   profile,
   isAdmin = false,
   unreadNotificationCount = 0,
+  notificationRealtimeVersion = 0,
   onUnreadNotificationCountChange,
   onLogout,
   onSignIn,
@@ -198,6 +200,7 @@ export default function Navbar({
           {user ? (
             <NotificationBell
               unreadCount={unreadNotificationCount}
+              realtimeVersion={notificationRealtimeVersion}
               onUnreadCountChange={onUnreadNotificationCountChange}
             />
           ) : null}
@@ -208,6 +211,7 @@ export default function Navbar({
           {user ? (
             <NotificationBell
               unreadCount={unreadNotificationCount}
+              realtimeVersion={notificationRealtimeVersion}
               onUnreadCountChange={onUnreadNotificationCountChange}
             />
           ) : null}

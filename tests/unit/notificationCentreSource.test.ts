@@ -52,4 +52,19 @@ describe("notification centre source", () => {
     expect(bell).toContain("notification-badge");
     expect(page).toContain("notification-card-enter");
   });
+
+  it("keeps the bell dropdown and notifications page live with realtime changes", () => {
+    const home = read("components/home/HomeClient.tsx");
+    const navbar = read("components/shared/layout/Navbar.tsx");
+    const bell = read("components/notifications/NotificationBell.tsx");
+    const page = read("components/notifications/NotificationsPageClient.tsx");
+
+    expect(home).toContain("notificationRealtimeVersion");
+    expect(home).toContain("setNotificationRealtimeVersion((version) => version + 1)");
+    expect(navbar).toContain("notificationRealtimeVersion");
+    expect(bell).toContain("realtimeVersion");
+    expect(bell).toContain("void loadNotifications();");
+    expect(page).toContain("notifications-page:");
+    expect(page).toContain("postgres_changes");
+  });
 });
