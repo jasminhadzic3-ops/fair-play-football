@@ -1817,6 +1817,80 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             ))}
           </div>
 
+          <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)] sm:p-6">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
+                How It Works
+              </p>
+              <h3 className="mt-3 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+                How It Works
+              </h3>
+              <p className="mt-3 text-base font-semibold text-stone-200">
+                Play football whenever it suits you.
+              </p>
+              <p className="mt-4 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
+                Fair Play Football isn't a team—it's a community that organises friendly football games across North London.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
+                Whether you're looking to play every week or just occasionally, you can join any game that fits your schedule.
+              </p>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {[
+                {
+                  number: "1",
+                  title: "Browse upcoming games",
+                  text: "Choose a game that suits your date, time and location.",
+                },
+                {
+                  number: "2",
+                  title: "Book your spot",
+                  text: "Secure your place online in just a few clicks.",
+                },
+                {
+                  number: "3",
+                  title: "Turn up and play",
+                  text: "Meet new players, enjoy the game and enjoy a great football experience.",
+                },
+                {
+                  number: "4",
+                  title: "Play on your own schedule",
+                  text: "No team commitments. No season commitments. Just football when you want to play.",
+                },
+              ].map((step) => (
+                <div
+                  key={step.title}
+                  className="rounded-2xl border border-zinc-800 bg-black/40 p-4 transition-colors hover:border-stone-200/20"
+                >
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-300/20 bg-stone-200 text-sm font-black text-zinc-950">
+                    {step.number}
+                  </span>
+                  <h4 className="mt-4 text-base font-bold text-white">{step.title}</h4>
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">{step.text}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/40 p-4 sm:p-5">
+              <h4 className="text-lg font-bold text-white">What to Expect</h4>
+              <div className="mt-4 grid gap-2 text-sm text-zinc-300 md:grid-cols-2">
+                {[
+                  "Friendly and welcoming atmosphere",
+                  "Meet different players every game",
+                  "Play whenever you're free",
+                  "Open to everyone aged 18+",
+                  "Casual games, with competitive matches clearly labelled",
+                ].map((item) => (
+                  <div key={item} className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5">
+                    <span className="mt-0.5 text-stone-300" aria-hidden="true">✓</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
             <h3 className="text-xl font-bold text-white">Our Venues</h3>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
@@ -1884,7 +1958,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
           <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h3 className="text-xl font-bold text-white">What to expect</h3>
+              <h3 className="text-xl font-bold text-white">Match guidelines</h3>
               <div className="mt-4 grid gap-2 text-sm text-zinc-300">
                 {[
                   "Fresh bibs and footballs are provided.",
