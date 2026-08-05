@@ -496,6 +496,8 @@ export default function WalletPage() {
                     const gameKickoff = formatGameKickoff(activityGame);
                     const ledgerDate = formatDate(transaction.created_at);
                     const ledgerMetadata = formatWalletActivityLedgerDate(transaction, ledgerDate);
+                    const primaryLabel = activityGame?.title?.trim() || description;
+                    const activityDescription = activityGame ? description : "";
 
                     return (
                       <div
@@ -503,10 +505,10 @@ export default function WalletPage() {
                         className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0">
-                          <p className="break-words text-sm font-bold text-white">{description}</p>
+                          <p className="break-words text-sm font-bold text-white">{primaryLabel}</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                            {activityGame?.title ? <span>{activityGame.title}</span> : null}
                             {gameKickoff ? <span>{gameKickoff}</span> : ledgerDate ? <span>{ledgerDate}</span> : null}
+                            {activityDescription ? <span>{activityDescription}</span> : null}
                             {activityGame && ledgerMetadata ? <span>{ledgerMetadata}</span> : null}
                             {transaction.status ? <span>{transaction.status}</span> : null}
                           </div>

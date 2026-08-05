@@ -16,7 +16,8 @@ describe("wallet page source", () => {
     expect(walletPageSource).toContain('getMetadataPositiveInteger(transaction.metadata, "original_game_id")');
     expect(walletPageSource).toContain(".map(getWalletActivityGameId)");
     expect(walletPageSource).toContain("formatGameKickoff(activityGame)");
-    expect(walletPageSource).toContain("activityGame?.title");
+    expect(walletPageSource).toContain("const primaryLabel = activityGame?.title?.trim() || description");
+    expect(walletPageSource).toContain("const activityDescription = activityGame ? description : \"\"");
     expect(walletPageSource).toContain("formatWalletActivityLedgerDate(transaction, ledgerDate)");
     expect(walletPageSource).toContain("Credited on ${ledgerDate}");
     expect(walletPageSource).toContain("Paid on ${ledgerDate}");
