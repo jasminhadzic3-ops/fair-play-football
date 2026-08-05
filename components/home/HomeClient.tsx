@@ -1871,10 +1871,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 Play football whenever it suits you.
               </p>
               <p className="mt-4 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Fair Play Football isn't a team—it's a community that organises friendly football games across North London.
+                Choose a game that fits your schedule, book your spot online, and simply turn up to play.
               </p>
               <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Whether you're looking to play every week or just occasionally, you can join any game that fits your schedule.
+                Whether you're a complete beginner or a regular player, everyone is welcome. Meet new players, enjoy great football, and play whenever you're free.
               </p>
             </div>
 
@@ -1893,11 +1893,11 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 {
                   number: "3",
                   title: "Turn up and play",
-                  text: "Meet new players, enjoy the game and enjoy a great football experience.",
+                  text: "Meet new players, enjoy a great game and have fun.",
                 },
                 {
                   number: "4",
-                  title: "Play on your own schedule",
+                  title: "Play whenever you're free",
                   text: "No team commitments. No season commitments. Just football when you want to play.",
                 },
               ].map((step) => (
@@ -1918,15 +1918,16 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               <h4 className="text-lg font-bold text-white">What to Expect</h4>
               <div className="mt-4 grid gap-2 text-sm text-zinc-300 md:grid-cols-2">
                 {[
-                  "Friendly and welcoming atmosphere",
-                  "Meet different players every game",
-                  "Play whenever you're free",
-                  "Open to everyone aged 18+",
-                  "Casual games, with competitive matches clearly labelled",
+                  { icon: "⚽", text: "Friendly and welcoming atmosphere" },
+                  { icon: "🌟", text: "Beginner-friendly and open to all skill levels" },
+                  { icon: "👥", text: "Meet new players every game" },
+                  { icon: "📅", text: "Play whenever it suits your schedule" },
+                  { icon: "🔞", text: "Open to everyone aged 18+" },
+                  { icon: "🏆", text: "Casual football, with competitive games clearly labelled" },
                 ].map((item) => (
-                  <div key={item} className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5">
-                    <span className="mt-0.5 text-stone-300" aria-hidden="true">✓</span>
-                    <span>{item}</span>
+                  <div key={item.text} className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5">
+                    <span className="mt-0.5 text-stone-300" aria-hidden="true">{item.icon}</span>
+                    <span>{item.text}</span>
                   </div>
                 ))}
               </div>
