@@ -30,6 +30,7 @@ type ProfileRow = {
 };
 
 type TableRow = GameRow | ProfileRow;
+type NullFilterOperator = "is" | "not.is";
 
 const state: {
   game: GameRow;
@@ -49,6 +50,7 @@ const state: {
 
 class MockSupabaseQuery {
   private filters: Array<{ field: string; value: unknown; caseInsensitive?: boolean }> = [];
+  private nullFilters: Array<{ field: string; operator: NullFilterOperator; value: null }> = [];
 
   constructor(private table: string) {}
 
@@ -64,6 +66,11 @@ class MockSupabaseQuery {
   ilike(field: string, value: string) {
     state.profileEmailLookup = value;
     this.filters.push({ field, value, caseInsensitive: true });
+    return this;
+  }
+
+  not(field: string, operator: string, value: null) {
+    this.nullFilters.push({ field, operator: `not.${operator}` as NullFilterOperator, value });
     return this;
   }
 
@@ -94,12 +101,22 @@ class MockSupabaseQuery {
         }
 
         return rawValue === filter.value;
+      }) &&
+      this.nullFilters.every((filter) => {
+        const rawValue = (row as Record<string, unknown>)[filter.field];
+
+        if (filter.operator === "not.is") {
+          return rawValue !== filter.value;
+        }
+
+        return rawValue === filter.value;
       })
     );
   }
 }
 
 beforeEach(() => {
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
   process.env.EMAIL_ENABLE_NEW_GAME = "true";
   process.env.EMAIL_BROADCAST_TEST_RECIPIENT = "jasminhadzic3@gmail.com";
@@ -204,6 +221,42 @@ describe("sendNewGamePostedEmails test-recipient personalization", () => {
         to: "JasminHadzic3@GMAIL.com",
         idempotencyKey: "new_game_posted:game:10:recipient:jasminhadzic3@gmail.com",
         text: expect.stringContaining("Hi Jasmin,"),
+      })
+    );
+  });
+
+  it("ignores the test-recipient override in production and sends to every profile email", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    state.profiles = [
+      {
+        id: "gmail-user",
+        email: "jasminhadzic3@gmail.com",
+        username: "Jasmin",
+      },
+      {
+        id: "yahoo-user",
+        email: "jasminhadzic3@yahoo.com",
+        username: "Yahoo Player",
+      },
+    ];
+
+    const result = await sendNewGamePostedEmails({ gameId: 10 });
+
+    expect(result).toEqual({ skipped: false, sentCount: 2 });
+    expect(state.profileEmailLookup).toBeNull();
+    expect(sendResendEmailMock).toHaveBeenCalledTimes(2);
+    expect(sendResendEmailMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        to: "jasminhadzic3@gmail.com",
+        idempotencyKey: "new_game_posted:game:10:recipient:gmail-user",
+      })
+    );
+    expect(sendResendEmailMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        to: "jasminhadzic3@yahoo.com",
+        idempotencyKey: "new_game_posted:game:10:recipient:yahoo-user",
       })
     );
   });

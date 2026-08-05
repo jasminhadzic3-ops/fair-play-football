@@ -33,6 +33,10 @@ function isNewGameEmailEnabled() {
 }
 
 function getBroadcastTestRecipient() {
+  if (process.env.NODE_ENV === "production") {
+    return null;
+  }
+
   return process.env.EMAIL_BROADCAST_TEST_RECIPIENT?.trim() || null;
 }
 
