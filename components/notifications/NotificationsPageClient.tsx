@@ -244,7 +244,7 @@ export default function NotificationsPageClient() {
   const unreadCount = notifications.filter((notification) => !notification.read_at).length;
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white sm:px-8 sm:py-10">
+    <main className="min-h-screen bg-black px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 text-white sm:px-8 sm:py-10">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -255,19 +255,19 @@ export default function NotificationsPageClient() {
               Notifications
             </h1>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             {unreadCount > 0 ? (
               <button
                 type="button"
                 onClick={() => void markAllAsRead()}
-                className="rounded-full border border-stone-300/20 bg-zinc-950 px-5 py-3 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-900 hover:text-white"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-stone-300/20 bg-zinc-950 px-5 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-900 hover:text-white sm:w-auto"
               >
                 Mark all as read
               </button>
             ) : null}
             <Link
               href="/"
-              className="rounded-full border border-stone-200/30 bg-stone-200 px-5 py-3 text-sm font-black text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:border-stone-100 hover:bg-stone-100"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-stone-200/30 bg-stone-200 px-5 text-sm font-black text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:border-stone-100 hover:bg-stone-100 sm:w-auto"
             >
               Back to Home
             </Link>
@@ -329,12 +329,12 @@ export default function NotificationsPageClient() {
               return (
                 <article
                   key={notification.id}
-                  className={`notification-card-enter rounded-[2rem] border p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-stone-200/20 ${
+                  className={`notification-card-enter rounded-[2rem] border p-4 shadow-[0_18px_60px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-stone-200/20 sm:p-5 ${
                     isUnread ? "border-stone-300/15 bg-zinc-950" : "border-zinc-800 bg-zinc-950/80"
                   }`}
                   style={{ animationDelay: `${index * 36}ms` }}
                 >
-                  <div className="flex gap-4">
+                  <div className="flex gap-3 sm:gap-4">
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl border border-stone-300/10 bg-zinc-900 text-2xl">
                       {notification.icon}
                     </span>
@@ -360,11 +360,11 @@ export default function NotificationsPageClient() {
                         ) : null}
                       </div>
 
-                      <div className="mt-5 flex flex-wrap items-center gap-2">
+                      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                         <Link
                           href={notification.action_url || "/"}
                           onClick={() => void openNotification(notification)}
-                          className="rounded-full border border-stone-200/30 bg-stone-200 px-5 py-2.5 text-sm font-black text-zinc-950 transition duration-200 hover:-translate-y-0.5 hover:border-stone-100 hover:bg-stone-100"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-stone-200/30 bg-stone-200 px-5 text-sm font-black text-zinc-950 transition duration-200 hover:-translate-y-0.5 hover:border-stone-100 hover:bg-stone-100 sm:w-auto"
                         >
                           {notification.action_label || "Open"}
                         </Link>
@@ -372,7 +372,7 @@ export default function NotificationsPageClient() {
                           <button
                             type="button"
                             onClick={() => void updateNotification(notification.id, "mark_read")}
-                            className="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-bold text-zinc-200 transition duration-200 hover:-translate-y-0.5 hover:border-stone-200/25 hover:bg-zinc-800 hover:text-white"
+                            className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 px-4 text-sm font-bold text-zinc-200 transition duration-200 hover:-translate-y-0.5 hover:border-stone-200/25 hover:bg-zinc-800 hover:text-white sm:w-auto"
                           >
                             Mark as read
                           </button>
@@ -380,7 +380,7 @@ export default function NotificationsPageClient() {
                         <button
                           type="button"
                           onClick={() => void updateNotification(notification.id, "archive")}
-                          className="rounded-full px-4 py-2.5 text-sm font-bold text-zinc-500 transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-900 hover:text-stone-200"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-full px-4 text-sm font-bold text-zinc-500 transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-900 hover:text-stone-200 sm:w-auto"
                         >
                           Archive
                         </button>

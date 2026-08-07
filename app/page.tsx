@@ -25,18 +25,21 @@ html[data-payment-return-boot="true"] body > :not(#fair-play-payment-return-boot
   position: fixed;
   inset: 0;
   z-index: 2147483647;
+  box-sizing: border-box;
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   color: #fff;
   background: rgba(0, 0, 0, 0.9);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 #fair-play-payment-return-boot-shell .payment-return-boot-modal {
+  box-sizing: border-box;
   display: flex;
   width: 100vw;
-  height: 100dvh;
+  height: 100%;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgb(39 39 42);

@@ -182,7 +182,7 @@ export default function MyBookingsPage() {
   return (
     <main className="min-h-screen bg-black text-white p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between gap-4 mb-10 flex-wrap">
+        <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-zinc-500 mb-3">
               Account
@@ -191,7 +191,7 @@ export default function MyBookingsPage() {
           </div>
           <Link
             href="/"
-            className="rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 py-3 font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 text-sm md:text-base whitespace-nowrap"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 sm:w-auto md:text-base"
           >
             Back to Home
           </Link>
@@ -237,14 +237,14 @@ export default function MyBookingsPage() {
                 aria-label={`Open details for ${game.title}`}
                 onClick={() => openBookingDetails(game.id)}
                 onKeyDown={(event) => handleBookingCardKeyDown(event, game.id)}
-                className="cursor-pointer rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.32)] transition hover:border-stone-200/20 hover:shadow-[0_22px_70px_rgba(0,0,0,0.42)] focus:outline-none focus:ring-2 focus:ring-stone-200/35 sm:p-6"
+                className="cursor-pointer rounded-[2rem] border border-zinc-800 bg-zinc-950 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.32)] transition hover:border-stone-200/20 hover:shadow-[0_22px_70px_rgba(0,0,0,0.42)] focus:outline-none focus:ring-2 focus:ring-stone-200/35 sm:p-6"
               >
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0 flex-1">
                     <h2 className="break-words text-2xl font-bold tracking-tight text-white">{game.title}</h2>
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
                       <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
-                        <p className="truncate text-sm font-semibold text-zinc-200">{game.location}</p>
+                        <p className="break-words text-sm font-semibold text-zinc-200">{game.location}</p>
                       </div>
                       <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
                         <p className="text-sm font-semibold text-zinc-200">{game.time || "TBD"}</p>

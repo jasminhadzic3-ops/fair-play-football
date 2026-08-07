@@ -250,7 +250,7 @@ export default function NotificationBell({
       </button>
 
       {isOpen ? (
-        <div className="notification-dropdown-enter absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-[1.7rem] border border-zinc-800 bg-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.58)]">
+        <div className="notification-dropdown-enter absolute right-0 top-12 z-50 flex max-h-[min(32rem,calc(100dvh-5.5rem))] w-[min(22rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[1.7rem] border border-zinc-800 bg-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.58)]">
           <div className="flex items-center justify-between border-b border-zinc-800/80 px-5 py-4">
             <div>
               <p className="text-sm font-black text-white">Notifications</p>
@@ -269,7 +269,7 @@ export default function NotificationBell({
             ) : null}
           </div>
 
-          <div className="max-h-[26rem] overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {isLoading ? (
               <div className="space-y-2 p-2">
                 {[0, 1, 2].map((index) => (
@@ -337,7 +337,7 @@ export default function NotificationBell({
                         <button
                           type="button"
                           onClick={() => void markNotificationAsRead(notification.id)}
-                          className="ml-12 mt-2 rounded-full px-3 py-1 text-xs font-bold text-stone-300 transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-800 hover:text-white"
+                          className="ml-12 mt-2 inline-flex min-h-9 items-center rounded-full px-3 text-xs font-bold text-stone-300 transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-800 hover:text-white"
                         >
                           Mark as read
                         </button>
@@ -349,11 +349,11 @@ export default function NotificationBell({
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between border-t border-zinc-800/80 px-5 py-3">
+          <div className="flex items-center justify-between border-t border-zinc-800/80 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
             <Link
               href="/notifications"
               onClick={() => setIsOpen(false)}
-              className="text-sm font-bold text-stone-200 transition hover:text-white"
+              className="inline-flex min-h-10 items-center text-sm font-bold text-stone-200 transition hover:text-white"
             >
               View all notifications
             </Link>

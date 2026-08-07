@@ -627,7 +627,7 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-black p-4 sm:p-8 text-white">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="mb-3 text-xs uppercase tracking-[0.35em] text-zinc-500">
               Account
@@ -636,7 +636,7 @@ export default function ProfilePage() {
           </div>
           <Link
             href="/"
-            className="rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 py-3 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 md:text-base"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 sm:w-auto md:text-base"
           >
             Back to Home
           </Link>
@@ -743,7 +743,7 @@ export default function ProfilePage() {
                       setErrorMessage(null);
                       setIsEditingProfile(true);
                     }}
-                    className="rounded-full border border-stone-300/20 bg-zinc-950 px-5 py-2 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800"
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-stone-300/20 bg-zinc-950 px-5 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 sm:w-auto"
                   >
                     Edit Profile
                   </button>

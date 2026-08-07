@@ -400,7 +400,7 @@ export default function WalletPage() {
   return (
     <main className="min-h-screen bg-black p-4 text-white sm:p-8">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="mb-3 text-xs uppercase tracking-[0.35em] text-zinc-500">
               Account
@@ -409,7 +409,7 @@ export default function WalletPage() {
           </div>
           <Link
             href="/"
-            className="rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 py-3 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 md:text-base"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 sm:w-auto md:text-base"
           >
             Back to Home
           </Link>
@@ -504,7 +504,7 @@ export default function WalletPage() {
                     return (
                       <div
                         key={transaction.id}
-                        className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
                       >
                         <div className="min-w-0">
                           <p className="break-words text-sm font-bold text-white">{primaryLabel}</p>
@@ -522,7 +522,7 @@ export default function WalletPage() {
                           )}
                         </div>
                         <p
-                          className={`text-lg font-black ${
+                          className={`text-lg font-black sm:text-right ${
                             amount >= 0 ? "text-stone-200" : "text-zinc-300"
                           }`}
                         >

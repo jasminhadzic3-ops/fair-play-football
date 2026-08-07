@@ -39,8 +39,8 @@ export default function Modal({
       />
 
       {/* Modal */}
-      <div className="relative flex h-[100dvh] w-screen items-stretch justify-center p-0 pointer-events-none overscroll-none sm:items-center">
-        <div className="flex h-[100dvh] w-screen flex-col overflow-hidden rounded-none border border-zinc-800 bg-zinc-900 shadow-2xl pointer-events-auto overscroll-contain sm:h-[99vh] sm:w-[88vw] sm:rounded-2xl">
+      <div className="relative flex h-[100dvh] w-screen items-stretch justify-center pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] pointer-events-none overscroll-none sm:items-center sm:pb-0 sm:pt-0">
+        <div className="flex h-full w-screen flex-col overflow-hidden rounded-none border border-zinc-800 bg-zinc-900 shadow-2xl pointer-events-auto overscroll-contain sm:h-[99vh] sm:w-[88vw] sm:rounded-2xl">
           {/* Header */}
           <div className="shrink-0 bg-zinc-900 border-b border-zinc-800 px-3 py-2.5 flex items-center justify-between sm:px-6 sm:py-4">
             <h2 className="text-lg font-bold text-white sm:text-2xl">{title}</h2>
