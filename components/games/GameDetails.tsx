@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Modal from "@/components/shared/ui/Modal";
 import TeamList from "./TeamList";
+import GameTagPills from "./GameTagPills";
 import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
 import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
@@ -20,6 +21,7 @@ interface GameDetailsProps {
     price?: number;
     format?: string;
     max_players?: number;
+    tags?: string[] | null;
     [key: string]: any;
   };
   bookings: Array<{
@@ -1093,6 +1095,8 @@ export default function GameDetails({
             Payment confirmed. Your booking has been added.
           </div>
         )}
+
+        <GameTagPills tags={game.tags} />
 
         <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
           <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">

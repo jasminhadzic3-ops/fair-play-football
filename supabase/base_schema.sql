@@ -37,7 +37,9 @@ create table if not exists public.games (
   cancelled_by uuid,
   cancellation_reason text,
   archived_at timestamptz,
-  archived_by uuid
+  archived_by uuid,
+  tags text[] not null default '{}'::text[],
+  constraint games_tags_max_five check (cardinality(tags) <= 5)
 );
 
 comment on column public.games.starts_at is
@@ -51,6 +53,9 @@ comment on column public.games.archived_at is
 
 comment on column public.games.archived_by is
 'Admin user who archived the game when available; archiving must never delete or rewrite financial/history records.';
+
+comment on column public.games.tags is
+'Optional game labels shown to players. Values are selected from the application game-tag catalogue; a game can have at most five.';
 
 create table if not exists public.bookings (
   id bigint not null,

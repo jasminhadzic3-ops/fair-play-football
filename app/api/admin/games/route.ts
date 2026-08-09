@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { sendNewGamePostedEmails } from "@/lib/email/newGamePosted";
 import { parseLondonKickoff } from "@/lib/londonKickoff";
+import { parseGameTags } from "@/lib/gameTags";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type GamePayload = {
@@ -11,6 +12,7 @@ type GamePayload = {
   kickoff_time?: unknown;
   price?: unknown;
   max_players?: unknown;
+  tags?: unknown;
 };
 
 function parseGamePayload(body: GamePayload | null) {
@@ -19,6 +21,7 @@ function parseGamePayload(body: GamePayload | null) {
   const kickoff = parseLondonKickoff(body?.kickoff_date, body?.kickoff_time);
   const price = Number(body?.price);
   const maxPlayers = Number(body?.max_players);
+  const tags = parseGameTags(body?.tags);
 
   if (
     !title ||
@@ -26,7 +29,8 @@ function parseGamePayload(body: GamePayload | null) {
     !kickoff ||
     Number.isNaN(price) ||
     Number.isNaN(maxPlayers) ||
-    ![12, 14, 16].includes(maxPlayers)
+    ![12, 14, 16].includes(maxPlayers) ||
+    !tags
   ) {
     return null;
   }
@@ -38,6 +42,7 @@ function parseGamePayload(body: GamePayload | null) {
     starts_at: kickoff.startsAtIso,
     price,
     max_players: maxPlayers,
+    tags,
   };
 }
 
@@ -54,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     if (!payload) {
       return Response.json(
-        { error: "Please fill in all fields with a valid London kickoff date and time. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8)." },
+        { error: "Please fill in all fields with a valid London kickoff date and time. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8), with up to 5 valid tags." },
         { status: 400 }
       );
     }

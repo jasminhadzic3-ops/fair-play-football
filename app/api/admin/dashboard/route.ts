@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       supabaseAdmin
         .from("games")
-        .select("id,title,location,time,starts_at,price,max_players,status,cancelled_at,cancelled_by,cancellation_reason,archived_at,archived_by")
+        .select("id,title,location,time,starts_at,price,max_players,tags,status,cancelled_at,cancelled_by,cancellation_reason,archived_at,archived_by")
         .order("id", { ascending: true }),
       supabaseAdmin
         .from("bookings")

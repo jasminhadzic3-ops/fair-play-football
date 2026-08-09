@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import GameDetails from "./GameDetails";
 import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
+import GameTagPills from "./GameTagPills";
 
 interface GameCardProps {
   game: {
@@ -15,6 +16,7 @@ interface GameCardProps {
     host?: string;
     playerName?: string;
     max_players?: number;
+    tags?: string[] | null;
     [key: string]: any;
   };
   bookings: Array<{
@@ -117,8 +119,11 @@ export default function GameCard({
               )}
             </div>
 
-            <div className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300 border border-emerald-500/20">
-              {spotsLeft > 0 ? `${spotsLeft} spots open` : "Full"}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300 border border-emerald-500/20">
+                {spotsLeft > 0 ? `${spotsLeft} spots open` : "Full"}
+              </div>
+              <GameTagPills tags={game.tags} />
             </div>
           </div>
 

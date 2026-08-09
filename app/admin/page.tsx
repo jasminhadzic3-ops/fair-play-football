@@ -11,6 +11,7 @@ import {
   isValidAdminMoveDestination,
 } from "@/lib/adminGameSafety";
 import { supabase } from "@/lib/supabase";
+import { GAME_TAG_OPTIONS, MAX_GAME_TAGS, type GameTag } from "@/lib/gameTags";
 
 interface Game {
   id: number;
@@ -26,6 +27,7 @@ interface Game {
   cancelled_at?: string | null;
   cancelled_by?: string | null;
   cancellation_reason?: string | null;
+  tags?: GameTag[] | null;
   admin_safety?: AdminGameSafetySummary | null;
   refund_candidates?: AdminRefundCandidate[];
   financial_records?: AdminFinancialRecord[];
@@ -303,6 +305,7 @@ export default function AdminPage() {
   const [legacyDisplayTime, setLegacyDisplayTime] = useState("");
   const [price, setPrice] = useState("");
   const [maxPlayers, setMaxPlayers] = useState("");
+  const [selectedTags, setSelectedTags] = useState<GameTag[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingGameId, setEditingGameId] = useState<number | null>(null);
   const [formHighlighted, setFormHighlighted] = useState(false);
@@ -558,6 +561,7 @@ export default function AdminPage() {
     setLegacyDisplayTime("");
     setPrice("");
     setMaxPlayers("");
+    setSelectedTags([]);
     setEditingGameId(null);
 
     if (clearSuccessMessage) {
@@ -640,6 +644,7 @@ export default function AdminPage() {
             }),
         price: numericPrice,
         max_players: numericMaxPlayers,
+        tags: selectedTags,
       };
 
       const response = await fetchWithTimeout(
@@ -682,6 +687,7 @@ export default function AdminPage() {
     setKickoffTime(formValues.kickoffTime);
     setPrice(String(game.price));
     setMaxPlayers(String(game.max_players));
+    setSelectedTags(game.tags ?? []);
     highlightForm();
     scrollToElement(formSectionRef.current);
     focusTitleAfterScroll();
@@ -1485,6 +1491,45 @@ export default function AdminPage() {
                 className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </div>
+
+            <fieldset>
+              <div className="flex items-center justify-between gap-4">
+                <legend className="text-sm font-semibold text-zinc-200">Game tags</legend>
+                <span className="text-xs font-semibold text-zinc-500">
+                  {selectedTags.length}/{MAX_GAME_TAGS} selected
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">Optional. Choose up to {MAX_GAME_TAGS}.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {GAME_TAG_OPTIONS.map((tag) => {
+                  const isSelected = selectedTags.includes(tag);
+                  const isDisabled = !isSelected && selectedTags.length >= MAX_GAME_TAGS;
+
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      aria-pressed={isSelected}
+                      disabled={isDisabled}
+                      onClick={() =>
+                        setSelectedTags((currentTags) =>
+                          currentTags.includes(tag)
+                            ? currentTags.filter((currentTag) => currentTag !== tag)
+                            : [...currentTags, tag]
+                        )
+                      }
+                      className={`rounded-full border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-stone-300/50 disabled:cursor-not-allowed disabled:opacity-35 ${
+                        isSelected
+                          ? "border-stone-200/40 bg-stone-200 text-zinc-950"
+                          : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-stone-200/30"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
 
             <button
               type="button"
