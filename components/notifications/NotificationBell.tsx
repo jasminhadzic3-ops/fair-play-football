@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 
 type NotificationRow = {
@@ -116,8 +117,41 @@ export default function NotificationBell({
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const badgeCount = formatBadgeCount(unreadCount);
+
+  const updateDropdownPosition = useCallback(() => {
+    const button = buttonRef.current;
+
+    if (!button) {
+      return;
+    }
+
+    const visualViewport = window.visualViewport;
+    const viewportLeft = visualViewport?.offsetLeft ?? 0;
+    const viewportWidth = visualViewport?.width ?? window.innerWidth;
+    const safeMargin = 12;
+    const maxWidth = 352;
+    const width = Math.max(0, Math.min(maxWidth, viewportWidth - safeMargin * 2));
+    const buttonRect = button.getBoundingClientRect();
+    const preferredLeft = buttonRect.right - width;
+    const minLeft = viewportLeft + safeMargin;
+    const maxLeft = viewportLeft + viewportWidth - safeMargin - width;
+    const left = Math.min(Math.max(preferredLeft, minLeft), Math.max(minLeft, maxLeft));
+
+    setDropdownPosition({
+      left,
+      top: buttonRect.bottom + 8 + (visualViewport?.offsetTop ?? 0),
+      width,
+    });
+  }, []);
 
   const loadNotifications = async () => {
     setIsLoading(true);
@@ -133,6 +167,26 @@ export default function NotificationBell({
       setIsLoading(false);
     }
   };
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    updateDropdownPosition();
+
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    window.visualViewport?.addEventListener("resize", updateDropdownPosition);
+    window.visualViewport?.addEventListener("scroll", updateDropdownPosition);
+
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+      window.visualViewport?.removeEventListener("resize", updateDropdownPosition);
+      window.visualViewport?.removeEventListener("scroll", updateDropdownPosition);
+    };
+  }, [isOpen, updateDropdownPosition]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -164,7 +218,12 @@ export default function NotificationBell({
     }
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      if (
+        !containerRef.current?.contains(target) &&
+        !dropdownRef.current?.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -223,6 +282,7 @@ export default function NotificationBell({
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         className="notification-bell-button relative flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition duration-200 hover:-translate-y-0.5 hover:border-stone-300/25 hover:bg-zinc-900 hover:text-white hover:shadow-[0_14px_34px_rgba(0,0,0,0.35)]"
@@ -249,8 +309,16 @@ export default function NotificationBell({
         ) : null}
       </button>
 
-      {isOpen ? (
-        <div className="notification-dropdown-enter absolute right-0 top-12 z-50 flex max-h-[min(32rem,calc(100dvh-5.5rem))] w-[min(22rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[1.7rem] border border-zinc-800 bg-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.58)]">
+      {isOpen && dropdownPosition && typeof document !== "undefined" ? createPortal(
+        <div
+          ref={dropdownRef}
+          className="notification-dropdown-enter fixed z-50 flex max-h-[min(32rem,calc(100dvh-5.5rem))] flex-col overflow-hidden rounded-[1.7rem] border border-zinc-800 bg-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.58)]"
+          style={{
+            left: dropdownPosition.left,
+            top: dropdownPosition.top,
+            width: dropdownPosition.width,
+          }}
+        >
           <div className="flex items-center justify-between border-b border-zinc-800/80 px-5 py-4">
             <div>
               <p className="text-sm font-black text-white">Notifications</p>
@@ -358,7 +426,8 @@ export default function NotificationBell({
               View all notifications
             </Link>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );
