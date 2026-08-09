@@ -1867,17 +1867,23 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
                 How It Works
               </p>
-              <h3 className="mt-3 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-                How It Works
+              <h3 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+                Getting Started
               </h3>
-              <p className="mt-3 text-base font-semibold text-stone-200">
-                Play football whenever it suits you.
-              </p>
-              <p className="mt-4 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Choose a game that fits your schedule, book your spot online, and simply turn up to play.
+              <p className="mt-4 text-sm leading-6 text-zinc-300 md:text-base md:leading-7">
+                Fair Play Football is a platform where you can discover, book and enjoy friendly football games whenever it suits you.
               </p>
               <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Whether you're a complete beginner or a regular player, everyone is welcome. Meet new players, enjoy great football, and play whenever you're free.
+                Browse upcoming matches, reserve your spot in just a few clicks and play on your own schedule.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
+                Meet new people, enjoy a welcoming football community and experience the game without the commitment of joining a team.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
+                Most matches are casual and friendly, while competitive games are always clearly labelled.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
+                Everyone aged 18+ is welcome, regardless of experience or ability.
               </p>
             </div>
 
@@ -1886,22 +1892,22 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 {
                   number: "1",
                   title: "Browse upcoming games",
-                  text: "Choose a game that suits your date, time and location.",
+                  text: "Explore upcoming matches and choose the date, time and location that suits you.",
                 },
                 {
                   number: "2",
                   title: "Book your spot",
-                  text: "Secure your place online in just a few clicks.",
+                  text: "Reserve and confirm your place online in just a few clicks.",
                 },
                 {
                   number: "3",
                   title: "Turn up and play",
-                  text: "Meet new players, enjoy a great game and have fun.",
+                  text: "Arrive ready to play, meet the group and enjoy your game.",
                 },
                 {
                   number: "4",
-                  title: "Play whenever you're free",
-                  text: "No team commitments. No season commitments. Just football when you want to play.",
+                  title: "Play on your schedule",
+                  text: "Come back whenever it suits you, with no team or season commitment.",
                 },
               ].map((step) => (
                 <div
@@ -1921,16 +1927,20 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               <h4 className="text-lg font-bold text-white">What to Expect</h4>
               <div className="mt-4 grid gap-2 text-sm text-zinc-300 md:grid-cols-2">
                 {[
-                  { icon: "⚽", text: "Friendly and welcoming atmosphere" },
-                  { icon: "🌟", text: "Beginner-friendly and open to all skill levels" },
-                  { icon: "👥", text: "Meet new players every game" },
-                  { icon: "📅", text: "Play whenever it suits your schedule" },
-                  { icon: "🔞", text: "Open to everyone aged 18+" },
-                  { icon: "🏆", text: "Casual football, with competitive games clearly labelled" },
+                  "Bibs and ball provided",
+                  "Regular games to choose from",
+                  "Casual and competitive football",
+                  "Fun and respectful matches",
+                  "Different skill levels welcome",
                 ].map((item) => (
-                  <div key={item.text} className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5">
-                    <span className="mt-0.5 text-stone-300" aria-hidden="true">{item.icon}</span>
-                    <span>{item.text}</span>
+                  <div key={item} className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5">
+                    <span
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-stone-300/20 bg-stone-200/10 text-xs font-bold text-stone-200"
+                      aria-hidden="true"
+                    >
+                      ✓
+                    </span>
+                    <span className="font-medium text-zinc-300">{item}</span>
                   </div>
                 ))}
               </div>
