@@ -670,7 +670,7 @@ export default function ProfilePage() {
                       initials
                     )}
                     <span className="absolute inset-0 flex items-center justify-center bg-black/60 px-2 text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-white opacity-0 transition group-hover:opacity-100">
-                      {isUploadingAvatar ? "Uploading" : "Upload"}
+                      {isUploadingAvatar ? "Uploading" : "Upload Photo"}
                     </span>
                     <input
                       type="file"
