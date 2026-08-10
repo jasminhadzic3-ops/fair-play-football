@@ -5,20 +5,19 @@ interface Booking {
   game_id: number;
   player_name: string;
   is_current_user?: boolean | null;
+  avatar_url?: string | null;
 }
 
 interface TeamListProps {
   bookings: Booking[];
   onLeaveGame: (bookingId: number) => Promise<void> | void;
   currentUserId?: string | null;
-  currentUserAvatarUrl?: string | null;
 }
 
 export default function TeamList({
   bookings,
   onLeaveGame,
   currentUserId,
-  currentUserAvatarUrl,
 }: TeamListProps) {
   const midpoint = Math.ceil(bookings.length / 2);
   const teamA = bookings.slice(0, midpoint);
@@ -40,7 +39,6 @@ export default function TeamList({
       <div className="space-y-3">
         {team.map((booking) => {
           const isCurrentUserBooking = currentUserId && booking.is_current_user === true;
-          const avatarUrl = isCurrentUserBooking ? currentUserAvatarUrl : null;
           const initials = booking.player_name
             .split(" ")
             .map((part) => part.charAt(0).toUpperCase())
@@ -54,10 +52,12 @@ export default function TeamList({
             >
               <div className="flex items-center gap-4 flex-1 min-w-0">
                 <div className="w-11 h-11 overflow-hidden rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
-                  {avatarUrl ? (
+                  {booking.avatar_url ? (
                     <img
-                      src={avatarUrl}
+                      src={booking.avatar_url}
                       alt=""
+                      loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover"
                     />
                   ) : (

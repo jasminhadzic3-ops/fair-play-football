@@ -24,6 +24,7 @@ interface GameCardProps {
     game_id: number;
     player_name: string;
     is_current_user?: boolean | null;
+    avatar_url?: string | null;
   }>;
   successGameId: number | null;
   user: any | null;
