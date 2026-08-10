@@ -91,6 +91,8 @@ type WalletSummaryTransaction = {
   created_at?: string | null;
 };
 
+type RegisteredUserRefundStatus = "wallet_credit" | "pending_review" | "refunded" | null;
+
 type ReminderDelivery = {
   id: number;
   game_id: number | null;
@@ -306,6 +308,12 @@ export async function GET(request: NextRequest) {
     const waitingListNotifications = (waitingListNotificationsResult.data ?? []) as WaitingListSummaryEntry[];
     const profileById = new Map((profiles as Profile[]).map((profile) => [profile.id, profile]));
     const bookingsByUserId = new Map<string, number>();
+    const completedWalletBalanceByUserId = new Map<string, number>();
+    const reservedRefundAmountByUserId = new Map<string, number>();
+    const latestRefundByUserId = new Map<
+      string,
+      { status: RegisteredUserRefundStatus; createdAt: number; transactionId: number }
+    >();
 
     (allBookings as Booking[]).forEach((booking) => {
       if (booking.user_id) {
@@ -313,8 +321,80 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    walletSummaryTransactions.forEach((transaction) => {
+      const userId = transaction.user_id;
+
+      if (!userId || (transaction.currency ?? "GBP") !== "GBP") {
+        return;
+      }
+
+      const amount = Number(transaction.amount ?? 0);
+
+      if (transaction.status === "completed" && transaction.transaction_type !== "refund_requested") {
+        completedWalletBalanceByUserId.set(
+          userId,
+          (completedWalletBalanceByUserId.get(userId) ?? 0) + amount
+        );
+      }
+
+      if (
+        transaction.transaction_type === "refund_requested" &&
+        (transaction.status === "pending" || transaction.status === "processing")
+      ) {
+        reservedRefundAmountByUserId.set(
+          userId,
+          (reservedRefundAmountByUserId.get(userId) ?? 0) + Math.abs(amount)
+        );
+      }
+
+      let latestRefundStatus: RegisteredUserRefundStatus = null;
+
+      if (
+        transaction.transaction_type === "refund_completed" &&
+        transaction.status === "completed"
+      ) {
+        latestRefundStatus = "refunded";
+      } else if (transaction.transaction_type === "refund_requested") {
+        if (transaction.status === "pending" || transaction.status === "processing") {
+          latestRefundStatus = "pending_review";
+        } else if (transaction.status === "completed") {
+          latestRefundStatus = "refunded";
+        } else if (transaction.status === "failed" || transaction.status === "cancelled") {
+          latestRefundStatus = "wallet_credit";
+        }
+      } else if (
+        (transaction.transaction_type === "game_cancelled_credit" ||
+          transaction.transaction_type === "player_cancelled_credit") &&
+        transaction.status === "completed"
+      ) {
+        latestRefundStatus = "wallet_credit";
+      }
+
+      if (!latestRefundStatus) {
+        return;
+      }
+
+      const createdAt = new Date(transaction.created_at ?? 0).getTime();
+      const currentLatest = latestRefundByUserId.get(userId);
+
+      if (
+        !currentLatest ||
+        createdAt > currentLatest.createdAt ||
+        (createdAt === currentLatest.createdAt && transaction.id > currentLatest.transactionId)
+      ) {
+        latestRefundByUserId.set(userId, {
+          status: latestRefundStatus,
+          createdAt,
+          transactionId: transaction.id,
+        });
+      }
+    });
+
     const registeredUsers = authUsersResult.users.map((authUser) => {
       const profile = profileById.get(authUser.id);
+      const walletAvailableBalance =
+        (completedWalletBalanceByUserId.get(authUser.id) ?? 0) -
+        (reservedRefundAmountByUserId.get(authUser.id) ?? 0);
 
       return {
         id: authUser.id,
@@ -327,6 +407,8 @@ export async function GET(request: NextRequest) {
         joined_at: authUser.created_at,
         last_sign_in_at: authUser.last_sign_in_at ?? null,
         total_bookings: bookingsByUserId.get(authUser.id) ?? 0,
+        wallet_available_balance: walletAvailableBalance,
+        latest_refund: latestRefundByUserId.get(authUser.id)?.status ?? null,
       };
     });
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
@@ -531,6 +613,19 @@ export async function GET(request: NextRequest) {
         players_count: countUniquePlayers(bookings),
         profiles_count: profiles.length,
         auth_users_count: registeredUsers.length,
+        wallet_credits_total: registeredUsers.reduce(
+          (total, registeredUser) => total + Math.max(0, registeredUser.wallet_available_balance),
+          0
+        ),
+        refund_requests_count: walletSummaryTransactions.filter(
+          (transaction) =>
+            transaction.transaction_type === "refund_requested" &&
+            (transaction.status === "pending" || transaction.status === "processing")
+        ).length,
+        completed_refunds_count: walletSummaryTransactions.filter(
+          (transaction) =>
+            transaction.transaction_type === "refund_completed" && transaction.status === "completed"
+        ).length,
         payments_count: bookingPayments.length,
         waiting_list_count: waitingList.length,
         paid_payments_amount_total: sumPaidPaymentAmounts(bookingPayments),

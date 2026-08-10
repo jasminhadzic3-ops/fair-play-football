@@ -160,6 +160,8 @@ interface RegisteredUser {
   joined_at: string;
   last_sign_in_at: string | null;
   total_bookings: number;
+  wallet_available_balance: number;
+  latest_refund: "wallet_credit" | "pending_review" | "refunded" | null;
 }
 
 type UserFilter = "all" | "active" | "verified" | "not_verified" | "google" | "email";
@@ -171,6 +173,9 @@ interface AdminSummary {
   players_count: number;
   profiles_count: number;
   auth_users_count: number;
+  wallet_credits_total: number;
+  refund_requests_count: number;
+  completed_refunds_count: number;
   paid_payments_amount_total: number;
 }
 
@@ -372,6 +377,9 @@ export default function AdminPage() {
     players_count: 0,
     profiles_count: 0,
     auth_users_count: 0,
+    wallet_credits_total: 0,
+    refund_requests_count: 0,
+    completed_refunds_count: 0,
     paid_payments_amount_total: 0,
   });
 
@@ -1436,6 +1444,9 @@ export default function AdminPage() {
     { label: "Upcoming games", value: operationalSummary.upcomingGamesCount },
     { label: "Current bookings", value: operationalSummary.currentBookingsCount },
     { label: "Registered users", value: operationalSummary.registeredUsersCount },
+    { label: "Wallet Credits", value: `£${summary.wallet_credits_total.toFixed(2)}` },
+    { label: "Refund Requests", value: summary.refund_requests_count },
+    { label: "Completed Refunds", value: summary.completed_refunds_count },
     {
       label: "Paid payments amount",
       value: `£${operationalSummary.paidPaymentsAmount.toFixed(2)}`,
@@ -1617,6 +1628,22 @@ export default function AdminPage() {
                     : status === "never_signed_in"
                       ? "border-amber-400/25 bg-amber-400/10 text-amber-200"
                       : "border-red-500/25 bg-red-500/10 text-red-200";
+                const latestRefundLabel =
+                  registeredUser.latest_refund === "wallet_credit"
+                    ? "Wallet Credit"
+                    : registeredUser.latest_refund === "pending_review"
+                      ? "Pending Review"
+                      : registeredUser.latest_refund === "refunded"
+                        ? "Refunded"
+                        : "None";
+                const latestRefundClassName =
+                  registeredUser.latest_refund === "wallet_credit"
+                    ? "border-sky-500/25 bg-sky-500/10 text-sky-200"
+                    : registeredUser.latest_refund === "pending_review"
+                      ? "border-amber-400/25 bg-amber-400/10 text-amber-200"
+                      : registeredUser.latest_refund === "refunded"
+                        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                        : "border-zinc-700 bg-zinc-900 text-zinc-400";
 
                 return (
                   <article
@@ -1686,6 +1713,34 @@ export default function AdminPage() {
                               <dd className="mt-1.5 truncate text-sm font-semibold text-zinc-200">{item.value}</dd>
                             </div>
                           ))}
+                          <div className="min-w-0">
+                            <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                              Wallet
+                            </dt>
+                            <dd className="mt-1.5">
+                              <span
+                                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  registeredUser.wallet_available_balance > 0
+                                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                                    : "border-zinc-700 bg-zinc-900 text-zinc-400"
+                                }`}
+                              >
+                                {registeredUser.wallet_available_balance > 0
+                                  ? `£${registeredUser.wallet_available_balance.toFixed(2)} Available`
+                                  : "No Credit"}
+                              </span>
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                              Latest Refund
+                            </dt>
+                            <dd className="mt-1.5">
+                              <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${latestRefundClassName}`}>
+                                {latestRefundLabel}
+                              </span>
+                            </dd>
+                          </div>
                         </dl>
                       </div>
                     </div>
