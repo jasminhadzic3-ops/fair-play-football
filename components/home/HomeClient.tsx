@@ -63,6 +63,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [retryPaymentGameId, setRetryPaymentGameId] = useState<number | null>(null);
   const [recoveredPaymentReturnReference, setRecoveredPaymentReturnReference] = useState<string | null>(null);
   const [showNavbarAuthModal, setShowNavbarAuthModal] = useState(false);
+  const [showNavbarRecoveryModal, setShowNavbarRecoveryModal] = useState(false);
+  const [navbarRecoverySent, setNavbarRecoverySent] = useState(false);
   const [navbarAuthEmail, setNavbarAuthEmail] = useState("");
   const [navbarAuthPassword, setNavbarAuthPassword] = useState("");
   const [navbarAuthConfirmPassword, setNavbarAuthConfirmPassword] = useState("");
@@ -1011,6 +1013,58 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setNavbarAgreementAccepted(false);
   };
 
+  const openNavbarRecoveryModal = () => {
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+    setNavbarRecoverySent(false);
+    setShowNavbarAuthModal(false);
+    setShowNavbarRecoveryModal(true);
+  };
+
+  const closeNavbarRecoveryModal = () => {
+    setShowNavbarRecoveryModal(false);
+    setNavbarRecoverySent(false);
+    setNavbarAuthLoading(false);
+    setNavbarAuthError(null);
+    setNavbarAuthStatus(null);
+  };
+
+  const returnToNavbarSignIn = () => {
+    closeNavbarRecoveryModal();
+    setNavbarAuthMode("signin");
+    setShowNavbarAuthModal(true);
+  };
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const shouldOpenRecovery = url.searchParams.get("forgot_password") === "1";
+    const shouldOpenSignIn = url.searchParams.get("sign_in") === "1";
+
+    if (!shouldOpenRecovery && !shouldOpenSignIn) {
+      return;
+    }
+
+    url.searchParams.delete("forgot_password");
+    url.searchParams.delete("sign_in");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+
+    const timeout = window.setTimeout(() => {
+      setNavbarAuthMode("signin");
+      setNavbarAuthError(null);
+      setNavbarAuthStatus(null);
+
+      if (shouldOpenRecovery) {
+        setNavbarRecoverySent(false);
+        setShowNavbarRecoveryModal(true);
+        setShowNavbarAuthModal(false);
+      } else {
+        setShowNavbarAuthModal(true);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   const switchNavbarAuthMode = (mode: "signin" | "signup") => {
     setNavbarAuthMode(mode);
     setNavbarAuthError(null);
@@ -1083,6 +1137,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     }
 
     setNavbarAuthStatus("If an account exists for this email, we will send a secure reset link.");
+    setNavbarRecoverySent(true);
     setNavbarAuthLoading(false);
   };
 
@@ -1409,7 +1464,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               {navbarAuthMode === "signin" ? (
                 <button
                   type="button"
-                  onClick={handleNavbarForgotPassword}
+                  onClick={openNavbarRecoveryModal}
                   disabled={navbarAuthLoading}
                   className="mt-3 text-sm font-semibold text-stone-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1490,6 +1545,83 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               </button>
             </div>
           </div>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={showNavbarRecoveryModal}
+        onClose={closeNavbarRecoveryModal}
+        title={navbarRecoverySent ? "Reset link sent" : "Reset your password"}
+      >
+        <div className="mx-auto w-full max-w-xl py-2 sm:py-6">
+          <section className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)] sm:p-8">
+            {navbarRecoverySent ? (
+              <div aria-live="polite">
+                <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-emerald-200">
+                  Email sent
+                </div>
+                <h2 className="mt-5 text-3xl font-black tracking-tight text-white">Check Your Inbox</h2>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  If there’s a Fair Play account for that email, a secure reset link is on its way.
+                </p>
+                <p className="mt-3 text-sm leading-6 text-zinc-500">
+                  The link will expire for your security. If you can’t find the email, check your spam or junk folder.
+                </p>
+                <button
+                  type="button"
+                  onClick={returnToNavbarSignIn}
+                  className="mt-7 w-full rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.35em] text-zinc-500">Password Reset</p>
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-white">Forgot Your Password?</h2>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  Enter your email address and we’ll send you a secure link to create a new password.
+                </p>
+
+                {navbarAuthError ? (
+                  <div role="alert" className="mt-5 rounded-3xl border border-rose-500/70 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                    {navbarAuthError}
+                  </div>
+                ) : null}
+
+                <div className="mt-6">
+                  <label htmlFor="navbar-recovery-email" className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">
+                    Email address
+                  </label>
+                  <input
+                    id="navbar-recovery-email"
+                    type="email"
+                    autoComplete="email"
+                    autoFocus
+                    value={navbarAuthEmail}
+                    onChange={(event) => setNavbarAuthEmail(event.target.value)}
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-black px-5 py-4 text-white outline-none transition focus:border-stone-200/40 focus:ring-2 focus:ring-stone-200/10"
+                    placeholder="you@example.com"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleNavbarForgotPassword}
+                  disabled={navbarAuthLoading}
+                  className="mt-6 w-full rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {navbarAuthLoading ? "Sending Reset Link…" : "Send Reset Link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={returnToNavbarSignIn}
+                  className="mt-3 w-full rounded-3xl border border-zinc-700 bg-zinc-900 px-6 py-3 font-semibold text-stone-200 transition hover:border-white/20 hover:text-white"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            )}
+          </section>
         </div>
       </Modal>
       {paymentReturnGame && paymentReturnTargetGameId && returnPaymentState ? (

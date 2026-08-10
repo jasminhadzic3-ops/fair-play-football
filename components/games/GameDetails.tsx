@@ -97,6 +97,8 @@ export default function GameDetails({
   onOpenAuthModalHandled,
 }: GameDetailsProps) {
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signin");
   const [authLoading, setAuthLoading] = useState(false);
@@ -346,6 +348,27 @@ export default function GameDetails({
       setAuthOpenedFromNavbar(false);
       onClose();
     }
+  };
+
+  const openRecoveryModal = () => {
+    clearAuthState();
+    setRecoverySent(false);
+    setShowProfileModal(false);
+    setShowRecoveryModal(true);
+  };
+
+  const closeRecoveryModal = () => {
+    setShowRecoveryModal(false);
+    setRecoverySent(false);
+    setAuthLoading(false);
+    setAuthError(null);
+    setStatusMessage(null);
+  };
+
+  const returnToProfileSignIn = () => {
+    closeRecoveryModal();
+    setAuthMode("signin");
+    setShowProfileModal(true);
   };
 
   const openProfileModal = () => {
@@ -927,6 +950,7 @@ export default function GameDetails({
     }
 
     setStatusMessage("If an account exists for this email, we will send a secure reset link.");
+    setRecoverySent(true);
     setAuthLoading(false);
   };
 
@@ -1638,7 +1662,7 @@ export default function GameDetails({
                     {authMode === "signin" ? (
                       <button
                         type="button"
-                        onClick={handleForgotPassword}
+                        onClick={openRecoveryModal}
                         disabled={authLoading}
                         className="mt-3 text-sm font-semibold text-stone-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1762,6 +1786,84 @@ export default function GameDetails({
               </button>
             ) : null}
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showRecoveryModal}
+        onClose={closeRecoveryModal}
+        title={recoverySent ? "Reset link sent" : "Reset your password"}
+      >
+        <div className="mx-auto w-full max-w-xl py-1 sm:py-5">
+          <section className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] sm:p-8">
+            {recoverySent ? (
+              <div aria-live="polite">
+                <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-emerald-200">
+                  Email sent
+                </div>
+                <h2 className="mt-5 text-3xl font-black tracking-tight text-white">Check Your Inbox</h2>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  If there’s a Fair Play account for that email, a secure reset link is on its way.
+                </p>
+                <p className="mt-3 text-sm leading-6 text-zinc-500">
+                  The link will expire for your security. If you can’t find the email, check your spam or junk folder.
+                </p>
+                <button
+                  type="button"
+                  onClick={returnToProfileSignIn}
+                  className="mt-7 w-full rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.35em] text-zinc-500">Password Reset</p>
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-white">Forgot Your Password?</h2>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  Enter your email address and we’ll send you a secure link to create a new password.
+                </p>
+
+                {authError ? (
+                  <div role="alert" className="mt-5 rounded-3xl border border-rose-500/70 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                    {authError}
+                  </div>
+                ) : null}
+
+                <div className="mt-6">
+                  <label htmlFor="game-recovery-email" className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">
+                    Email address
+                  </label>
+                  <input
+                    id="game-recovery-email"
+                    type="email"
+                    autoComplete="email"
+                    autoFocus
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-black px-5 py-4 text-white outline-none transition focus:border-stone-200/40 focus:ring-2 focus:ring-stone-200/10"
+                    placeholder="you@example.com"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={authLoading}
+                  className="mt-6 w-full rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {authLoading ? "Sending Reset Link…" : "Send Reset Link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={returnToProfileSignIn}
+                  className="mt-3 w-full rounded-3xl border border-zinc-700 bg-zinc-900 px-6 py-3 font-semibold text-stone-200 transition hover:border-white/20 hover:text-white"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            )}
+          </section>
         </div>
       </Modal>
 
