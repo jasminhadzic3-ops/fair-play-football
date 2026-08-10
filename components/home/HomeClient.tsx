@@ -1561,7 +1561,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 </div>
                 <h2 className="mt-5 text-3xl font-black tracking-tight text-white">Check Your Email</h2>
                 <p className="mt-3 text-sm leading-6 text-zinc-300">
-                  If there&apos;s a Fair Play account associated with that email address, you&apos;ll receive a secure password reset link.
+                  If there&apos;s a Fair Play account associated with that email address, you will receive a secure password reset link.
                 </p>
                 <p className="mt-3 text-sm leading-6 text-zinc-500">
                   For your security, the reset link will expire after a limited time. If you don&apos;t see the email within a few minutes, please check your spam or junk folder.
