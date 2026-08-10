@@ -38,7 +38,17 @@ interface Booking {
   game_id: number;
   user_id?: string | null;
   player_name?: string | null;
+  payment_method?: "website" | "cash" | "free" | "manual";
+  booking_source?: "website" | "cash" | "manual" | "guest";
+  added_by?: "admin" | "player" | "system";
+  notes?: string | null;
+  guest_phone?: string | null;
+  wallet_available_balance?: number;
+  latest_refund?: "wallet_credit" | "pending_review" | "refunded" | null;
 }
+
+type AdminPlayerType = "existing" | "guest";
+type AdminPaymentMethod = "website" | "cash" | "free" | "manual";
 
 interface BookingPayment {
   id: number;
@@ -371,6 +381,17 @@ export default function AdminPage() {
   const [cancellingGameId, setCancellingGameId] = useState<number | null>(null);
   const [processingRefundRequestId, setProcessingRefundRequestId] = useState<number | null>(null);
   const [processingAdminRefundSourceId, setProcessingAdminRefundSourceId] = useState<number | null>(null);
+  const [addPlayerGame, setAddPlayerGame] = useState<Game | null>(null);
+  const [addPlayerType, setAddPlayerType] = useState<AdminPlayerType>("existing");
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [guestPlayerName, setGuestPlayerName] = useState("");
+  const [guestPhoneNumber, setGuestPhoneNumber] = useState("");
+  const [adminPaymentMethod, setAdminPaymentMethod] = useState<AdminPaymentMethod>("website");
+  const [adminBookingNotes, setAdminBookingNotes] = useState("");
+  const [isAddingPlayer, setIsAddingPlayer] = useState(false);
+  const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
+  const [editingAdminBooking, setEditingAdminBooking] = useState<Booking | null>(null);
   const [summary, setSummary] = useState<AdminSummary>({
     games_count: 0,
     bookings_count: 0,
@@ -382,6 +403,27 @@ export default function AdminPage() {
     completed_refunds_count: 0,
     paid_payments_amount_total: 0,
   });
+
+  useEffect(() => {
+    if (!addPlayerGame) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isAddingPlayer) {
+        setAddPlayerGame(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [addPlayerGame, isAddingPlayer]);
 
   const getAdminAuthHeaders = useCallback(async () => {
     const {
@@ -642,6 +684,33 @@ export default function AdminPage() {
     [visibleRegisteredUsers]
   );
 
+  const addPlayerSearchResults = useMemo(() => {
+    if (!addPlayerGame || addPlayerType !== "existing") {
+      return [];
+    }
+
+    const query = playerSearch.trim().toLowerCase();
+    const bookedUserIds = new Set(
+      bookings
+        .filter((booking) => booking.game_id === addPlayerGame.id && booking.user_id)
+        .map((booking) => booking.user_id)
+    );
+
+    return registeredUsers
+      .filter(
+        (registeredUser) =>
+          (!bookedUserIds.has(registeredUser.id) || editingAdminBooking?.user_id === registeredUser.id) &&
+          (!query ||
+            registeredUser.username.toLowerCase().includes(query) ||
+            registeredUser.email?.toLowerCase().includes(query))
+      )
+      .slice(0, 8);
+  }, [addPlayerGame, addPlayerType, bookings, editingAdminBooking?.user_id, playerSearch, registeredUsers]);
+
+  const selectedAddPlayer = selectedPlayerId
+    ? registeredUsers.find((registeredUser) => registeredUser.id === selectedPlayerId) ?? null
+    : null;
+
   const getValidMoveDestinations = useCallback(
     (booking: Booking) => {
       const now = new Date();
@@ -809,6 +878,147 @@ export default function AdminPage() {
     highlightForm();
     scrollToElement(formSectionRef.current);
     focusTitleAfterScroll();
+  };
+
+  const openAddPlayerModal = (game: Game) => {
+    setEditingAdminBooking(null);
+    setAddPlayerGame(game);
+    setAddPlayerType("existing");
+    setPlayerSearch("");
+    setSelectedPlayerId(null);
+    setGuestPlayerName("");
+    setGuestPhoneNumber("");
+    setAdminPaymentMethod("website");
+    setAdminBookingNotes("");
+    setAddPlayerError(null);
+  };
+
+  const closeAddPlayerModal = () => {
+    if (isAddingPlayer) {
+      return;
+    }
+
+    setAddPlayerGame(null);
+    setEditingAdminBooking(null);
+    setAddPlayerError(null);
+  };
+
+  const openEditAdminBookingModal = (booking: Booking) => {
+    const game = games.find((currentGame) => currentGame.id === booking.game_id);
+
+    if (!game || booking.added_by !== "admin") {
+      return;
+    }
+
+    const isGuest = booking.booking_source === "guest";
+    setEditingAdminBooking(booking);
+    setAddPlayerGame(game);
+    setAddPlayerType(isGuest ? "guest" : "existing");
+    setPlayerSearch("");
+    setSelectedPlayerId(booking.user_id ?? null);
+    setGuestPlayerName(isGuest ? booking.player_name?.trim() ?? "" : "");
+    setGuestPhoneNumber(isGuest ? booking.guest_phone ?? "" : "");
+    setAdminPaymentMethod(booking.payment_method ?? (isGuest ? "free" : "website"));
+    setAdminBookingNotes(booking.notes ?? "");
+    setAddPlayerError(null);
+  };
+
+  const selectAddPlayerType = (playerType: AdminPlayerType) => {
+    setAddPlayerType(playerType);
+    setSelectedPlayerId(null);
+    setAddPlayerError(null);
+    setAdminPaymentMethod(playerType === "guest" ? "free" : "website");
+  };
+
+  const addPlayerToGame = async () => {
+    if (!addPlayerGame || isAddingPlayer) {
+      return;
+    }
+
+    const playerName =
+      addPlayerType === "existing" ? selectedAddPlayer?.username.trim() ?? "" : guestPlayerName.trim();
+
+    if (!playerName || (addPlayerType === "existing" && !selectedAddPlayer)) {
+      setAddPlayerError(
+        addPlayerType === "existing" ? "Select a registered player." : "Enter the guest player’s name."
+      );
+      return;
+    }
+
+    setIsAddingPlayer(true);
+    setAddPlayerError(null);
+
+    try {
+      const response = await fetch(
+        editingAdminBooking ? `/api/admin/bookings/${editingAdminBooking.id}` : "/api/admin/bookings",
+        {
+        method: editingAdminBooking ? "PATCH" : "POST",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({
+          game_id: addPlayerGame.id,
+          player_type: addPlayerType,
+          user_id: selectedAddPlayer?.id ?? null,
+          player_name: playerName,
+          phone_number: addPlayerType === "guest" ? guestPhoneNumber.trim() || null : null,
+          payment_method: adminPaymentMethod,
+          notes: adminBookingNotes.trim() || null,
+        }),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || !result?.booking) {
+        setAddPlayerError(result?.error || "Unable to add this player.");
+        return;
+      }
+
+      const newBooking = result.booking as Booking;
+      const registeredUser = newBooking.user_id
+        ? registeredUsers.find((currentUser) => currentUser.id === newBooking.user_id)
+        : null;
+
+      setBookings((currentBookings) =>
+        editingAdminBooking
+          ? currentBookings.map((currentBooking) =>
+              currentBooking.id === newBooking.id
+                ? {
+                    ...currentBooking,
+                    ...newBooking,
+                  }
+                : currentBooking
+            )
+          : [
+              ...currentBookings,
+              {
+                ...newBooking,
+                wallet_available_balance: registeredUser?.wallet_available_balance ?? 0,
+                latest_refund: registeredUser?.latest_refund ?? null,
+              },
+            ]
+      );
+      if (!editingAdminBooking) {
+        setGames((currentGames) =>
+          currentGames.map((currentGame) =>
+            currentGame.id === addPlayerGame.id && currentGame.admin_safety
+              ? {
+                  ...currentGame,
+                  admin_safety: {
+                    ...currentGame.admin_safety,
+                    bookings_count: currentGame.admin_safety.bookings_count + 1,
+                    spaces_remaining: Math.max(0, currentGame.admin_safety.spaces_remaining - 1),
+                    safe_to_delete: false,
+                  },
+                }
+              : currentGame
+          )
+        );
+      }
+      setAddPlayerGame(null);
+      setEditingAdminBooking(null);
+    } catch (error) {
+      setAddPlayerError(error instanceof Error ? error.message : "Unable to add this player.");
+    } finally {
+      setIsAddingPlayer(false);
+    }
   };
 
   const deleteGame = async (game: Game) => {
@@ -1158,7 +1368,7 @@ export default function AdminPage() {
   const getPaymentStatusForBooking = (booking: Booking) => {
     const matchedPayment = getPaymentDisplayForBooking(booking);
 
-    return matchedPayment?.payment_status || "unknown";
+    return matchedPayment?.payment_status || booking.payment_method || "unknown";
   };
 
   const isPaidBookingPayment = (payment: BookingPayment) =>
@@ -2197,6 +2407,15 @@ export default function AdminPage() {
                       </div>
 
                       <div className="flex gap-3">
+                        {!isArchived && game.status !== "cancelled" && safety.spaces_remaining > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => openAddPlayerModal(game)}
+                            className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+                          >
+                            Add Player
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => editGame(game)}
@@ -2314,9 +2533,23 @@ export default function AdminPage() {
                               className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm font-medium text-zinc-200"
                             >
                               <span>{booking.player_name?.trim() || "Unnamed player"}</span>
+                              {booking.booking_source === "guest" ? (
+                                <span className="rounded-full border border-violet-400/25 bg-violet-400/10 px-2 py-0.5 text-xs font-semibold text-violet-200">
+                                  Guest Player
+                                </span>
+                              ) : null}
                               <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs uppercase tracking-[0.18em] text-zinc-400">
                                 {getPaymentStatusForBooking(booking)}
                               </span>
+                              {booking.added_by === "admin" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditAdminBookingModal(booking)}
+                                  className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-200 transition hover:border-sky-400"
+                                >
+                                  Edit
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => removeBooking(booking)}
@@ -2377,6 +2610,11 @@ export default function AdminPage() {
                         <p className="mt-2 font-semibold text-white">
                           {booking.player_name?.trim() || "Unnamed player"}
                         </p>
+                        {booking.booking_source === "guest" ? (
+                          <span className="mt-2 inline-flex rounded-full border border-violet-400/25 bg-violet-400/10 px-3 py-1 text-xs font-semibold text-violet-200">
+                            Guest Player
+                          </span>
+                        ) : null}
                       </div>
 
                       <div>
@@ -2448,6 +2686,16 @@ export default function AdminPage() {
                             </p>
                           )}
 
+                          {booking.added_by === "admin" ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditAdminBookingModal(booking)}
+                              className="w-full rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:border-sky-400 sm:w-auto"
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+
                           <button
                             type="button"
                             onClick={() => removeBooking(booking)}
@@ -2456,6 +2704,76 @@ export default function AdminPage() {
                             Remove booking
                           </button>
                         </form>
+                      </div>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-4 border-t border-zinc-800 pt-4 md:grid-cols-3 lg:grid-cols-6">
+                      {[
+                        {
+                          label: "Payment Method",
+                          value: booking.payment_method
+                            ? booking.payment_method.charAt(0).toUpperCase() + booking.payment_method.slice(1)
+                            : "Website",
+                        },
+                        {
+                          label: "Booking Source",
+                          value: booking.booking_source
+                            ? booking.booking_source.charAt(0).toUpperCase() + booking.booking_source.slice(1)
+                            : booking.user_id
+                              ? "Website"
+                              : "Guest",
+                        },
+                        {
+                          label: "Added By",
+                          value: booking.added_by
+                            ? booking.added_by.charAt(0).toUpperCase() + booking.added_by.slice(1)
+                            : booking.user_id
+                              ? "Player"
+                              : "System",
+                        },
+                        { label: "Notes", value: booking.notes || "None" },
+                      ].map((item) => (
+                        <div key={item.label} className="min-w-0">
+                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                            {item.label}
+                          </p>
+                          <p className="mt-1.5 break-words text-sm font-semibold text-zinc-200">{item.value}</p>
+                        </div>
+                      ))}
+                      <div className="min-w-0">
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-zinc-500">Wallet</p>
+                        <span
+                          className={`mt-1.5 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                            Number(booking.wallet_available_balance ?? 0) > 0
+                              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                              : "border-zinc-700 bg-zinc-950 text-zinc-400"
+                          }`}
+                        >
+                          {Number(booking.wallet_available_balance ?? 0) > 0
+                            ? `£${Number(booking.wallet_available_balance).toFixed(2)} Available`
+                            : "No Credit"}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-zinc-500">Latest Refund</p>
+                        <span
+                          className={`mt-1.5 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                            booking.latest_refund === "pending_review"
+                              ? "border-amber-400/25 bg-amber-400/10 text-amber-200"
+                              : booking.latest_refund === "refunded"
+                                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                                : booking.latest_refund === "wallet_credit"
+                                  ? "border-sky-500/25 bg-sky-500/10 text-sky-200"
+                                  : "border-zinc-700 bg-zinc-950 text-zinc-400"
+                          }`}
+                        >
+                          {booking.latest_refund === "wallet_credit"
+                            ? "Wallet Credit"
+                            : booking.latest_refund === "pending_review"
+                              ? "Pending Review"
+                              : booking.latest_refund === "refunded"
+                                ? "Refunded"
+                                : "None"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -2670,6 +2988,217 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {addPlayerGame ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-player-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeAddPlayerModal();
+            }
+          }}
+        >
+          <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.7)] animate-[notification-dropdown-enter_180ms_ease-out] sm:rounded-[2rem] sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">Player Management</p>
+                <h2 id="add-player-title" className="mt-2 text-2xl font-bold text-white sm:text-3xl">
+                  {editingAdminBooking ? "Edit Player" : "Add Player"}
+                </h2>
+                <p className="mt-2 text-sm text-zinc-400">{addPlayerGame.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeAddPlayerModal}
+                disabled={isAddingPlayer}
+                aria-label="Close add player"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 transition hover:border-zinc-600 hover:text-white disabled:opacity-50"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-black p-1.5">
+              {([
+                { value: "existing", label: "Existing Player" },
+                { value: "guest", label: "Guest Player" },
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => selectAddPlayerType(option.value)}
+                  disabled={Boolean(editingAdminBooking)}
+                  className={`rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                    addPlayerType === option.value
+                      ? "bg-stone-200 text-zinc-950"
+                      : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            {addPlayerType === "existing" ? (
+              <div className="mt-6">
+                <label htmlFor="admin-player-search" className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                  Search registered users
+                </label>
+                <input
+                  id="admin-player-search"
+                  type="search"
+                  autoFocus
+                  value={playerSearch}
+                  onChange={(event) => {
+                    setPlayerSearch(event.target.value);
+                    setSelectedPlayerId(null);
+                  }}
+                  placeholder="Search by name or email"
+                  className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                />
+
+                <div className="mt-3 grid max-h-52 gap-2 overflow-y-auto pr-1">
+                  {addPlayerSearchResults.length > 0 ? (
+                    addPlayerSearchResults.map((registeredUser) => {
+                      const initials = registeredUser.username
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part) => part.charAt(0).toUpperCase())
+                        .join("");
+                      const isSelected = selectedPlayerId === registeredUser.id;
+
+                      return (
+                        <button
+                          key={registeredUser.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPlayerId(registeredUser.id);
+                            setAddPlayerError(null);
+                          }}
+                          className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                            isSelected
+                              ? "border-emerald-400/50 bg-emerald-500/10"
+                              : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+                          }`}
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-800 text-xs font-bold text-white">
+                            {registeredUser.avatar_url ? (
+                              <img
+                                src={registeredUser.avatar_url}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              initials || "?"
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-white">{registeredUser.username}</span>
+                            <span className="mt-0.5 block truncate text-xs text-zinc-500">{registeredUser.email || "No email available"}</span>
+                          </span>
+                          {isSelected ? <span className="text-emerald-300" aria-hidden="true">✓</span> : null}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-500">
+                      No available registered players found.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Player Name</span>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={guestPlayerName}
+                    onChange={(event) => setGuestPlayerName(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-4 py-3.5 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Phone Number <span className="normal-case tracking-normal">(optional)</span></span>
+                  <input
+                    type="tel"
+                    value={guestPhoneNumber}
+                    onChange={(event) => setGuestPhoneNumber(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-4 py-3.5 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </label>
+              </div>
+            )}
+
+            {(addPlayerType === "guest" || selectedAddPlayer) ? (
+              <div className="mt-6 grid gap-4 border-t border-zinc-800 pt-6 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Payment Method</span>
+                  <select
+                    value={adminPaymentMethod}
+                    onChange={(event) => setAdminPaymentMethod(event.target.value as AdminPaymentMethod)}
+                    className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                  >
+                    {(addPlayerType === "existing"
+                      ? ["website", "cash", "free", "manual"]
+                      : ["free", "cash", "manual"]
+                    ).map((method) => (
+                      <option key={method} value={method}>
+                        {method.charAt(0).toUpperCase() + method.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Booking Status</p>
+                  <span className="mt-2 inline-flex rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">
+                    Confirmed
+                  </span>
+                </div>
+                <label className="block sm:col-span-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Notes <span className="normal-case tracking-normal">(optional)</span></span>
+                  <textarea
+                    rows={2}
+                    value={adminBookingNotes}
+                    onChange={(event) => setAdminBookingNotes(event.target.value)}
+                    className="mt-2 w-full resize-none rounded-2xl border border-zinc-700 bg-black px-4 py-3.5 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            {addPlayerError ? (
+              <p role="alert" className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {addPlayerError}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void addPlayerToGame()}
+              disabled={isAddingPlayer || (addPlayerType === "existing" ? !selectedAddPlayer : !guestPlayerName.trim())}
+              className="mt-6 w-full rounded-2xl bg-emerald-500 px-5 py-4 text-sm font-bold text-black transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-2 focus:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isAddingPlayer
+                ? editingAdminBooking
+                  ? "Saving Changes..."
+                  : "Adding Player..."
+                : editingAdminBooking
+                  ? "Save Changes"
+                : addPlayerType === "guest"
+                  ? "Create & Add to Game"
+                  : "Add to Game"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

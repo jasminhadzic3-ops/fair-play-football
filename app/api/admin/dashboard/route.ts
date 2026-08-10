@@ -36,6 +36,15 @@ type Booking = {
   player_name: string | null;
 };
 
+type AdminBookingDetail = {
+  booking_id: number;
+  payment_method: "website" | "cash" | "free" | "manual";
+  booking_source: "website" | "cash" | "manual" | "guest";
+  added_by: "admin" | "player" | "system";
+  notes: string | null;
+  guest_phone: string | null;
+};
+
 type Profile = {
   id: string;
   email: string | null;
@@ -194,6 +203,7 @@ export async function GET(request: NextRequest) {
     const [
       gamesResult,
       bookingsResult,
+      adminBookingDetailsResult,
       profilesResult,
       paymentsResult,
       walletTransactionsResult,
@@ -214,6 +224,9 @@ export async function GET(request: NextRequest) {
         .from("bookings")
         .select("id,game_id,user_id,player_name")
         .order("id", { ascending: true }),
+      supabaseAdmin
+        .from("admin_booking_details")
+        .select("booking_id,payment_method,booking_source,added_by,notes,guest_phone"),
       supabaseAdmin
         .from("profiles")
         .select("id,email,username,age,gender,favourite_position,avatar_url"),
@@ -262,6 +275,7 @@ export async function GET(request: NextRequest) {
     const firstError =
       gamesResult.error ||
       bookingsResult.error ||
+      adminBookingDetailsResult.error ||
       profilesResult.error ||
       paymentsResult.error ||
       walletTransactionsResult.error ||
@@ -280,6 +294,9 @@ export async function GET(request: NextRequest) {
 
     const games = gamesResult.data ?? [];
     const allBookings = bookingsResult.data ?? [];
+    const adminBookingDetailByBookingId = new Map(
+      ((adminBookingDetailsResult.data ?? []) as AdminBookingDetail[]).map((detail) => [detail.booking_id, detail])
+    );
     const actionableGameIds = new Set(
       (games as Game[])
         .filter((game) => getAdminGameLifecycle(game) === "active_upcoming")
@@ -409,6 +426,22 @@ export async function GET(request: NextRequest) {
         total_bookings: bookingsByUserId.get(authUser.id) ?? 0,
         wallet_available_balance: walletAvailableBalance,
         latest_refund: latestRefundByUserId.get(authUser.id)?.status ?? null,
+      };
+    });
+    const registeredUserById = new Map(registeredUsers.map((registeredUser) => [registeredUser.id, registeredUser]));
+    const adminBookings = bookings.map((booking) => {
+      const detail = adminBookingDetailByBookingId.get(booking.id);
+      const registeredUser = booking.user_id ? registeredUserById.get(booking.user_id) : null;
+
+      return {
+        ...booking,
+        payment_method: detail?.payment_method ?? "website",
+        booking_source: detail?.booking_source ?? (booking.user_id ? "website" : "guest"),
+        added_by: detail?.added_by ?? (booking.user_id ? "player" : "system"),
+        notes: detail?.notes ?? null,
+        guest_phone: detail?.guest_phone ?? null,
+        wallet_available_balance: registeredUser?.wallet_available_balance ?? 0,
+        latest_refund: registeredUser?.latest_refund ?? null,
       };
     });
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
@@ -599,7 +632,7 @@ export async function GET(request: NextRequest) {
 
     return Response.json({
       games: gamesWithSafetySummaries,
-      bookings,
+      bookings: adminBookings,
       profiles,
       booking_payments: safeBookingPayments,
       wallet_transactions: walletTransactions,
