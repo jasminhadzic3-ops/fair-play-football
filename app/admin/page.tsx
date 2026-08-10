@@ -149,11 +149,28 @@ interface WaitingListEntry {
   created_at?: string | null;
 }
 
+interface RegisteredUser {
+  id: string;
+  username: string;
+  email: string | null;
+  avatar_url: string | null;
+  provider: "Google" | "Email";
+  email_verified: boolean;
+  profile_exists: boolean;
+  joined_at: string;
+  last_sign_in_at: string | null;
+  total_bookings: number;
+}
+
+type UserFilter = "all" | "active" | "verified" | "not_verified" | "google" | "email";
+type UserSort = "newest" | "oldest" | "last_sign_in" | "most_bookings" | "name";
+
 interface AdminSummary {
   games_count: number;
   bookings_count: number;
   players_count: number;
   profiles_count: number;
+  auth_users_count: number;
   paid_payments_amount_total: number;
 }
 
@@ -164,6 +181,7 @@ interface AdminDashboardData {
   wallet_transactions?: WalletTransaction[];
   refund_requests?: RefundRequest[];
   waiting_list: WaitingListEntry[];
+  registered_users: RegisteredUser[];
   automaticSumUpRefundEnabled?: boolean;
   automaticSumUpRefundMockEnabled?: boolean;
   automaticSumUpRefundMode?: "disabled" | "test_mock" | "local_sandbox_real" | "production_real";
@@ -219,6 +237,35 @@ const gameFilters: Array<{ value: AdminGameFilter; label: string }> = [
   { value: "archived", label: "Archived" },
   { value: "all", label: "All" },
 ];
+
+const userFilters: Array<{ value: UserFilter; label: string }> = [
+  { value: "all", label: "All Users" },
+  { value: "active", label: "Active" },
+  { value: "verified", label: "Verified" },
+  { value: "not_verified", label: "Not Verified" },
+  { value: "google", label: "Google" },
+  { value: "email", label: "Email" },
+];
+
+const userSortOptions: Array<{ value: UserSort; label: string }> = [
+  { value: "newest", label: "Newest Joined" },
+  { value: "oldest", label: "Oldest Joined" },
+  { value: "last_sign_in", label: "Last Sign In" },
+  { value: "most_bookings", label: "Most Bookings" },
+  { value: "name", label: "Name A–Z" },
+];
+
+function getRegisteredUserStatus(user: RegisteredUser) {
+  if (!user.email_verified) {
+    return "not_verified" as const;
+  }
+
+  if (!user.last_sign_in_at) {
+    return "never_signed_in" as const;
+  }
+
+  return "active" as const;
+}
 
 function getLondonKickoffFormValues(startsAt: string | null | undefined) {
   if (!startsAt) {
@@ -295,6 +342,10 @@ export default function AdminPage() {
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [waitingList, setWaitingList] = useState<WaitingListEntry[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userFilter, setUserFilter] = useState<UserFilter>("all");
+  const [userSort, setUserSort] = useState<UserSort>("newest");
   const [automaticSumUpRefundEnabled, setAutomaticSumUpRefundEnabled] = useState(false);
   const [gameSearch, setGameSearch] = useState("");
   const [gameFilter, setGameFilter] = useState<AdminGameFilter>("active_upcoming");
@@ -320,6 +371,7 @@ export default function AdminPage() {
     bookings_count: 0,
     players_count: 0,
     profiles_count: 0,
+    auth_users_count: 0,
     paid_payments_amount_total: 0,
   });
 
@@ -358,6 +410,7 @@ export default function AdminPage() {
         setWalletTransactions(result.wallet_transactions ?? []);
         setRefundRequests(result.refund_requests ?? []);
         setWaitingList(result.waiting_list ?? []);
+        setRegisteredUsers(result.registered_users ?? []);
         setAutomaticSumUpRefundEnabled(result.automaticSumUpRefundEnabled === true);
         setSummary(result.summary);
       }
@@ -517,12 +570,69 @@ export default function AdminPage() {
       upcomingGamesCount,
       archivedGamesCount,
       currentBookingsCount,
-      registeredUsersCount: summary.profiles_count,
+      registeredUsersCount: summary.auth_users_count,
       paidPaymentsAmount: summary.paid_payments_amount_total,
       refundsNeedingAttentionCount: refundRequests.length,
       waitingListCount: waitingList.length,
     };
-  }, [bookings, games, refundRequests.length, summary.paid_payments_amount_total, summary.profiles_count, waitingList.length]);
+  }, [bookings, games, refundRequests.length, summary.auth_users_count, summary.paid_payments_amount_total, waitingList.length]);
+
+  const visibleRegisteredUsers = useMemo(() => {
+    const query = userSearch.trim().toLowerCase();
+    const filteredUsers = registeredUsers.filter((registeredUser) => {
+      const status = getRegisteredUserStatus(registeredUser);
+      const matchesSearch =
+        !query ||
+        registeredUser.username.toLowerCase().includes(query) ||
+        registeredUser.email?.toLowerCase().includes(query);
+      const matchesFilter =
+        userFilter === "all" ||
+        (userFilter === "active" && status === "active") ||
+        (userFilter === "verified" && registeredUser.email_verified) ||
+        (userFilter === "not_verified" && !registeredUser.email_verified) ||
+        (userFilter === "google" && registeredUser.provider === "Google") ||
+        (userFilter === "email" && registeredUser.provider === "Email");
+
+      return Boolean(matchesSearch && matchesFilter);
+    });
+
+    return [...filteredUsers].sort((firstUser, secondUser) => {
+      if (userSort === "oldest") {
+        return new Date(firstUser.joined_at).getTime() - new Date(secondUser.joined_at).getTime();
+      }
+
+      if (userSort === "last_sign_in") {
+        return (
+          new Date(secondUser.last_sign_in_at ?? 0).getTime() -
+          new Date(firstUser.last_sign_in_at ?? 0).getTime()
+        );
+      }
+
+      if (userSort === "most_bookings") {
+        return secondUser.total_bookings - firstUser.total_bookings;
+      }
+
+      if (userSort === "name") {
+        return firstUser.username.localeCompare(secondUser.username, "en-GB", { sensitivity: "base" });
+      }
+
+      return new Date(secondUser.joined_at).getTime() - new Date(firstUser.joined_at).getTime();
+    });
+  }, [registeredUsers, userFilter, userSearch, userSort]);
+
+  const registeredUserSummary = useMemo(
+    () => ({
+      total: visibleRegisteredUsers.length,
+      verified: visibleRegisteredUsers.filter((registeredUser) => registeredUser.email_verified).length,
+      notVerified: visibleRegisteredUsers.filter((registeredUser) => !registeredUser.email_verified).length,
+      active: visibleRegisteredUsers.filter(
+        (registeredUser) => getRegisteredUserStatus(registeredUser) === "active"
+      ).length,
+      email: visibleRegisteredUsers.filter((registeredUser) => registeredUser.provider === "Email").length,
+      google: visibleRegisteredUsers.filter((registeredUser) => registeredUser.provider === "Google").length,
+    }),
+    [visibleRegisteredUsers]
+  );
 
   const getValidMoveDestinations = useCallback(
     (booking: Booking) => {
@@ -1376,6 +1486,215 @@ export default function AdminPage() {
             </div>
           ))}
         </div>
+
+        <section
+          aria-labelledby="registered-users-heading"
+          className="mb-8 rounded-[2rem] border border-zinc-800 bg-zinc-900 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.3)] sm:p-6"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+                Player Accounts
+              </p>
+              <h2 id="registered-users-heading" className="mt-2 text-2xl font-bold text-white sm:text-3xl">
+                Registered Users
+              </h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Review authentication, profile activity and booking history at a glance.
+              </p>
+            </div>
+            <span className="self-start rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-zinc-300 sm:self-auto">
+              {visibleRegisteredUsers.length} shown
+            </span>
+          </div>
+
+          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+            {[
+              { icon: "👥", label: "Total Registered Users", value: registeredUserSummary.total, filter: "all" },
+              { icon: "✅", label: "Verified Users", value: registeredUserSummary.verified, filter: "verified" },
+              { icon: "⚠️", label: "Not Verified", value: registeredUserSummary.notVerified, filter: "not_verified" },
+              { icon: "🟢", label: "Active Users", value: registeredUserSummary.active, filter: "active" },
+              { icon: "📧", label: "Email Accounts", value: registeredUserSummary.email, filter: "email" },
+              { icon: "🟢", label: "Google Accounts", value: registeredUserSummary.google, filter: "google" },
+            ].map((card) => (
+              <button
+                key={card.label}
+                type="button"
+                aria-pressed={userFilter === card.filter}
+                onClick={() => setUserFilter(card.filter as UserFilter)}
+                className={`rounded-2xl border px-4 py-4 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-300/40 ${
+                  userFilter === card.filter
+                    ? "border-stone-200/35 bg-stone-200/10"
+                    : "border-zinc-800 bg-zinc-950 hover:border-zinc-700"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span aria-hidden="true">{card.icon}</span>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    {card.label}
+                  </p>
+                </div>
+                <p className="mt-3 text-2xl font-bold text-white">{card.value}</p>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <label className="relative block">
+              <span className="sr-only">Search registered users</span>
+              <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-zinc-500" aria-hidden="true">
+                ⌕
+              </span>
+              <input
+                type="search"
+                value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                placeholder="Search by name, username or email"
+                className="min-h-12 w-full rounded-2xl border border-zinc-700 bg-black py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+              />
+            </label>
+
+            <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-zinc-700 bg-black px-4">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Sort</span>
+              <select
+                value={userSort}
+                onChange={(event) => setUserSort(event.target.value as UserSort)}
+                className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold text-white outline-none lg:min-w-44"
+              >
+                {userSortOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-zinc-950">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0">
+            {userFilters.map((filter) => {
+              const isSelected = userFilter === filter.value;
+
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => setUserFilter(filter.value)}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-300/40 ${
+                    isSelected
+                      ? "border-stone-200/40 bg-stone-200 text-zinc-950"
+                      : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-stone-200/30 hover:text-white"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {visibleRegisteredUsers.length === 0 ? (
+            <div className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-950 p-6 text-center text-sm text-zinc-400">
+              No users match the current search and filter.
+            </div>
+          ) : (
+            <div className="mt-6 space-y-3">
+              {visibleRegisteredUsers.map((registeredUser) => {
+                const status = getRegisteredUserStatus(registeredUser);
+                const initials = registeredUser.username
+                  .split(" ")
+                  .map((part) => part.charAt(0).toUpperCase())
+                  .slice(0, 2)
+                  .join("");
+                const statusLabel =
+                  status === "active"
+                    ? "Active"
+                    : status === "never_signed_in"
+                      ? "Never Signed In"
+                      : "Email Not Verified";
+                const statusClassName =
+                  status === "active"
+                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                    : status === "never_signed_in"
+                      ? "border-amber-400/25 bg-amber-400/10 text-amber-200"
+                      : "border-red-500/25 bg-red-500/10 text-red-200";
+
+                return (
+                  <article
+                    key={registeredUser.id}
+                    className="rounded-3xl border border-zinc-800 bg-zinc-950 p-4 transition hover:border-zinc-700 sm:p-5"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-800 text-sm font-bold text-white shadow-sm">
+                        {registeredUser.avatar_url ? (
+                          <img
+                            src={registeredUser.avatar_url}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          initials || "?"
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-lg font-bold text-white">{registeredUser.username}</h3>
+                            <p className="mt-1 truncate text-sm text-zinc-400">
+                              {registeredUser.email || "No email available"}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName}`}>
+                              ● {statusLabel}
+                            </span>
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                registeredUser.profile_exists
+                                  ? "border-sky-500/25 bg-sky-500/10 text-sky-200"
+                                  : "border-zinc-600 bg-zinc-800 text-zinc-300"
+                              }`}
+                            >
+                              {registeredUser.profile_exists ? "Profile Exists" : "Missing"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-zinc-800 pt-4 md:grid-cols-5">
+                          {[
+                            { label: "Provider", value: registeredUser.provider },
+                            { label: "Joined", value: formatJoinedDate(registeredUser.joined_at) },
+                            {
+                              label: "Last sign in",
+                              value: registeredUser.last_sign_in_at
+                                ? formatJoinedDate(registeredUser.last_sign_in_at)
+                                : "Never",
+                            },
+                            { label: "Total bookings", value: String(registeredUser.total_bookings) },
+                            {
+                              label: "Email",
+                              value: registeredUser.email_verified ? "Verified" : "Not Verified",
+                            },
+                          ].map((item) => (
+                            <div key={item.label} className="min-w-0">
+                              <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                                {item.label}
+                              </dt>
+                              <dd className="mt-1.5 truncate text-sm font-semibold text-zinc-200">{item.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         <section
           ref={formSectionRef}

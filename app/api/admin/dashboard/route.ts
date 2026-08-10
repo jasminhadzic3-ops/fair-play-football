@@ -40,6 +40,19 @@ type Profile = {
   id: string;
   email: string | null;
   username: string | null;
+  avatar_url?: string | null;
+};
+
+type AdminAuthUser = {
+  id: string;
+  email?: string;
+  email_confirmed_at?: string | null;
+  created_at: string;
+  last_sign_in_at?: string | null;
+  app_metadata?: {
+    provider?: string;
+    providers?: string[];
+  };
 };
 
 type RefundRequest = {
@@ -125,6 +138,34 @@ function sumPaidPaymentAmounts(payments: Payment[]) {
     .reduce((total, payment) => total + Number(payment.amount || 0), 0);
 }
 
+async function listAllAuthUsers() {
+  const users: AdminAuthUser[] = [];
+  const perPage = 1000;
+
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+
+    if (error) {
+      return { users: [] as AdminAuthUser[], error };
+    }
+
+    const pageUsers = data.users as AdminAuthUser[];
+    users.push(...pageUsers);
+
+    if (pageUsers.length < perPage) {
+      return { users, error: null };
+    }
+  }
+}
+
+function getAuthProvider(user: AdminAuthUser): "Google" | "Email" {
+  const providers = user.app_metadata?.providers ?? [];
+
+  return user.app_metadata?.provider === "google" || providers.includes("google")
+    ? "Google"
+    : "Email";
+}
+
 function getMetadataNumber(metadata: Record<string, unknown> | null | undefined, key: string) {
   const value = metadata?.[key];
   const numberValue = Number(value);
@@ -161,6 +202,7 @@ export async function GET(request: NextRequest) {
       reminderDeliveriesResult,
       waitingListSummaryResult,
       waitingListNotificationsResult,
+      authUsersResult,
     ] = await Promise.all([
       supabaseAdmin
         .from("games")
@@ -172,7 +214,7 @@ export async function GET(request: NextRequest) {
         .order("id", { ascending: true }),
       supabaseAdmin
         .from("profiles")
-        .select("id,email,username,age,gender,favourite_position"),
+        .select("id,email,username,age,gender,favourite_position,avatar_url"),
       supabaseAdmin
         .from("booking_payments")
         .select(
@@ -212,6 +254,7 @@ export async function GET(request: NextRequest) {
       supabaseAdmin
         .from("waiting_list_notifications")
         .select("id,game_id,user_id,player_name,status,created_at"),
+      listAllAuthUsers(),
     ]);
 
     const firstError =
@@ -226,7 +269,8 @@ export async function GET(request: NextRequest) {
       walletSummaryTransactionsResult.error ||
       reminderDeliveriesResult.error ||
       waitingListSummaryResult.error ||
-      waitingListNotificationsResult.error;
+      waitingListNotificationsResult.error ||
+      authUsersResult.error;
 
     if (firstError) {
       return Response.json({ error: firstError.message }, { status: 500 });
@@ -261,6 +305,30 @@ export async function GET(request: NextRequest) {
     const waitingListSummary = (waitingListSummaryResult.data ?? []) as WaitingListSummaryEntry[];
     const waitingListNotifications = (waitingListNotificationsResult.data ?? []) as WaitingListSummaryEntry[];
     const profileById = new Map((profiles as Profile[]).map((profile) => [profile.id, profile]));
+    const bookingsByUserId = new Map<string, number>();
+
+    (allBookings as Booking[]).forEach((booking) => {
+      if (booking.user_id) {
+        bookingsByUserId.set(booking.user_id, (bookingsByUserId.get(booking.user_id) ?? 0) + 1);
+      }
+    });
+
+    const registeredUsers = authUsersResult.users.map((authUser) => {
+      const profile = profileById.get(authUser.id);
+
+      return {
+        id: authUser.id,
+        username: profile?.username?.trim() || authUser.email?.split("@")[0] || "Unnamed user",
+        email: authUser.email ?? profile?.email ?? null,
+        avatar_url: profile?.avatar_url ?? null,
+        provider: getAuthProvider(authUser),
+        email_verified: Boolean(authUser.email_confirmed_at),
+        profile_exists: Boolean(profile),
+        joined_at: authUser.created_at,
+        last_sign_in_at: authUser.last_sign_in_at ?? null,
+        total_bookings: bookingsByUserId.get(authUser.id) ?? 0,
+      };
+    });
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
     const bookingById = new Map((allBookings as Booking[]).map((booking) => [booking.id, booking]));
     const paymentById = new Map((bookingPayments as Payment[]).map((payment) => [payment.id, payment]));
@@ -455,12 +523,14 @@ export async function GET(request: NextRequest) {
       wallet_transactions: walletTransactions,
       refund_requests: refundRequests,
       waiting_list: waitingList,
+      registered_users: registeredUsers,
       ...getAutomaticSumUpRefundCapabilities(),
       summary: {
         games_count: games.length,
         bookings_count: bookings.length,
         players_count: countUniquePlayers(bookings),
         profiles_count: profiles.length,
+        auth_users_count: registeredUsers.length,
         payments_count: bookingPayments.length,
         waiting_list_count: waitingList.length,
         paid_payments_amount_total: sumPaidPaymentAmounts(bookingPayments),
