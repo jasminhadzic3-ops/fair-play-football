@@ -659,17 +659,19 @@ export default function ProfilePage() {
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-5">
-                  <label className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
-                    {profile?.avatar_url ? (
-                      <img
-                        src={profile.avatar_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      initials
-                    )}
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/60 px-2 text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-white opacity-0 transition group-hover:opacity-100">
+                  <label className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center">
+                    <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
+                      {profile?.avatar_url ? (
+                        <img
+                          src={profile.avatar_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        initials
+                      )}
+                    </span>
+                    <span className="absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-white">
                       {isUploadingAvatar ? "Uploading" : "Upload Photo"}
                     </span>
                     <input
