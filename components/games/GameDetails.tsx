@@ -1801,12 +1801,12 @@ export default function GameDetails({
                 <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-emerald-200">
                   Email sent
                 </div>
-                <h2 className="mt-5 text-3xl font-black tracking-tight text-white">Check Your Inbox</h2>
+                <h2 className="mt-5 text-3xl font-black tracking-tight text-white">Check Your Email</h2>
                 <p className="mt-3 text-sm leading-6 text-zinc-300">
-                  If there’s a Fair Play account for that email, a secure reset link is on its way.
+                  If there&apos;s a Fair Play account associated with that email address, you&apos;ll receive a secure password reset link.
                 </p>
                 <p className="mt-3 text-sm leading-6 text-zinc-500">
-                  The link will expire for your security. If you can’t find the email, check your spam or junk folder.
+                  For your security, the reset link will expire after a limited time. If you don&apos;t see the email within a few minutes, please check your spam or junk folder.
                 </p>
                 <button
                   type="button"
