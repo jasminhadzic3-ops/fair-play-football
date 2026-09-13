@@ -53,13 +53,13 @@ export default function Hero() {
               >
                 How it works
               </a>
+              <Link
+                href="/rewards"
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-8 py-4 font-semibold text-stone-200 transition-transform duration-300 hover:-translate-y-0.5 hover:border-stone-200/35 hover:bg-zinc-800"
+              >
+                Rewards &amp; perks
+              </Link>
             </div>
-            <Link
-              href="/rewards"
-              className="text-sm font-semibold text-stone-300 underline decoration-stone-300/30 underline-offset-8 transition-colors hover:text-white hover:decoration-stone-200/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50"
-            >
-              Rewards &amp; perks
-            </Link>
           </div>
         </div>
       </div>

@@ -38,15 +38,15 @@ export default function RewardsPage() {
             </h1>
           </header>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="mx-auto max-w-4xl space-y-6">
             {rewardsSections.map((item) => (
               <section
                 key={item.heading}
-                className="flex flex-col rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_54px_rgba(0,0,0,0.22)] sm:p-7"
+                className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_54px_rgba(0,0,0,0.22)] sm:p-8"
               >
                 <h2 className="text-2xl font-extrabold tracking-tight text-white">{item.heading}</h2>
                 <p className="mt-5 text-base leading-7 text-zinc-200">{item.body}</p>
-                <p className="mt-auto pt-8 text-sm leading-6 text-zinc-500">{item.supportingText}</p>
+                <p className="mt-6 max-w-3xl text-sm leading-6 text-zinc-500">{item.supportingText}</p>
               </section>
             ))}
           </div>
