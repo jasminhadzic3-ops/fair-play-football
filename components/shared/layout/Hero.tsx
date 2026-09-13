@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Hero() {
   return (
@@ -53,6 +54,12 @@ export default function Hero() {
                 How it works
               </a>
             </div>
+            <Link
+              href="/rewards"
+              className="text-sm font-semibold text-stone-300 underline decoration-stone-300/30 underline-offset-8 transition-colors hover:text-white hover:decoration-stone-200/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50"
+            >
+              Rewards &amp; perks
+            </Link>
           </div>
         </div>
       </div>
