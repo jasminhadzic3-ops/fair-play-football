@@ -12,12 +12,12 @@ test("signed-out mobile homepage and game details smoke test", async ({
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Football on your schedule." })
+    page.getByRole("heading", { name: "Play football in North London. No team needed." })
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Find Games" }).first().click();
+  await page.getByRole("link", { name: "Find a game" }).first().click();
   await expect(page.locator("#games")).toBeVisible();
-  await expect(page.getByText("Discover upcoming games")).toBeVisible();
+  await expect(page.getByText("Choose your next game")).toBeVisible();
 
   const gameCards = page.locator("#games").locator(".cursor-pointer");
   const gameCount = await gameCards.count();

@@ -23,66 +23,19 @@ export default function Hero() {
 
             <div className="space-y-4 px-2 md:px-0">
               <h1 className="text-2xl md:text-2xl font-extrabold text-white leading-tight tracking-[-0.03em] md:tracking-[-0.02em] drop-shadow-[0_1px_15px_rgba(255,255,255,0.08)]">
-                Football on your schedule.
+                Play football in North London. No team needed.
               </h1>
               <p className="mx-auto max-w-2xl text-lg md:text-xl text-zinc-300 leading-relaxed">
-                Join weekly 6v6, 7v7 & 8v8 games across North London.
+                Book friendly, organised 6v6, 7v7 and 8v8 games on quality pitches. Come alone or with friends, choose a time that suits you and pay online. Games from £5.
               </p>
               <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-zinc-200 md:text-base">
-                <span className="inline-flex items-center gap-2">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-4 w-4 text-white"
-                    aria-hidden="true"
-                  >
-                    <path d="M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4" />
-                    <circle cx="12" cy="9" r="3" />
-                    <path d="M20 19c0-1.7-1-3.1-2.4-3.7" />
-                    <path d="M4 19c0-1.7 1-3.1 2.4-3.7" />
-                  </svg>
-                  Friendly games
-                </span>
+                <span>No team needed</span>
                 <span className="hidden h-4 w-px bg-white/15 sm:block" />
-                <span className="inline-flex items-center gap-2">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-4 w-4 text-white"
-                    aria-hidden="true"
-                  >
-                    <rect x="4" y="5" width="16" height="14" rx="2" />
-                    <path d="M12 5v14" />
-                    <path d="M4 12h4" />
-                    <path d="M16 12h4" />
-                    <circle cx="12" cy="12" r="2" />
-                  </svg>
-                  Quality pitches
-                </span>
+                <span>Mixed 18+ games</span>
                 <span className="hidden h-4 w-px bg-white/15 sm:block" />
-                <span className="inline-flex items-center gap-2">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-4 w-4 text-white"
-                    aria-hidden="true"
-                  >
-                    <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
-                  </svg>
-                  All levels welcome
-                </span>
+                <span>Quality 3G pitches</span>
+                <span className="hidden h-4 w-px bg-white/15 sm:block" />
+                <span>Bibs and balls provided</span>
               </div>
             </div>
 
@@ -91,7 +44,13 @@ export default function Hero() {
                 href="#games"
                 className="inline-flex items-center justify-center px-8 py-4 bg-white text-black font-semibold rounded-full shadow-lg shadow-white/10 transition-transform duration-300 hover:-translate-y-0.5"
               >
-                Find Games
+                Find a game
+              </a>
+              <a
+                href="#how-it-works"
+                className="inline-flex items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-8 py-4 font-semibold text-stone-200 transition-transform duration-300 hover:-translate-y-0.5 hover:border-stone-200/35 hover:bg-zinc-800"
+              >
+                How it works
               </a>
             </div>
           </div>

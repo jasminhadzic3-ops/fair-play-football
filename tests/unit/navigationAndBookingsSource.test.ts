@@ -8,9 +8,11 @@ const myBookingsSource = readFileSync(join(process.cwd(), "app/my-bookings/page.
 describe("navigation and my bookings source", () => {
   it("groups desktop navigation into logo, centred account and right public sections", () => {
     expect(navbarSource).toContain("const publicNavLinks = [");
-    expect(navbarSource).toContain('{ label: "Home", href: "/" }');
     expect(navbarSource).toContain('{ label: "Games", href: "/#games" }');
-    expect(navbarSource).toContain('{ label: "About", href: "/#about" }');
+    expect(navbarSource).toContain('{ label: "How it works", href: "/#how-it-works" }');
+    expect(navbarSource).toContain('{ label: "Venues", href: "/#venues" }');
+    expect(navbarSource).toContain('{ label: "FAQ", href: "/#faq" }');
+    expect(navbarSource).toContain("Find a game");
     expect(navbarSource).toContain("const accountNavLinks = [");
     expect(navbarSource).toContain('{ label: "My Bookings", href: "/my-bookings" }');
     expect(navbarSource).toContain('{ label: "Wallet", href: "/wallet" }');
@@ -26,7 +28,8 @@ describe("navigation and my bookings source", () => {
     expect(navbarSource).toContain("{renderNavLinks(publicNavLinks)}");
     expect(navbarSource).toContain("{renderNavLinks(adminNavLinks)}");
     expect(navbarSource).toContain("text-lg font-black tracking-[0.3em] text-white md:text-[1.05rem]");
-    expect(navbarSource).toContain('renderMobileNavGroup("Browse", publicNavLinks)');
+    expect(navbarSource).toContain("Browse");
+    expect(navbarSource).toContain("{renderNavLinks(publicNavLinks, true)}");
     expect(navbarSource).toContain('renderMobileNavGroup("Account", mobileAccountNavLinks)');
     expect(navbarSource).toContain("h-4 w-px bg-zinc-800/70");
   });

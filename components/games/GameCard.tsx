@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import GameDetails from "./GameDetails";
-import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
 import GameTagPills from "./GameTagPills";
+import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
 
 interface GameCardProps {
   game: {
@@ -46,6 +46,82 @@ interface GameCardProps {
   onOpenAuthModalHandled?: () => void;
 }
 
+const cardDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "Europe/London",
+});
+
+const cardTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: "Europe/London",
+});
+
+function formatCardTime(date: Date) {
+  return cardTimeFormatter.format(date).replace(/\s?(am|pm)$/i, (match) => match.trim().toLowerCase());
+}
+
+function getGameDurationMinutes(game: GameCardProps["game"]) {
+  const rawDuration = game.duration_minutes ?? game.durationMinutes ?? game.duration;
+  const duration = typeof rawDuration === "number" ? rawDuration : Number(rawDuration);
+
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
+}
+
+function formatGameDateTime(game: GameCardProps["game"]) {
+  if (!game.starts_at) {
+    return game.time || "Date and time to be confirmed";
+  }
+
+  const startsAt = new Date(game.starts_at);
+
+  if (Number.isNaN(startsAt.getTime())) {
+    return game.time || "Date and time to be confirmed";
+  }
+
+  const durationMinutes = getGameDurationMinutes(game);
+  const dateLabel = cardDateFormatter.format(startsAt);
+  const startTime = formatCardTime(startsAt);
+
+  if (!durationMinutes) {
+    return `${dateLabel} · ${startTime}`;
+  }
+
+  const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+  return `${dateLabel} · ${startTime}–${formatCardTime(endsAt)}`;
+}
+
+function getPlayingStyleLabel(tags?: string[] | null) {
+  return tags?.some((tag) => tag.toLowerCase().includes("competitive")) ? "Competitive" : "Casual";
+}
+
+function formatSideLabel(format: string) {
+  const match = format.match(/^(\d+)v\d+$/i);
+  return match ? `${match[1]}-a-side` : format;
+}
+
+function formatPrice(price?: number) {
+  const numericPrice = Number(price ?? 0);
+  const priceLabel = Number.isInteger(numericPrice) ? `£${numericPrice}` : `£${numericPrice.toFixed(2)}`;
+
+  return `${priceLabel} per player`;
+}
+
+function formatAvailability(spotsLeft: number) {
+  if (spotsLeft <= 0) {
+    return "Full – join waiting list";
+  }
+
+  if (spotsLeft <= 4) {
+    return `${spotsLeft} ${spotsLeft === 1 ? "place" : "places"} left`;
+  }
+
+  return "Spaces available";
+}
+
 export default function GameCard({
   game,
   bookings,
@@ -83,59 +159,51 @@ export default function GameCard({
     bookings.filter((booking) => booking.game_id === game.id).length;
 
   const formatBadge = getFormatFromMaxPlayers(maxPlayers);
+  const durationMinutes = getGameDurationMinutes(game);
+  const playingStyleLabel = getPlayingStyleLabel(game.tags);
+  const formatAndDuration = [
+    formatSideLabel(formatBadge),
+    playingStyleLabel,
+    durationMinutes ? `${durationMinutes} minutes` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <>
       <div
-        className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-[0_14px_44px_rgba(0,0,0,0.22)] transition cursor-pointer hover:border-stone-200/25 hover:shadow-[0_18px_54px_rgba(0,0,0,0.32)] hover:-translate-y-0.5"
+        role="button"
+        tabIndex={0}
+        aria-label={`View details for ${game.title}`}
+        className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-[0_14px_44px_rgba(0,0,0,0.22)] transition cursor-pointer hover:border-stone-200/25 hover:shadow-[0_18px_54px_rgba(0,0,0,0.32)] hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-stone-200/40"
         onClick={() => setIsDetailsOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsDetailsOpen(true);
+          }
+        }}
       >
-        <div className="grid gap-6 p-5 md:p-8 md:grid-cols-[auto_1fr_auto] items-center">
-          {/* Time */}
-          <div className="flex flex-col items-center justify-center text-center min-w-[8rem]">
+        <div className="grid gap-6 p-5 md:p-8 md:grid-cols-[1fr_auto] md:items-center">
+          <div className="min-w-0 space-y-3">
             <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
               Kickoff
             </p>
-            <p className="mt-2 text-lg font-bold text-white">
-              {game.time || "TBD"}
+            <p className="break-words text-xl font-bold text-white md:text-2xl">
+              {formatGameDateTime(game)}
+            </p>
+            <h3 className="break-words text-lg font-bold text-white">{game.title}</h3>
+            <p className="break-words text-sm text-zinc-300 md:text-base">{game.location}</p>
+            <p className="text-sm font-semibold text-zinc-400">{formatAndDuration}</p>
+            <GameTagPills tags={game.tags} />
+            <p className="text-sm font-semibold text-stone-200">{formatPrice(game.price)}</p>
+            <p className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300 border border-emerald-500/20">
+              {formatAvailability(spotsLeft)}
             </p>
           </div>
 
-          {/* Title, Venue, Badges */}
-          <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="break-words text-xl font-bold text-white">{game.title}</h3>
-              <span className="rounded-full border border-zinc-700 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.28em] text-zinc-300 font-semibold">
-                {formatBadge}
-              </span>
-            </div>
-
-            <p className="break-words text-zinc-400">{game.location}</p>
-
-            <div className="flex flex-wrap gap-2">
-              {game.host && (
-                <span className="rounded-full bg-zinc-800 border border-zinc-700 px-3 py-1 text-xs text-zinc-300 font-medium">
-                  Host: {game.host}
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300 border border-emerald-500/20">
-                {spotsLeft > 0 ? `${spotsLeft} spots open` : "Full"}
-              </div>
-              <GameTagPills tags={game.tags} />
-            </div>
-          </div>
-
-          {/* Price */}
-          <div className="text-left md:text-right">
-            <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
-              Price
-            </p>
-            <p className="mt-2 text-3xl font-bold text-white">
-              £{game.price ?? "0"}
-            </p>
+          <div className="md:text-right">
+            <span className="inline-flex min-h-11 items-center justify-center rounded-full bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors">
+              Book your place
+            </span>
           </div>
         </div>
       </div>

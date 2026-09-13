@@ -10,7 +10,9 @@ const refundPolicySource = readFileSync(join(process.cwd(), "lib/refundPolicy.ts
 
 describe("homepage about section source", () => {
   it("adds a navbar-compatible About section with the approved positioning", () => {
-    expect(navbarSource).toContain('href: "/#about"');
+    expect(navbarSource).toContain('href: "/#how-it-works"');
+    expect(navbarSource).toContain('href: "/#venues"');
+    expect(navbarSource).toContain('href: "/#faq"');
     expect(homePageSource).toContain('<section id="about"');
     expect(homePageSource).toContain("Friendly games, good vibes and all skill levels welcome.");
     expect(homePageSource).toContain("co-ed 18+ football platform");
@@ -26,9 +28,11 @@ describe("homepage about section source", () => {
   });
 
   it("covers how it works, player expectations, locations and FAQs", () => {
-    expect(homePageSource).toContain("Find a game");
-    expect(homePageSource).toContain("Book and pay");
+    expect(homePageSource).toContain("Choose a game. Book your place. Turn up and play.");
+    expect(homePageSource).toContain("Pick the date, venue and playing style that suits you.");
+    expect(homePageSource).toContain("Pay securely online and receive your game details immediately.");
     expect(homePageSource).toContain("Turn up and play");
+    expect(homePageSource).toContain("Meet your host, collect a bib and join the game. Teams are organised on the day.");
     expect(homePageSource).toContain("Our Venues");
     expect(homePageSource).toContain("We currently organise games at three high-quality 3G artificial grass venues across North London:");
     expect(homePageSource).toContain("Whittington Park");
@@ -39,7 +43,8 @@ describe("homepage about section source", () => {
     expect(homePageSource).toContain("📍 Barnard Park – Copenhagen Street, Islington, London N1 0ER");
     expect(homePageSource).toContain("Fresh bibs and footballs are provided.");
     expect(homePageSource).toContain("No slide tackles.");
-    expect(homePageSource).toContain("North London locations");
+    expect(homePageSource).toContain("Stay connected between games");
+    expect(homePageSource).toContain("Join the Fair Play player community for new-game alerts, last-minute availability and local updates. All bookings and payments stay on fairplayfootball.co.uk.");
     expect(homePageSource).toContain("What happens if a game is full?");
     expect(homePageSource).toContain("What do I need to bring?");
   });
@@ -82,9 +87,10 @@ describe("homepage about section source", () => {
     expect(gameDetailsSource).not.toContain("Credit available on your Fair Play Football account.");
   });
 
-  it("shows Find Games and signed-out Sign Up CTAs", () => {
+  it("shows approved game discovery and signed-out Sign Up CTAs", () => {
     expect(homePageSource).toContain('href="#games"');
-    expect(homePageSource).toContain("Find Games");
+    expect(homePageSource).toContain("Find a game");
+    expect(homePageSource).toContain("View upcoming games");
     expect(homePageSource).toContain("setNavbarAuthMode(\"signup\")");
     expect(homePageSource).toContain("Sign Up");
     expect(homePageSource).toContain("{!user ? (");

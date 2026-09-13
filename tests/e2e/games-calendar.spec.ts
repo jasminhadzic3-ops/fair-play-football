@@ -277,7 +277,7 @@ test.describe("Games calendar navigation", () => {
 
     try {
       await signInWithEmail(page, player.email, player.password);
-      await page.getByRole("link", { name: "Find Games" }).first().click();
+      await page.getByRole("link", { name: "Find a game" }).first().click();
       await expect(page.locator("#games")).toBeVisible();
 
       const firstDate = page.getByRole("button", {
@@ -338,7 +338,7 @@ test.describe("Games calendar navigation", () => {
 
       await seed.supabase.from("bookings").delete().eq("id", playerBookingId);
       await page.reload();
-      await page.getByRole("link", { name: "Find Games" }).first().click();
+      await page.getByRole("link", { name: "Find a game" }).first().click();
       await expect(page.getByTestId(`calendar-booked-tick-${seed.firstDateKey}`)).toHaveCount(0);
       await expect(page.getByTestId(`calendar-game-count-${seed.firstDateKey}`)).not.toHaveText("0");
     } finally {
@@ -371,7 +371,7 @@ test.describe("Games calendar navigation", () => {
 
     try {
       await signInWithEmail(page, player.email, player.password);
-      await page.getByRole("link", { name: "Find Games" }).first().click();
+      await page.getByRole("link", { name: "Find a game" }).first().click();
       await expect(page.locator("#games")).toBeVisible();
       await expect(page.getByTestId(`calendar-game-count-${seed.firstDateKey}`)).toHaveText("2");
       await expect(page.getByTestId(`calendar-booked-tick-${seed.firstDateKey}`)).toBeVisible();
@@ -403,7 +403,7 @@ test.describe("Games calendar navigation", () => {
     try {
       await signInWithEmail(page, player.email, player.password);
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.getByRole("link", { name: "Find Games" }).first().click();
+      await page.getByRole("link", { name: "Find a game" }).first().click();
       await expect(page.locator("#games")).toBeVisible();
       await expect(page.getByRole("button", { name: "All Games" })).toBeVisible();
       await expect(page.getByText("= Your Booking")).toBeVisible();

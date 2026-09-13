@@ -33,6 +33,72 @@ const PENDING_SUMUP_GAME_SNAPSHOT_KEY = "pendingSumUpGameSnapshot";
 const incompletePaymentMessage =
   "Payment wasn't completed.\nYour booking has not been confirmed.";
 const terminalIncompletePaymentStatuses = new Set(["cancelled", "canceled", "failed", "expired"]);
+const whatsappCommunityUrl = "https://chat.whatsapp.com/JAGpOaEd8jf2njevCRK7JE?mode=gi_t";
+
+const emptyStateDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
+
+const nextGameDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "Europe/London",
+});
+
+const nextGameTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: "Europe/London",
+});
+
+function formatHomepageTime(date: Date) {
+  return nextGameTimeFormatter.format(date).replace(/\s?(am|pm)$/i, (match) => match.trim().toLowerCase());
+}
+
+function formatEmptyStateDateLabel(dateKey: string) {
+  return emptyStateDateFormatter.format(new Date(`${dateKey}T00:00:00.000Z`));
+}
+
+function getAreaLabel(location?: string | null) {
+  if (!location) {
+    return "North London";
+  }
+
+  const commaParts = location
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (commaParts.length > 1) {
+    return commaParts[1];
+  }
+
+  const parts = location
+    .split(/[,\u2013-]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.length > 1 ? parts[parts.length - 1] : location;
+}
+
+function formatNextAvailableGameMessage(game: any) {
+  if (!game?.starts_at) {
+    return "The next available game is ready to book.";
+  }
+
+  const startsAt = new Date(game.starts_at);
+
+  if (Number.isNaN(startsAt.getTime())) {
+    return "The next available game is ready to book.";
+  }
+
+  return `The next available game is ${nextGameDateFormatter.format(startsAt)} at ${formatHomepageTime(startsAt)} in ${getAreaLabel(game.location)}.`;
+}
 
 type HomeClientProps = {
   initialPaymentReturnReference?: string | null;
@@ -116,10 +182,16 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const selectedDatedGames = showAllGames
     ? sortGamesByStartsAt(calendarGames)
     : sortGamesByStartsAt(fallbackSelectedDateKey ? gamesByDateKey.get(fallbackSelectedDateKey) ?? [] : []);
+  const sortedCalendarGames = sortGamesByStartsAt(calendarGames);
   const nextAvailableDateKey: string | null =
     Array.from(gamesByDateKey.keys()).sort().find((dateKey) => dateKey >= todayDateKey) ??
     Array.from(gamesByDateKey.keys()).sort()[0] ??
     null;
+  const nextAvailableGame = sortedCalendarGames.find((game) => {
+    const dateKey = getGameLondonDateKey(game, lifecycleNow);
+    return dateKey ? dateKey >= todayDateKey : false;
+  }) ?? sortedCalendarGames[0] ?? null;
+  const selectedEmptyDateLabel = fallbackSelectedDateKey ? formatEmptyStateDateLabel(fallbackSelectedDateKey) : null;
   const weekSlideClass =
     weekNavigationDirection === "next"
       ? "calendar-week-slide-next"
@@ -1685,13 +1757,13 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           {!isPaymentReturnGateActive ? (
             <div className="mb-5 text-center">
               <p className="text-xs uppercase tracking-[0.35em] text-zinc-500 mb-3">
-                Find Games
+                Games
               </p>
               <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-                Browse premium football matches in one clean list.
+                Choose your next game
               </h2>
               <p className="mt-2 text-base md:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-                Discover upcoming games, pick your match, and play when it suits you.
+                Book individually or with friends. Select a date, venue and level that suits you.
               </p>
             </div>
           ) : null}
@@ -1899,9 +1971,17 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             {!showAllGames && selectedDatedGames.length === 0 ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-white">No games on this date.</p>
+                  <p className="text-sm font-semibold text-white">
+                    {nextAvailableGame
+                      ? selectedEmptyDateLabel
+                        ? `No game on ${selectedEmptyDateLabel}.`
+                        : "No game on this date."
+                      : "New games are being added."}
+                  </p>
                   <p className="mt-0.5 text-sm text-zinc-400">
-                    Pick another day or jump to the next available match.
+                    {nextAvailableGame
+                      ? formatNextAvailableGameMessage(nextAvailableGame)
+                      : "Join the player updates list and we’ll let you know when the next North London games go live."}
                   </p>
                 </div>
                 {nextAvailableDateKey ? (
@@ -1910,12 +1990,19 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                     onClick={() => {
                       setSelectedGameDateKey(nextAvailableDateKey);
                       setVisibleWeekStartKey(nextAvailableDateKey);
-                    }}
-                    className="min-h-9 rounded-full border border-stone-200/30 bg-stone-200 px-4 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
-                  >
-                    Next available game
+                  }}
+                  className="min-h-9 rounded-full border border-stone-200/30 bg-stone-200 px-4 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                >
+                    View next available game
                   </button>
-                ) : null}
+                ) : (
+                  <a
+                    href="#player-community"
+                    className="inline-flex min-h-9 items-center justify-center rounded-full border border-stone-200/30 bg-stone-200 px-4 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                  >
+                    Get game updates
+                  </a>
+                )}
               </div>
             ) : null}
 
@@ -1942,6 +2029,26 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
       {!isPaymentReturnGateActive ? (
         <>
+      <section className="bg-black px-6 pb-8 text-white">
+        <div className="mx-auto max-w-5xl rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)] sm:p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+                Coming alone? You’ll fit right in.
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
+                Most Fair Play players book individually. Your host welcomes the group, provides the equipment and balances the teams. Arrive 10 minutes early and we’ll take care of the rest.
+              </p>
+            </div>
+            <a
+              href="#games"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+            >
+              Find your first game
+            </a>
+          </div>
+        </div>
+      </section>
       <section id="about" className="bg-black px-6 py-14 text-white sm:py-16">
         <div className="mx-auto max-w-5xl">
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
@@ -1994,52 +2101,32 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             ))}
           </div>
 
-          <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)] sm:p-6">
+          <div id="how-it-works" className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)] sm:p-6">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
                 How It Works
               </p>
               <h3 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                Getting Started
+                Choose a game. Book your place. Turn up and play.
               </h3>
-              <p className="mt-4 text-sm leading-6 text-zinc-300 md:text-base md:leading-7">
-                Fair Play Football is a platform where you can discover, book and enjoy friendly football games whenever it suits you.
-              </p>
-              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Browse upcoming matches, reserve your spot in just a few clicks and play on your own schedule.
-              </p>
-              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Meet new people, enjoy a welcoming football community and experience the game without the commitment of joining a team.
-              </p>
-              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Most matches are casual and friendly, while competitive games are always clearly labelled.
-              </p>
-              <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base md:leading-7">
-                Everyone aged 18+ is welcome, regardless of experience or ability.
-              </p>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
               {[
                 {
                   number: "1",
-                  title: "Browse upcoming games",
-                  text: "Explore upcoming matches and choose the date, time and location that suits you.",
+                  title: "Choose a game",
+                  text: "Pick the date, venue and playing style that suits you.",
                 },
                 {
                   number: "2",
-                  title: "Book your spot",
-                  text: "Reserve and confirm your place online in just a few clicks.",
+                  title: "Book your place",
+                  text: "Pay securely online and receive your game details immediately.",
                 },
                 {
                   number: "3",
                   title: "Turn up and play",
-                  text: "Arrive ready to play, meet the group and enjoy your game.",
-                },
-                {
-                  number: "4",
-                  title: "Play on your schedule",
-                  text: "Come back whenever it suits you, with no team or season commitment.",
+                  text: "Meet your host, collect a bib and join the game. Teams are organised on the day.",
                 },
               ].map((step) => (
                 <div
@@ -2079,7 +2166,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+          <div id="venues" className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
             <h3 className="text-xl font-bold text-white">Our Venues</h3>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               We currently organise games at three high-quality 3G artificial grass venues across North London:
@@ -2164,7 +2251,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+            <div id="faq" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
               <h3 className="text-xl font-bold text-white">FAQ</h3>
               <div className="mt-4 grid gap-3">
                 {[
@@ -2232,23 +2319,34 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h3 className="text-lg font-bold text-white">North London locations</h3>
+            <div id="player-community" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+              <h3 className="text-lg font-bold text-white">Stay connected between games</h3>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Games take place at North London venues. Exact pitch and venue details are shown on each game card.
+                Join the Fair Play player community for new-game alerts, last-minute availability and local updates. All bookings and payments stay on fairplayfootball.co.uk.
               </p>
+              <div className="mt-4">
+                <a
+                  href={whatsappCommunityUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-5 text-sm font-bold text-stone-200 transition-colors hover:border-stone-200/35 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                >
+                  Join the player community
+                </a>
+                <p className="mt-2 text-xs font-medium text-zinc-500">Opens WhatsApp</p>
+              </div>
             </div>
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h3 className="text-lg font-bold text-white">Ready to play?</h3>
+              <h3 className="text-lg font-bold text-white">Ready for your next game?</h3>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Find a match that suits you and book your place when you are ready.
+                No team, trial or season commitment. Choose a game and book your place online.
               </p>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                 <a
                   href="#games"
                   className="inline-flex min-h-11 items-center justify-center rounded-full bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
                 >
-                  Find Games
+                  View upcoming games
                 </a>
                 {!user ? (
                   <button

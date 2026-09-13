@@ -9,15 +9,15 @@ test("signed-out Join Game opens auth prompt without checkout access", async ({
 }) => {
   await page.goto("/");
 
-  await page.getByRole("link", { name: "Find Games" }).first().click();
+  await page.getByRole("link", { name: "Find a game" }).first().click();
   await expect(page.locator("#games")).toBeVisible();
-  await expect(page.getByText("Discover upcoming games")).toBeVisible();
+  await expect(page.getByText("Choose your next game")).toBeVisible();
 
   const gameCards = page.locator("#games").locator(".cursor-pointer");
   const gameCount = await gameCards.count();
 
   if (gameCount === 0) {
-    await expect(page.getByText("Discover upcoming games")).toBeVisible();
+    await expect(page.getByText("Choose your next game")).toBeVisible();
     return;
   }
 

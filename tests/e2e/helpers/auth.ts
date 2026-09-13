@@ -6,7 +6,7 @@ export async function signInWithEmail(page: Page, email: string, password: strin
   const navbar = page.getByRole("navigation");
   const signInButton = navbar.getByRole("button", { name: "Sign in" });
 
-  await expect(page.getByText("Discover upcoming games")).toBeVisible();
+  await expect(page.getByText("Choose your next game")).toBeVisible();
   await expect(signInButton).toBeVisible();
 
   await signInButton.click();

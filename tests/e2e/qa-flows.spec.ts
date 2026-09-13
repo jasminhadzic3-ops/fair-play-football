@@ -556,7 +556,7 @@ test.describe("TEST-only launch QA flows", () => {
       await signedInNavbar.screenshot({ path: "/tmp/fair-play-navbar-signed-in-mobile.png" });
       await page.setViewportSize({ width: 1280, height: 720 });
     }
-    await page.getByRole("link", { name: "Find Games" }).first().click();
+    await page.getByRole("link", { name: "Find a game" }).first().click();
     await page.getByRole("button", { name: "All Games" }).click();
     const gameCard = page.locator("#games").locator(".cursor-pointer").filter({ hasText: game.title }).first();
     await expect(gameCard).toBeVisible();
@@ -647,7 +647,7 @@ test.describe("TEST-only launch QA flows", () => {
     await fillGameToCapacity(supabase, seed, game);
 
     await signInWithEmail(page, player.email, player.password);
-    await page.getByRole("link", { name: "Find Games" }).first().click();
+    await page.getByRole("link", { name: "Find a game" }).first().click();
     const gameCard = page.locator("#games").locator(".cursor-pointer").filter({ hasText: game.title }).first();
     await expect(gameCard).toBeVisible();
     await gameCard.click();

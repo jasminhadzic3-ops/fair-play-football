@@ -6,14 +6,14 @@ test("signed-out homepage and game details smoke test", async ({ page }) => {
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Football on your schedule." })
+    page.getByRole("heading", { name: "Play football in North London. No team needed." })
   ).toBeVisible();
-  const heroFindGamesLink = page.getByRole("link", { name: "Find Games" }).first();
+  const heroFindGamesLink = page.getByRole("link", { name: "Find a game" }).first();
   await expect(heroFindGamesLink).toBeVisible();
 
   await heroFindGamesLink.click();
   await expect(page.locator("#games")).toBeVisible();
-  await expect(page.getByText("Discover upcoming games")).toBeVisible();
+  await expect(page.getByText("Choose your next game")).toBeVisible();
 
   const gameCards = page.locator("#games").locator(".cursor-pointer");
   const gameCount = await gameCards.count();
@@ -32,15 +32,15 @@ test("signed-out homepage and game details smoke test", async ({ page }) => {
 test("signed-out game details modal shows match information", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByRole("link", { name: "Find Games" }).first().click();
+  await page.getByRole("link", { name: "Find a game" }).first().click();
   await expect(page.locator("#games")).toBeVisible();
-  await expect(page.getByText("Discover upcoming games")).toBeVisible();
+  await expect(page.getByText("Choose your next game")).toBeVisible();
 
   const gameCards = page.locator("#games").locator(".cursor-pointer");
   const gameCount = await gameCards.count();
 
   if (gameCount === 0) {
-    await expect(page.getByText("Discover upcoming games")).toBeVisible();
+    await expect(page.getByText("Choose your next game")).toBeVisible();
     return;
   }
 
