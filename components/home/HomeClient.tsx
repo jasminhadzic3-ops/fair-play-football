@@ -2295,7 +2295,15 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div id="player-community" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h3 className="text-lg font-bold text-white">Stay connected between games</h3>
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#7dd3a7]/20 bg-[#7dd3a7]/10 text-[#7dd3a7]" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                    <path d="M20.5 3.5A11.85 11.85 0 0 0 12.06 0C5.5 0 .17 5.32.17 11.88c0 2.1.55 4.15 1.6 5.96L.07 24l6.3-1.65a11.85 11.85 0 0 0 5.69 1.45h.01c6.55 0 11.87-5.33 11.87-11.88 0-3.18-1.24-6.17-3.44-8.42ZM12.07 21.8h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.23-.37a9.87 9.87 0 0 1-1.52-5.29C2.18 6.43 6.61 2 12.07 2c2.64 0 5.12 1.03 6.98 2.9a9.82 9.82 0 0 1 2.89 7.02c0 5.46-4.43 9.88-9.87 9.88Z" fill="currentColor" />
+                    <path d="M17.56 14.45c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.48-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.47s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.09 4.49.71.31 1.27.49 1.7.62.72.23 1.37.2 1.89.12.58-.09 1.75-.72 2-1.41.25-.69.25-1.28.17-1.41-.07-.13-.27-.2-.57-.35Z" fill="currentColor" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-white">Stay connected between games</h3>
+              </div>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
                 Join the Fair Play player community for new-game alerts, last-minute availability and local updates. All bookings and payments stay on fairplayfootball.co.uk.
               </p>

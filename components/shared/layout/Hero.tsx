@@ -25,7 +25,7 @@ export default function Hero() {
               <h1 className="text-2xl md:text-2xl font-extrabold text-white leading-tight tracking-[-0.03em] md:tracking-[-0.02em] drop-shadow-[0_1px_15px_rgba(255,255,255,0.08)]">
                 Play football in North London. No team needed.
               </h1>
-              <p className="mx-auto max-w-2xl text-lg md:text-xl text-zinc-300 leading-relaxed">
+              <p className="mx-auto max-w-[42rem] text-base font-normal leading-[1.65] text-zinc-300 md:text-[18px]">
                 Book friendly, organised 6v6, 7v7 and 8v8 games on quality pitches. Come alone or with friends, choose a time that suits you and pay online. Games from £5.
               </p>
               <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-zinc-200 md:text-base">
