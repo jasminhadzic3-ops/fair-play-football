@@ -2076,31 +2076,6 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             </div>
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {[
-              {
-                title: "Find a game",
-                text: "Use the calendar and game cards to pick a North London match that suits your level and schedule.",
-              },
-              {
-                title: "Book and pay",
-                text: "Reserve your spot online. Places are confirmed on a first paid, first served basis.",
-              },
-              {
-                title: "Turn up and play",
-                text: "Arrive 10 minutes early, meet the group, grab a bib and enjoy the game.",
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)]"
-              >
-                <h3 className="text-lg font-bold text-white">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">{item.text}</p>
-              </div>
-            ))}
-          </div>
-
           <div id="how-it-works" className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)] sm:p-6">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
