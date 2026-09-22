@@ -1379,7 +1379,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             <p className="mt-3 text-sm leading-6 text-zinc-400">
               {navbarAuthMode === "signup"
                 ? "Create your player profile to book games, join waiting lists and manage your bookings in one place."
-                : "Sign in to manage bookings and join games faster."}
+                : "Access your Fair Play account to book games, manage your bookings, join waiting lists and track your rewards, all in one place."}
             </p>
             {navbarAuthMode === "signup" ? (
               <p className="mt-2 text-xs font-semibold text-stone-300">
