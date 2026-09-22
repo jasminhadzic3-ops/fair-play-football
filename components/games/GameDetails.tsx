@@ -9,6 +9,14 @@ import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
 import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
 import { REFUND_POLICY_ITEMS } from "@/lib/refundPolicy";
+import {
+  createReferralSignupIntent,
+  normalizeReferralCode,
+  REFERRAL_APPLIED_MESSAGE,
+  REFERRAL_INVALID_MESSAGE,
+  REFERRAL_SIGNUP_ERROR_MESSAGE,
+  validateReferralCode,
+} from "@/lib/referralSignup";
 
 interface GameDetailsProps {
   isOpen: boolean;
@@ -137,6 +145,9 @@ export default function GameDetails({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [referralStatus, setReferralStatus] = useState<string | null>(null);
+  const [referralError, setReferralError] = useState<string | null>(null);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
   const positionOptions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Flexible"];
@@ -175,6 +186,28 @@ export default function GameDetails({
     profile?.username?.trim() || username.trim() || googleName.trim() || emailName
   );
   const normalizedProfileName = profileName.trim().toLowerCase();
+
+  const validateSignupReferralCode = async () => {
+    const code = normalizeReferralCode(referralCode);
+    setReferralCode(code);
+    setReferralStatus(null);
+    setReferralError(null);
+
+    if (!code) {
+      return;
+    }
+
+    try {
+      const result = await validateReferralCode(code);
+      if (result.valid) {
+        setReferralStatus(REFERRAL_APPLIED_MESSAGE);
+      } else {
+        setReferralError(REFERRAL_INVALID_MESSAGE);
+      }
+    } catch {
+      setReferralError(REFERRAL_INVALID_MESSAGE);
+    }
+  };
   const isGameFull = spotsLeft <= 0;
   const alreadyJoined = user?.id
     ? gameBookings.some((booking) => booking.is_current_user === true)
@@ -776,6 +809,9 @@ export default function GameDetails({
 
     try {
       const termsAcceptedAt = new Date().toISOString();
+      const referralIntentId = referralCode.trim()
+        ? await createReferralSignupIntent(referralCode)
+        : null;
       const pendingSignupProfile = {
         username: username.trim(),
         age,
@@ -785,6 +821,7 @@ export default function GameDetails({
         email,
         terms_accepted_at: termsAcceptedAt,
         terms_version: AGREEMENT_VERSION,
+        ...(referralIntentId ? { referral_signup_intent_id: referralIntentId } : {}),
       };
 
       localStorage.setItem(
@@ -853,7 +890,11 @@ export default function GameDetails({
       }, 900);
     } catch (error: any) {
       localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
-      setAuthError(error?.message || "Unable to create account. Please try again.");
+      setAuthError(
+        referralCode.trim()
+          ? REFERRAL_SIGNUP_ERROR_MESSAGE
+          : error?.message || "Unable to create account. Please try again."
+      );
     } finally {
       setAuthLoading(false);
     }
@@ -1620,6 +1661,26 @@ export default function GameDetails({
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Referral code (optional)</label>
+                    <input
+                      value={referralCode}
+                      onChange={(event) => {
+                        setReferralCode(event.target.value.toUpperCase());
+                        setReferralStatus(null);
+                        setReferralError(null);
+                      }}
+                      onBlur={() => void validateSignupReferralCode()}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
+                      placeholder="e.g. JASMIN7K4"
+                      autoCapitalize="characters"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <p className="mt-2 text-xs text-zinc-500">Referral codes are currently available for email signups only.</p>
+                    {referralStatus ? <p className="mt-2 text-sm font-semibold text-emerald-300">{referralStatus}</p> : null}
+                    {referralError ? <p className="mt-2 text-sm text-rose-200">{referralError}</p> : null}
                   </div>
                 </>
               ) : (

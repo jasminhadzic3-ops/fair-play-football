@@ -26,6 +26,14 @@ import {
   isCalendarCountableGame,
   sortGamesByStartsAt,
 } from "@/lib/gameCalendar";
+import {
+  createReferralSignupIntent,
+  normalizeReferralCode,
+  REFERRAL_APPLIED_MESSAGE,
+  REFERRAL_INVALID_MESSAGE,
+  REFERRAL_SIGNUP_ERROR_MESSAGE,
+  validateReferralCode,
+} from "@/lib/referralSignup";
 
 const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 const PENDING_SUMUP_CHECKOUT_REFERENCE_KEY = "pendingSumUpCheckoutReference";
@@ -138,6 +146,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [navbarAuthAge, setNavbarAuthAge] = useState("");
   const [navbarAuthGender, setNavbarAuthGender] = useState("");
   const [navbarAuthFavouritePosition, setNavbarAuthFavouritePosition] = useState("");
+  const [navbarReferralCode, setNavbarReferralCode] = useState("");
+  const [navbarReferralStatus, setNavbarReferralStatus] = useState<string | null>(null);
+  const [navbarReferralError, setNavbarReferralError] = useState<string | null>(null);
   const [navbarAgreementAccepted, setNavbarAgreementAccepted] = useState(false);
   const [navbarAuthMode, setNavbarAuthMode] = useState<"signin" | "signup">("signin");
   const [navbarAuthLoading, setNavbarAuthLoading] = useState(false);
@@ -1285,6 +1296,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     try {
       const termsAcceptedAt = new Date().toISOString();
+      const referralIntentId = navbarReferralCode.trim()
+        ? await createReferralSignupIntent(navbarReferralCode)
+        : null;
       const pendingSignupProfile = {
         username: navbarAuthUsername.trim(),
         age: navbarAuthAge,
@@ -1294,6 +1308,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         email: navbarAuthEmail,
         terms_accepted_at: termsAcceptedAt,
         terms_version: AGREEMENT_VERSION,
+        ...(referralIntentId ? { referral_signup_intent_id: referralIntentId } : {}),
       };
 
       localStorage.setItem(PENDING_SIGNUP_PROFILE_KEY, JSON.stringify(pendingSignupProfile));
@@ -1345,7 +1360,11 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       setNavbarAuthStatus("Almost there. Check your email to activate your account.");
     } catch (error: any) {
       localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
-      setNavbarAuthError(error?.message || "Unable to create account. Please try again.");
+      setNavbarAuthError(
+        navbarReferralCode.trim()
+          ? REFERRAL_SIGNUP_ERROR_MESSAGE
+          : error?.message || "Unable to create account. Please try again."
+      );
     } finally {
       setNavbarAuthLoading(false);
     }
@@ -1502,6 +1521,26 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Referral code (optional)</label>
+                  <input
+                    value={navbarReferralCode}
+                    onChange={(event) => {
+                      setNavbarReferralCode(event.target.value.toUpperCase());
+                      setNavbarReferralStatus(null);
+                      setNavbarReferralError(null);
+                    }}
+                    onBlur={() => void validateNavbarReferralCode()}
+                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-white/30"
+                    placeholder="e.g. JASMIN7K4"
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <p className="mt-2 text-xs text-zinc-500">Referral codes are currently available for email signups only.</p>
+                  {navbarReferralStatus ? <p className="mt-2 text-sm font-semibold text-emerald-300">{navbarReferralStatus}</p> : null}
+                  {navbarReferralError ? <p className="mt-2 text-sm text-rose-200">{navbarReferralError}</p> : null}
                 </div>
               </div>
             ) : null}
