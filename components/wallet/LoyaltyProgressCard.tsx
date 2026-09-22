@@ -87,16 +87,16 @@ export default function LoyaltyProgressCard({ userId }: LoyaltyProgressCardProps
   }, [userId]);
 
   return (
-    <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:p-6">
+    <section className="rounded-[2rem] border border-amber-200/30 bg-[#11100d] p-5 shadow-[0_18px_60px_rgba(120,88,30,0.18)] sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">
             Fair Play Rewards
           </p>
-          <h2 className="mt-2 text-xl font-black tracking-tight text-white">Earn £5 wallet credit</h2>
+          <h2 className="mt-2 text-xl font-black tracking-tight text-white">Play 5 games. Get your 6th free.</h2>
         </div>
-        <span className="shrink-0 rounded-full border border-stone-300/20 bg-stone-200/10 px-3 py-1 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-stone-200">
-          £5 credit
+        <span className="shrink-0 rounded-full border border-amber-200/35 bg-amber-200/10 px-3 py-1 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-amber-100">
+          6TH GAME FREE
         </span>
       </div>
 
@@ -112,34 +112,15 @@ export default function LoyaltyProgressCard({ userId }: LoyaltyProgressCardProps
         </p>
       ) : (
         <>
-          {progress.current_progress >= progress.target ? (
-            <>
-              <p className="mt-6 text-2xl font-black tracking-tight text-stone-100">Reward processing</p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-zinc-300">
-                Your £5 Fair Play credit is being processed.
-              </p>
-            </>
-          ) : progress.current_progress === 0 ? (
-            <>
-              <p className="mt-6 text-2xl font-black tracking-tight text-stone-100">
-                {progress.total_rewards_earned > 0 ? "Your next reward starts now" : "Your first reward starts here"}
-              </p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-zinc-300">
-                Complete 5 qualifying games to unlock £5 credit.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="mt-6 text-2xl font-black tracking-tight text-stone-100">
-                {progress.current_progress} of {progress.target} games completed
-              </p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-zinc-300">
-                {progress.remaining === 1
-                  ? "One more qualifying game unlocks £5 credit."
-                  : `${progress.remaining} more qualifying games to unlock £5 credit.`}
-              </p>
-            </>
-          )}
+          <p className="mt-6 text-2xl font-black tracking-tight text-white">
+            Complete five qualifying Fair Play games and receive £5 wallet credit towards your sixth game.
+          </p>
+          <p className="mt-3 text-sm font-semibold leading-6 text-zinc-300">
+            The reward repeats automatically, each time you complete another five qualifying games, you’ll receive another £5 credit towards your next game.
+          </p>
+          <p className="mt-6 text-2xl font-black tracking-tight text-white">
+            {progress.current_progress} of {progress.target} games completed
+          </p>
 
           <div className="mt-6 flex items-center gap-2" aria-label={`${Math.min(progress.current_progress, progress.target)} of ${progress.target} games completed`}>
             {Array.from({ length: 5 }, (_, index) => (
@@ -148,8 +129,8 @@ export default function LoyaltyProgressCard({ userId }: LoyaltyProgressCardProps
                 aria-hidden="true"
                 className={`h-2.5 flex-1 rounded-full border ${
                   index < Math.min(progress.current_progress, progress.target)
-                    ? "border-stone-200 bg-stone-200"
-                    : "border-zinc-700 bg-zinc-800"
+                    ? "border-amber-200 bg-amber-200"
+                    : "border-amber-200/25 bg-amber-200/5"
                 }`}
               />
             ))}
@@ -157,7 +138,7 @@ export default function LoyaltyProgressCard({ userId }: LoyaltyProgressCardProps
 
           <Link
             href="/rewards"
-            className="mt-6 inline-flex min-h-11 items-center text-sm font-bold text-stone-200 underline decoration-stone-300/30 underline-offset-4 transition hover:text-white"
+            className="mt-6 inline-flex min-h-11 items-center text-sm font-bold text-amber-100 underline decoration-amber-200/35 underline-offset-4 transition hover:text-white"
           >
             How Fair Play Rewards work <span className="ml-2" aria-hidden="true">→</span>
           </Link>

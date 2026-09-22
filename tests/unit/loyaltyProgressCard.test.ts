@@ -21,13 +21,12 @@ describe("player loyalty progress card", () => {
     );
   });
 
-  it("supports the approved first-cycle, repeat-cycle, partial, singular, and processing copy", () => {
-    expect(cardSource).toContain("Your first reward starts here");
-    expect(cardSource).toContain("Your next reward starts now");
+  it("supports the approved premium rewards copy and dynamic progress", () => {
+    expect(cardSource).toContain("Play 5 games. Get your 6th free.");
+    expect(cardSource).toContain("Complete five qualifying Fair Play games and receive £5 wallet credit towards your sixth game.");
+    expect(cardSource).toContain("The reward repeats automatically, each time you complete another five qualifying games, you’ll receive another £5 credit towards your next game.");
     expect(cardSource).toContain("of {progress.target} games completed");
-    expect(cardSource).toContain("One more qualifying game unlocks £5 credit.");
-    expect(cardSource).toContain("Reward processing");
-    expect(cardSource).toContain("Your £5 Fair Play credit is being processed.");
+    expect(cardSource).toContain("6TH GAME FREE");
   });
 
   it("renders exactly five capped visual markers and links to the public rewards explanation", () => {
