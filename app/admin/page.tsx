@@ -40,11 +40,22 @@ interface Booking {
   player_name?: string | null;
   payment_method?: "website" | "cash" | "free" | "manual";
   booking_source?: "website" | "cash" | "manual" | "guest";
+  booking_origin?: "fair_play" | "admin_manual" | "guest" | "third_party" | "legacy";
   added_by?: "admin" | "player" | "system";
   notes?: string | null;
   guest_phone?: string | null;
   wallet_available_balance?: number;
   latest_refund?: "wallet_credit" | "pending_review" | "refunded" | null;
+  attendance?: {
+    booking_id: number;
+    game_id: number;
+    user_id: string | null;
+    status: "attended" | "no_show" | null;
+    marked_by: string | null;
+    marked_at: string | null;
+    updated_at: string;
+    correction_note: string | null;
+  } | null;
 }
 
 type AdminPlayerType = "existing" | "guest";
@@ -192,6 +203,7 @@ interface AdminSummary {
 interface AdminDashboardData {
   games: Game[];
   bookings: Booking[];
+  roster_bookings?: Booking[];
   booking_payments: BookingPayment[];
   wallet_transactions?: WalletTransaction[];
   refund_requests?: RefundRequest[];
@@ -353,6 +365,7 @@ export default function AdminPage() {
   const gameHighlightTimeoutRef = useRef<number | null>(null);
   const [games, setGames] = useState<Game[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [rosterBookings, setRosterBookings] = useState<Booking[]>([]);
   const [bookingPayments, setBookingPayments] = useState<BookingPayment[]>([]);
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
@@ -456,6 +469,7 @@ export default function AdminPage() {
       if (result && "games" in result) {
         setGames(result.games ?? []);
         setBookings(result.bookings ?? []);
+        setRosterBookings(result.roster_bookings ?? result.bookings ?? []);
         setBookingPayments(result.booking_payments ?? []);
         setWalletTransactions(result.wallet_transactions ?? []);
         setRefundRequests(result.refund_requests ?? []);
@@ -995,6 +1009,20 @@ export default function AdminPage() {
               },
             ]
       );
+      setRosterBookings((currentBookings) =>
+        editingAdminBooking
+          ? currentBookings.map((currentBooking) =>
+              currentBooking.id === newBooking.id ? { ...currentBooking, ...newBooking } : currentBooking
+            )
+          : [
+              ...currentBookings,
+              {
+                ...newBooking,
+                wallet_available_balance: registeredUser?.wallet_available_balance ?? 0,
+                latest_refund: registeredUser?.latest_refund ?? null,
+              },
+            ]
+      );
       if (!editingAdminBooking) {
         setGames((currentGames) =>
           currentGames.map((currentGame) =>
@@ -1018,6 +1046,51 @@ export default function AdminPage() {
       setAddPlayerError(error instanceof Error ? error.message : "Unable to add this player.");
     } finally {
       setIsAddingPlayer(false);
+    }
+  };
+
+  const setBookingAttendance = async (booking: Booking, status: "attended" | "no_show") => {
+    const correctionReason = booking.attendance?.status
+      ? window.prompt("Optional reason for correcting this attendance:")
+      : null;
+
+    if (booking.attendance?.status && correctionReason === null) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/admin/attendance", {
+        method: "POST",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({
+          booking_id: booking.id,
+          status,
+          correction_reason: correctionReason?.trim() || null,
+        }),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || !result?.attendance) {
+        alert(result?.error || "Unable to save attendance.");
+        return;
+      }
+
+      setBookings((currentBookings) =>
+        currentBookings.map((currentBooking) =>
+          currentBooking.id === booking.id
+            ? { ...currentBooking, attendance: result.attendance }
+            : currentBooking
+        )
+      );
+      setRosterBookings((currentBookings) =>
+        currentBookings.map((currentBooking) =>
+          currentBooking.id === booking.id
+            ? { ...currentBooking, attendance: result.attendance }
+            : currentBooking
+        )
+      );
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save attendance.");
     }
   };
 
@@ -1363,7 +1436,7 @@ export default function AdminPage() {
     bookings.filter((booking) => booking.game_id === gameId).length;
 
   const getGameBookings = (gameId: number) =>
-    bookings.filter((booking) => booking.game_id === gameId);
+    rosterBookings.filter((booking) => booking.game_id === gameId);
 
   const getPaymentStatusForBooking = (booking: Booking) => {
     const matchedPayment = getPaymentDisplayForBooking(booking);
@@ -1668,6 +1741,40 @@ export default function AdminPage() {
     { label: "Archived games", value: operationalSummary.archivedGamesCount },
     { label: "Waiting list", value: operationalSummary.waitingListCount },
   ];
+
+  const renderAttendanceControls = (booking: Booking) => {
+    const status = booking.attendance?.status ?? null;
+
+    return (
+      <span className="mt-2 inline-flex flex-wrap items-center gap-1.5" aria-label={`Attendance for ${booking.player_name || "player"}`}>
+        <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+          {status === "attended" ? "Attended" : status === "no_show" ? "No-show" : "Unmarked"}
+        </span>
+        <button
+          type="button"
+          onClick={() => void setBookingAttendance(booking, "attended")}
+          className={`rounded-full border px-2 py-1 text-[10px] font-semibold transition ${
+            status === "attended"
+              ? "border-emerald-400 bg-emerald-500/15 text-emerald-200"
+              : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:border-emerald-400/60 hover:text-emerald-200"
+          }`}
+        >
+          Attended
+        </button>
+        <button
+          type="button"
+          onClick={() => void setBookingAttendance(booking, "no_show")}
+          className={`rounded-full border px-2 py-1 text-[10px] font-semibold transition ${
+            status === "no_show"
+              ? "border-amber-400 bg-amber-500/15 text-amber-100"
+              : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:border-amber-400/60 hover:text-amber-100"
+          }`}
+        >
+          No-show
+        </button>
+      </span>
+    );
+  };
 
   return (
     <main className="min-h-screen bg-black text-white p-8">
@@ -2295,6 +2402,7 @@ export default function AdminPage() {
                                   <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs uppercase tracking-[0.18em] text-zinc-400">
                                     {getPaymentStatusForBooking(booking)}
                                   </span>
+                                  {renderAttendanceControls(booking)}
                                 </span>
                               ))}
                             </div>
@@ -2541,6 +2649,7 @@ export default function AdminPage() {
                               <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs uppercase tracking-[0.18em] text-zinc-400">
                                 {getPaymentStatusForBooking(booking)}
                               </span>
+                              {renderAttendanceControls(booking)}
                               {booking.added_by === "admin" ? (
                                 <button
                                   type="button"

@@ -10,6 +10,11 @@ vi.mock("@/lib/adminAuth", () => ({
 vi.mock("@/lib/supabaseAdmin", () => ({
   supabaseAdmin: {
     from: supabaseFromMock,
+    auth: {
+      admin: {
+        listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
+      },
+    },
   },
 }));
 
@@ -18,6 +23,7 @@ import { GET } from "@/app/api/admin/dashboard/route";
 type TableName =
   | "games"
   | "bookings"
+  | "booking_attendance"
   | "profiles"
   | "booking_payments"
   | "wallet_transactions"
@@ -35,6 +41,7 @@ type Filter =
 const state: Record<TableName, TableRow[]> = {
   games: [],
   bookings: [],
+  booking_attendance: [],
   profiles: [],
   booking_payments: [],
   wallet_transactions: [],

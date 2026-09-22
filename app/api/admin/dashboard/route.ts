@@ -34,6 +34,18 @@ type Booking = {
   game_id?: number | null;
   user_id: string | null;
   player_name: string | null;
+  booking_source: "fair_play" | "admin_manual" | "guest" | "third_party" | "legacy";
+};
+
+type BookingAttendance = {
+  booking_id: number;
+  game_id: number;
+  user_id: string | null;
+  status: "attended" | "no_show" | null;
+  marked_by: string | null;
+  marked_at: string | null;
+  updated_at: string;
+  correction_note: string | null;
 };
 
 type AdminBookingDetail = {
@@ -203,6 +215,7 @@ export async function GET(request: NextRequest) {
     const [
       gamesResult,
       bookingsResult,
+      attendanceResult,
       adminBookingDetailsResult,
       profilesResult,
       paymentsResult,
@@ -222,8 +235,11 @@ export async function GET(request: NextRequest) {
         .order("id", { ascending: true }),
       supabaseAdmin
         .from("bookings")
-        .select("id,game_id,user_id,player_name")
+        .select("id,game_id,user_id,player_name,booking_source")
         .order("id", { ascending: true }),
+      supabaseAdmin
+        .from("booking_attendance")
+        .select("booking_id,game_id,user_id,status,marked_by,marked_at,updated_at,correction_note"),
       supabaseAdmin
         .from("admin_booking_details")
         .select("booking_id,payment_method,booking_source,added_by,notes,guest_phone"),
@@ -275,6 +291,7 @@ export async function GET(request: NextRequest) {
     const firstError =
       gamesResult.error ||
       bookingsResult.error ||
+      attendanceResult.error ||
       adminBookingDetailsResult.error ||
       profilesResult.error ||
       paymentsResult.error ||
@@ -294,6 +311,9 @@ export async function GET(request: NextRequest) {
 
     const games = gamesResult.data ?? [];
     const allBookings = bookingsResult.data ?? [];
+    const attendanceByBookingId = new Map(
+      ((attendanceResult.data ?? []) as BookingAttendance[]).map((attendance) => [attendance.booking_id, attendance])
+    );
     const adminBookingDetailByBookingId = new Map(
       ((adminBookingDetailsResult.data ?? []) as AdminBookingDetail[]).map((detail) => [detail.booking_id, detail])
     );
@@ -429,12 +449,14 @@ export async function GET(request: NextRequest) {
       };
     });
     const registeredUserById = new Map(registeredUsers.map((registeredUser) => [registeredUser.id, registeredUser]));
-    const adminBookings = bookings.map((booking) => {
+    const buildAdminBooking = (booking: Booking) => {
       const detail = adminBookingDetailByBookingId.get(booking.id);
       const registeredUser = booking.user_id ? registeredUserById.get(booking.user_id) : null;
 
       return {
         ...booking,
+        booking_origin: booking.booking_source,
+        attendance: attendanceByBookingId.get(booking.id) ?? null,
         payment_method: detail?.payment_method ?? "website",
         booking_source: detail?.booking_source ?? (booking.user_id ? "website" : "guest"),
         added_by: detail?.added_by ?? (booking.user_id ? "player" : "system"),
@@ -443,7 +465,9 @@ export async function GET(request: NextRequest) {
         wallet_available_balance: registeredUser?.wallet_available_balance ?? 0,
         latest_refund: registeredUser?.latest_refund ?? null,
       };
-    });
+    };
+    const adminBookings = bookings.map(buildAdminBooking);
+    const rosterBookings = (allBookings as Booking[]).map(buildAdminBooking);
     const gameById = new Map((games as Game[]).map((game) => [game.id, game]));
     const bookingById = new Map((allBookings as Booking[]).map((booking) => [booking.id, booking]));
     const paymentById = new Map((bookingPayments as Payment[]).map((payment) => [payment.id, payment]));
@@ -633,6 +657,7 @@ export async function GET(request: NextRequest) {
     return Response.json({
       games: gamesWithSafetySummaries,
       bookings: adminBookings,
+      roster_bookings: rosterBookings,
       profiles,
       booking_payments: safeBookingPayments,
       wallet_transactions: walletTransactions,
