@@ -1371,19 +1371,19 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         <div className="space-y-5">
           <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
             <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">
-              {navbarAuthMode === "signup" ? "CREATE ACCOUNT" : "SIGN IN"}
+              {navbarAuthMode === "signup" ? "CREATE YOUR ACCOUNT" : "SIGN IN"}
             </p>
             <h2 className="mt-3 text-3xl font-black tracking-tight text-white">
-              Play more football, with less admin.
+              {navbarAuthMode === "signup" ? "Your next game starts here." : "Play more football, with less admin."}
             </h2>
             <p className="mt-3 text-sm leading-6 text-zinc-400">
               {navbarAuthMode === "signup"
-                ? "Create your player profile so you can book games and join waiting lists."
+                ? "Create your player profile to book games, join waiting lists and manage your bookings in one place."
                 : "Sign in to manage bookings and join games faster."}
             </p>
             {navbarAuthMode === "signup" ? (
               <p className="mt-2 text-xs font-semibold text-stone-300">
-                After creating your account, check your email to activate it.
+                Once registered, please check your email and follow the activation link to verify your account.
               </p>
             ) : null}
 
