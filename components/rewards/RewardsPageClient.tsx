@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import BackButton from "@/components/rewards/BackButton";
-import { supabase } from "@/lib/supabase";
 
 const whatsappCommunityUrl = "https://chat.whatsapp.com/JAGpOaEd8jf2njevCRK7JE?mode=gi_t";
 
@@ -30,16 +28,6 @@ const primaryButtonClass = "inline-flex min-h-11 items-center justify-center rou
 const outlineButtonClass = "inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-bold text-zinc-100 transition hover:border-white hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-zinc-300/60";
 
 export default function RewardsPageClient() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (isMounted) setIsLoggedIn(Boolean(data.user));
-    });
-    return () => { isMounted = false; };
-  }, []);
-
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white sm:py-14">
       <div className="mx-auto max-w-5xl">
@@ -50,16 +38,16 @@ export default function RewardsPageClient() {
         </header>
 
         <div className="space-y-8 lg:space-y-5">
-          <section className={`${cardClass} lg:mr-auto lg:max-w-[720px]`}>
+          <section className={`${cardClass} lg:mr-auto lg:max-w-[780px]`}>
             <div className={iconClass}><RewardIcon name="trophy" /></div>
             <p className={labelClass}>Fair Play Rewards</p>
             <h2 className="mt-3 max-w-[calc(100%-4rem)] text-2xl font-extrabold tracking-tight text-white sm:mt-2">Fair Play Rewards</h2>
             <p className="mt-5 max-w-4xl text-base leading-7 text-zinc-100 sm:mt-4 sm:leading-6">Complete 5 eligible games booked through your Fair Play account and get your 6th game free.</p>
             <p className="mt-4 max-w-4xl text-sm leading-6 text-zinc-400 sm:mt-3 sm:leading-5">Only attended, paid Fair Play bookings count. Cancelled, refunded, complimentary and third-party bookings are excluded. Your progress is tracked automatically in your account.</p>
-            <div className="mt-6 sm:mt-5"><Link href={isLoggedIn ? "/wallet" : "/?sign_in=1"} className={primaryButtonClass}>{isLoggedIn ? "View your rewards" : "Create Fair Play account"}<span className="ml-3 text-lg" aria-hidden="true">→</span></Link></div>
+            <div className="mt-6 sm:mt-5"><Link href="/?sign_in=1" className={primaryButtonClass}>Create Fair Play account<span className="ml-3 text-lg" aria-hidden="true">→</span></Link></div>
           </section>
 
-          <section className={`${cardClass} lg:ml-[120px] lg:max-w-[720px]`}>
+          <section className={`${cardClass} lg:ml-[120px] lg:max-w-[780px]`}>
             <div className={iconClass}><RewardIcon name="people" /></div>
             <p className={labelClass}>Referral promotion</p>
             <h2 className="mt-3 max-w-[calc(100%-4rem)] text-2xl font-extrabold tracking-tight text-white sm:mt-2">Football is better with friends.</h2>
@@ -68,7 +56,7 @@ export default function RewardsPageClient() {
             <div className="mt-6 sm:mt-5"><button type="button" disabled className={`${outlineButtonClass} cursor-not-allowed`} aria-disabled="true">View your referral code <span className="ml-3 text-lg" aria-hidden="true">→</span></button></div>
           </section>
 
-          <section className={`${cardClass} lg:mr-auto lg:max-w-[720px]`}>
+          <section className={`${cardClass} lg:mr-auto lg:max-w-[780px]`}>
             <div className={iconClass}><RewardIcon name="star" /></div>
             <p className={labelClass}>Player Perks</p>
             <h2 className="mt-3 max-w-[calc(100%-4rem)] text-2xl font-extrabold tracking-tight text-white sm:mt-2">Affordable football for everyone.</h2>
