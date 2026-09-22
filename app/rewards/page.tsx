@@ -7,9 +7,9 @@ export const metadata = {
 
 const rewardsSections = [
   {
-    label: "Loyalty promotion",
+    label: "Fair Play Rewards",
     heading: "Fair Play Rewards",
-    body: "Complete 9 eligible games booked through your Fair Play account and receive £5 credit towards your next game.",
+    body: "Complete 5 eligible games booked through your Fair Play account and get your 6th game free.",
     supportingText:
       "Only attended, paid Fair Play bookings count. Cancelled, refunded, complimentary and third-party bookings are excluded. Your progress is tracked automatically in your account.",
   },

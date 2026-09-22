@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import LoyaltyProgressCard from "@/components/wallet/LoyaltyProgressCard";
 import { supabase } from "@/lib/supabase";
 
 type WalletTransaction = {
@@ -469,6 +470,8 @@ export default function WalletPage() {
                 ) : null}
               </div>
             </section>
+
+            <LoyaltyProgressCard userId={userId} />
 
             <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:p-6">
               <div className="mb-5 flex items-center justify-between gap-4">
