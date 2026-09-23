@@ -219,7 +219,10 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
           </h2>
         </div>
         <p className="mt-6 text-sm font-semibold leading-6 text-zinc-300">
-          Invite a friend with your personal code. Once they register with your code and verify their account, you’ll get £5 Fair Play Wallet credit. Their £5 unlocks after their first qualifying paid game.
+          Invite a friend using your referral code and get £5 credit towards your next game for you and your friend. Their £5 unlocks after their first qualifying paid game.
+        </p>
+        <p className="mt-3 text-sm font-semibold leading-6 text-zinc-300">
+          Rewards are applied automatically once eligibility is confirmed.
         </p>
       </div>
 
