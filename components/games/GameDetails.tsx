@@ -14,6 +14,7 @@ import {
   normalizeReferralCode,
   REFERRAL_APPLIED_MESSAGE,
   REFERRAL_INVALID_MESSAGE,
+  REFERRAL_PENDING_VERIFICATION_MESSAGE,
   REFERRAL_SIGNUP_ERROR_MESSAGE,
   validateReferralCode,
 } from "@/lib/referralSignup";
@@ -879,7 +880,9 @@ export default function GameDetails({
       setStatusMessage(
         sessionUser
           ? "Profile verified and saved."
-          : "Check your email to verify your account. Your profile will be completed after verification."
+          : referralIntentId
+          ? REFERRAL_PENDING_VERIFICATION_MESSAGE
+          : AUTH_MESSAGES.verifyAccountBeforeBooking
       );
       setTimeout(() => {
         setShowPaymentModal(false);
@@ -1486,7 +1489,13 @@ export default function GameDetails({
             {statusMessage ? (
               <div className={`mt-4 inline-flex items-center gap-2 rounded-full border border-stone-300/15 bg-zinc-950 px-4 py-2 text-sm text-stone-200 shadow-sm transition-opacity duration-300 ${showStatusBadge ? "opacity-100" : "opacity-0"}`}>
                 <span className="text-stone-200">✓</span>
-                <span>{statusMessage.includes("Profile") ? statusMessage : "Profile verified"}</span>
+                <span>
+                  {statusMessage === REFERRAL_PENDING_VERIFICATION_MESSAGE
+                    ? statusMessage
+                    : statusMessage.includes("Profile")
+                    ? statusMessage
+                    : "Profile verified"}
+                </span>
               </div>
             ) : null}
           </div>

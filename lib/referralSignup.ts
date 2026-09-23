@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabase";
 export const REFERRAL_INVALID_MESSAGE =
   "That referral code is not valid. Please check it and try again.";
 export const REFERRAL_APPLIED_MESSAGE = "Referral code applied";
+export const REFERRAL_PENDING_VERIFICATION_MESSAGE =
+  "Referral code applied. Verify your email to complete your referral.";
 export const REFERRAL_SIGNUP_ERROR_MESSAGE =
   "We couldn't apply that referral code. Please check it and try again.";
 
