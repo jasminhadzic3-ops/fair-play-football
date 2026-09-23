@@ -21,28 +21,32 @@ function getVerificationIntent(value: string | null): VerificationIntent | null 
 function getVerificationCopy(intent: VerificationIntent | null) {
   if (intent === "booking") {
     return {
-      title: "Verify your email to book",
-      description: "Open the link in your inbox, then you can get back to choosing your game.",
+      eyebrow: "One final step",
+      title: "Verify your email",
+      description: "Open the link in your inbox, then return to book your game.",
     };
   }
 
   if (intent === "wallet") {
     return {
-      title: "Verify your email to use your wallet",
-      description: "Open the link in your inbox before using your Fair Play credit.",
+      eyebrow: "One final step",
+      title: "Verify your email",
+      description: "Open the link in your inbox to access your Fair Play Wallet.",
     };
   }
 
   if (intent === "waiting-list") {
     return {
-      title: "Verify your email to join the waiting list",
-      description: "Open the link in your inbox, then you can join the list for this game.",
+      eyebrow: "One final step",
+      title: "Verify your email",
+      description: "Open the link in your inbox, then return to join the waiting list.",
     };
   }
 
   return {
+    eyebrow: "Account created",
     title: "Check your inbox",
-    description: "Your Fair Play account is ready. Open the verification link to finish setting up your profile.",
+    description: "We’ve sent you a verification link. Open it to finish setting up your Fair Play account.",
   };
 }
 
@@ -95,7 +99,7 @@ export default function VerifyEmailPage() {
 
     if (!normalizedEmail) {
       setResendState("error");
-      setResendMessage("Enter the email you used to create your account.");
+      setResendMessage("Enter the email address you used to create your account.");
       return;
     }
 
@@ -112,22 +116,30 @@ export default function VerifyEmailPage() {
 
     if (error) {
       setResendState("error");
-      setResendMessage("We couldn't send another verification email. Please try again.");
+      setResendMessage("We couldn’t send a new link. Please try again.");
       return;
     }
 
     setLinkIssue(false);
     setResendState("sent");
-    setResendMessage("A fresh verification link is on its way.");
+    setResendMessage("A new verification link is on its way.");
   }
 
   return (
     <main className="min-h-[100dvh] bg-black px-4 py-8 text-white sm:px-6 sm:py-16">
-      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-lg items-center sm:min-h-[calc(100vh-8rem)]">
-        <section className="w-full rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.35em] text-zinc-500">Fair Play Football</p>
+      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-xl items-center sm:min-h-[calc(100vh-8rem)]">
+        <section className="w-full rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:rounded-[2.25rem] sm:p-10">
+          <div className="flex items-start justify-between gap-6">
+            <p className="pt-1 text-xs font-bold uppercase tracking-[0.35em] text-stone-400">{copy.eyebrow}</p>
+            <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full border border-stone-300/15 bg-stone-200/5 text-stone-300">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-4.5">
+                <path d="M4 6.75h16v10.5H4z" />
+                <path d="m4.75 7.5 7.25 5 7.25-5" />
+              </svg>
+            </span>
+          </div>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">{copy.title}</h1>
-          <p className="mt-3 text-sm leading-6 text-zinc-300">{copy.description}</p>
+          <p className="mt-3 max-w-md text-[15px] leading-7 text-zinc-300">{copy.description}</p>
 
           {email ? (
             <p className="mt-4 break-words text-sm font-semibold text-stone-200">{email}</p>
@@ -140,8 +152,8 @@ export default function VerifyEmailPage() {
           ) : null}
 
           {linkIssue ? (
-            <div role="alert" className="mt-5 rounded-2xl border border-rose-500/35 bg-rose-500/10 px-4 py-3 text-sm leading-6 text-rose-100">
-              This verification link is no longer available. Send a new one to continue.
+            <div role="alert" className="mt-5 rounded-2xl border border-rose-500/25 bg-rose-500/8 px-4 py-3 text-sm leading-6 text-rose-100">
+              That link has expired or has already been used. Request a new one below.
             </div>
           ) : null}
 
@@ -168,7 +180,7 @@ export default function VerifyEmailPage() {
               disabled={resendState === "sending"}
               className="w-full rounded-3xl border border-stone-300/20 bg-zinc-900 px-6 py-4 text-sm font-bold text-stone-100 transition hover:border-stone-200/35 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-stone-200/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {resendState === "sending" ? "Sending email..." : "Resend verification email"}
+              {resendState === "sending" ? "Sending…" : "Send a new link"}
             </button>
           </form>
 

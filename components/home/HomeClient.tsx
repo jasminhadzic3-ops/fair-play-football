@@ -1831,6 +1831,21 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
             </div>
           ) : null}
 
+          {user && !isEmailVerified(user) && !isPaymentReturnGateActive ? (
+            <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-stone-300/15 bg-zinc-950 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-stone-100">Verify your email</p>
+                <p className="mt-1 text-sm leading-6 text-zinc-400">Check your inbox to start booking games, using your wallet and joining waiting lists.</p>
+              </div>
+              <Link
+                href={getEmailVerificationPath()}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-stone-300/20 bg-stone-200/10 px-5 text-sm font-bold text-stone-100 transition hover:border-stone-200/35 hover:bg-stone-200/15 focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+              >
+                Verify email
+              </Link>
+            </section>
+          ) : null}
+
           {isPaymentReturnGateActive ? (
             <section
               className="mx-auto max-w-2xl rounded-3xl border border-stone-200/15 bg-zinc-950 px-6 py-8 text-center shadow-[0_18px_54px_rgba(214,211,209,0.08)]"

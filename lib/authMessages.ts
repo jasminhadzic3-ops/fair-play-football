@@ -9,11 +9,11 @@ export const AUTH_MESSAGES = {
     "You’re signed in, but we couldn’t load your session. Please refresh and try again.",
   createAccountFailed:
     "We couldn’t create your Fair Play account. Please check your details and try again.",
-  verifyAccountAfterSignup: "We’ll send a verification link after you sign up.",
+  verifyAccountAfterSignup: "We’ll email you a link to verify your account.",
   googleSignInFailed: "Google sign-in didn’t complete. Please try again.",
   signInAgain: "Please sign in again to continue.",
   saveProfileFailed: "We couldn’t save your profile. Please try again.",
   signInToJoinWaitingList: "Sign in to join the waiting list.",
   verifyEmailProfileBody:
-    "Check your inbox and verify your email before booking games, making payments or joining waiting lists.",
+    "Check your inbox to verify your account before booking games, using your wallet or joining waiting lists.",
 } as const;

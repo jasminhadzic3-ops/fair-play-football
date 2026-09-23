@@ -438,11 +438,11 @@ export default function ProfilePage() {
         setStatusMessage(
           onboardingSource === "verified"
             ? playerDetailsMissing
-              ? "Your email is verified. Add a couple of details before you play."
-              : "Your email is verified. Your profile is ready."
+              ? "Your email is verified. Complete your player details to continue."
+              : "Your email is verified. You’re ready to play."
             : playerDetailsMissing
-              ? "Add a couple of details before you play."
-              : "Your profile is ready."
+              ? "Complete your player details to continue."
+              : "You’re ready to play."
         );
       }
       setIsLoading(false);
@@ -743,14 +743,14 @@ export default function ProfilePage() {
               <section aria-live="polite" className="rounded-3xl border border-stone-300/20 bg-stone-200/10 px-5 py-5 sm:px-6">
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-stone-300">Welcome to Fair Play</p>
                 <h2 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
-                  {needsPlayerDetails ? "Finish your player details" : "You're ready to play"}
+                  {needsPlayerDetails ? "Complete your profile" : "You’re all set"}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-stone-100">
                   {needsPlayerDetails
-                    ? "Add your age and favourite position so your profile is ready for game day."
+                    ? "Add your age and favourite position to finish setting up your player profile."
                     : emailVerified
-                      ? "Your email is verified and your player profile is ready."
-                      : "Your player profile is ready."}
+                      ? "Your email is verified and your Fair Play account is ready."
+                      : "Your Fair Play account is ready."}
                 </p>
                 {!needsPlayerDetails ? (
                   <Link
@@ -847,7 +847,7 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    {needsPlayerDetails ? "Finish your player details" : "Personal details"}
+                    {needsPlayerDetails ? "Player details" : "Personal details"}
                   </p>
                 </div>
                 {!isEditingProfile ? (

@@ -5,7 +5,7 @@ test.use({ baseURL: "http://localhost:3000" });
 test("verification inbox route stays within the mobile viewport", async ({ page }) => {
   await page.goto("/verify-email?intent=booking");
 
-  await expect(page.getByRole("heading", { name: "Verify your email to book" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
   const dimensions = await page.evaluate(() => ({
     viewportWidth: window.innerWidth,
     bodyWidth: document.documentElement.scrollWidth,
