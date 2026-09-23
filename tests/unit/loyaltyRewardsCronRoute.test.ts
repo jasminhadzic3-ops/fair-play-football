@@ -80,7 +80,7 @@ describe("loyalty rewards cron route", () => {
 });
 
 describe("loyalty rewards cron configuration and implementation", () => {
-  it("preserves the reminder cron and runs loyalty reconciliation hourly", () => {
+  it("preserves the reminder cron without registering loyalty rewards", () => {
     const vercelConfig = JSON.parse(readFileSync(join(repoRoot, "vercel.json"), "utf8"));
 
     expect(
@@ -97,12 +97,7 @@ describe("loyalty rewards cron configuration and implementation", () => {
       vercelConfig.crons.filter(
         (cron: { path: string }) => cron.path === "/api/cron/loyalty-rewards"
       )
-    ).toEqual([
-      {
-        path: "/api/cron/loyalty-rewards",
-        schedule: "45 * * * *",
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it("keeps the helper server-only and delegates business logic to the RPC", () => {

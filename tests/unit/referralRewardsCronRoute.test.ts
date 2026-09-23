@@ -36,18 +36,16 @@ beforeEach(() => {
 });
 
 describe("referral rewards cron route", () => {
-  it("runs referral reconciliation hourly without changing the loyalty schedule", () => {
+  it("does not register referral rewards with Vercel Cron", () => {
     const vercel = JSON.parse(
       readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")
     ) as { crons: Array<{ path: string; schedule: string }> };
 
-    expect(vercel.crons.filter((cron) => cron.path === "/api/cron/referral-rewards")).toEqual([
-      { path: "/api/cron/referral-rewards", schedule: "15 * * * *" },
-    ]);
-    expect(vercel.crons).toContainEqual({
-      path: "/api/cron/loyalty-rewards",
-      schedule: "45 * * * *",
-    });
+    expect(
+      vercel.crons.filter(
+        (cron) => cron.path === "/api/cron/referral-rewards"
+      )
+    ).toEqual([]);
   });
 
   it("rejects unauthorized requests without invoking reconciliation", async () => {

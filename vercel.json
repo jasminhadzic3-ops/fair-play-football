@@ -3,14 +3,6 @@
     {
       "path": "/api/cron/game-reminders",
       "schedule": "5 9 * * *"
-    },
-    {
-      "path": "/api/cron/loyalty-rewards",
-      "schedule": "45 * * * *"
-    },
-    {
-      "path": "/api/cron/referral-rewards",
-      "schedule": "15 * * * *"
     }
   ]
 }
