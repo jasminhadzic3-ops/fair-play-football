@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 type LoyaltyProgress = {
@@ -91,7 +90,7 @@ export default function LoyaltyProgressCard({ userId }: LoyaltyProgressCardProps
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">
-            Fair Play Rewards
+            Loyalty promotion
           </p>
           <h2 className="mt-2 text-xl font-black tracking-tight text-white">Play 5 games. Get your 6th free.</h2>
         </div>
@@ -136,12 +135,6 @@ export default function LoyaltyProgressCard({ userId }: LoyaltyProgressCardProps
             ))}
           </div>
 
-          <Link
-            href="/rewards"
-            className="mt-6 inline-flex min-h-11 items-center text-sm font-bold text-amber-100 underline decoration-amber-200/35 underline-offset-4 transition hover:text-white"
-          >
-            How Fair Play Rewards work <span className="ml-2" aria-hidden="true">→</span>
-          </Link>
         </>
       )}
     </section>

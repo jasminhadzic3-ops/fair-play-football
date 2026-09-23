@@ -29,11 +29,11 @@ describe("player loyalty progress card", () => {
     expect(cardSource).toContain("6TH GAME FREE");
   });
 
-  it("renders exactly five capped visual markers and links to the public rewards explanation", () => {
+  it("renders exactly five capped visual markers without the removed rewards link", () => {
     expect(cardSource).toContain("Array.from({ length: 5 }");
     expect(cardSource).toContain("Math.min(progress.current_progress, progress.target)");
-    expect(cardSource).toContain('href="/rewards"');
-    expect(cardSource).toContain("How Fair Play Rewards work");
+    expect(cardSource).toContain("Loyalty promotion");
+    expect(cardSource).not.toContain("How Fair Play Rewards work");
   });
 
   it("fails softly when the RPC is unavailable and does not recreate eligibility logic", () => {

@@ -24,7 +24,7 @@ describe("referral wallet UX", () => {
   });
 
   it("renders the permanent code with copy and share fallback actions", () => {
-    expect(referralCardSource).toContain("Your personal code");
+    expect(referralCardSource).toContain("YOUR REFERRAL CODE");
     expect(referralCardSource).toContain("navigator.clipboard.writeText(referralCode)");
     expect(referralCardSource).toContain("navigator.share");
     expect(referralCardSource).toContain("Message copied");

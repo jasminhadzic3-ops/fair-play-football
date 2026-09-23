@@ -212,15 +212,14 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
       aria-labelledby="referral-heading"
     >
       <div className="max-w-xl">
-        <p className="text-xs font-bold uppercase text-[#dfceb1]">Refer a Friend</p>
+        <p className="text-xs font-bold uppercase text-[#dfceb1]">Referral promotion</p>
         <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 id="referral-heading" className="text-2xl font-black text-white sm:text-3xl">
-            Share the game. Earn wallet credit.
+            Give £5. Get £5.
           </h2>
-          <p className="text-sm font-bold text-[#dfceb1]">£5 Wallet credit</p>
         </div>
         <p className="mt-3 text-sm leading-6 text-stone-300">
-          Invite friends with your personal code. Your rewards are applied automatically when they qualify.
+          Invite a friend with your personal code. Once they register with your code and verify their account, you’ll get £5 Fair Play Wallet credit. Their £5 unlocks after their first qualifying paid game.
         </p>
       </div>
 
@@ -240,7 +239,7 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
       ) : (
         <>
           <div className="mt-7 border-y border-[#cbb38d]/20 py-5 sm:py-6">
-            <p className="text-xs font-bold uppercase text-stone-400">Your personal code</p>
+            <p className="text-xs font-bold uppercase text-stone-400">YOUR REFERRAL CODE</p>
             <p className="mt-3 break-all text-3xl font-black text-[#f1e6d5] sm:text-4xl">{referralCode || "Unavailable"}</p>
             {referralCode ? (
               <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
