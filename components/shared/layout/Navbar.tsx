@@ -58,7 +58,7 @@ export default function Navbar({
 
   const accountNavLinks = [
     ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
-    ...(user ? [{ label: "Wallet", href: "/wallet" }] : []),
+    ...(user ? [{ label: "Wallet & Rewards", href: "/wallet" }] : []),
     ...(user ? [{ label: "Profile", href: "/profile" }] : []),
   ];
 
@@ -68,6 +68,11 @@ export default function Navbar({
 
   const mobileAccountNavLinks = [
     ...accountNavLinks,
+    ...adminNavLinks,
+  ];
+
+  const desktopPlayerNavLinks = [
+    ...accountNavLinks.filter((link) => link.href !== "/profile"),
     ...adminNavLinks,
   ];
 
@@ -96,17 +101,17 @@ export default function Navbar({
   const renderNavLinks = (
     links: Array<{ label: string; href: string }>,
     isMobile = false,
-    emphasizeDesktop = false
+    desktopTone: "public" | "player" = "public"
   ) =>
     links.map((link) => {
       const isActive = isActiveLink(link.href);
-      const desktopLinkTone = emphasizeDesktop
+      const desktopLinkTone = desktopTone === "player"
         ? isActive
-          ? "font-semibold text-white"
+          ? "font-semibold text-white after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-stone-200"
           : "font-semibold text-zinc-200 hover:text-white"
         : isActive
-          ? "font-medium text-white"
-          : "font-medium text-gray-300 hover:text-white";
+          ? "font-medium text-white after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-stone-300"
+          : "font-medium text-zinc-400 hover:text-white";
 
       return (
       <Link
@@ -115,7 +120,7 @@ export default function Navbar({
         className={
           isMobile
             ? `flex items-center gap-2 py-2 font-medium transition ${isActive ? "text-white" : "text-gray-300 hover:text-white"}`
-            : `inline-flex items-center gap-2 text-sm transition ${desktopLinkTone}`
+            : `relative inline-flex min-h-10 items-center whitespace-nowrap text-[0.82rem] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50 focus-visible:ring-offset-4 focus-visible:ring-offset-black ${desktopLinkTone}`
         }
         aria-current={isActive ? "page" : undefined}
         onClick={isMobile ? () => setIsMenuOpen(false) : undefined}
@@ -132,15 +137,9 @@ export default function Navbar({
     </div>
   );
 
-  const renderAuthControls = (isMobile = false) =>
+  const renderMobileAuthControls = () =>
     user ? (
-      <div
-        className={
-          isMobile
-            ? "flex items-center justify-between gap-3 rounded-3xl border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-200"
-            : "flex min-w-0 items-center gap-3 rounded-full border border-zinc-700 bg-zinc-950/80 px-4 py-2 text-sm text-zinc-200"
-        }
-      >
+      <div className="flex items-center justify-between gap-3 rounded-3xl border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-200">
         <span className="inline-flex min-w-0 items-center gap-2 font-semibold text-white">
           <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-900 text-[0.65rem] font-bold text-stone-200">
             {profile?.avatar_url ? (
@@ -156,7 +155,7 @@ export default function Navbar({
           <span className="min-w-0 max-w-[11rem] truncate">{displayName}</span>
         </span>
         <button
-          onClick={isMobile ? handleMobileLogout : onLogout}
+          onClick={handleMobileLogout}
           className="rounded-full border border-stone-300/20 bg-zinc-900 px-3 py-1 font-semibold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 hover:text-white"
         >
           Sign out
@@ -164,57 +163,88 @@ export default function Navbar({
       </div>
     ) : (
       <button
-        onClick={isMobile ? handleMobileSignIn : onSignIn}
-        className={
-          isMobile
-            ? "block w-full text-left text-gray-300 hover:text-white transition font-medium py-2"
-            : "text-gray-300 hover:text-white transition font-medium text-sm"
-        }
+        onClick={handleMobileSignIn}
+        className="block w-full py-2 text-left font-medium text-gray-300 transition hover:text-white"
       >
         Sign in
       </button>
     );
 
   return (
-    <nav className="sticky top-0 z-40 bg-black border-b border-zinc-800/60 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-3 py-3 sm:px-4 lg:px-5 md:grid md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-14">
-        <Link href="/" className="flex shrink-0 items-center gap-3 justify-self-start">
-          <span className="text-lg font-black tracking-[0.3em] text-white md:text-[1.05rem]">
+    <nav className="sticky top-0 z-40 border-b border-zinc-800/60 bg-black/95 backdrop-blur-sm">
+      <div className="flex min-h-[4.25rem] w-full items-center justify-between gap-5 px-4 py-3 sm:px-6 min-[1360px]:grid min-[1360px]:grid-cols-[minmax(10rem,1fr)_auto_minmax(10rem,1fr)] min-[1360px]:gap-8 min-[1360px]:px-8 min-[1600px]:px-10">
+        <Link
+          href="/"
+          className="flex shrink-0 items-center justify-self-start rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50 focus-visible:ring-offset-4 focus-visible:ring-offset-black"
+        >
+          <span className="text-lg font-black tracking-[0.3em] text-white min-[1360px]:text-[1.05rem]">
             FAIR PLAY
           </span>
         </Link>
 
-        <div className="hidden min-w-0 items-center justify-start gap-5 border-r border-zinc-800/50 pr-7 md:flex">
-          {accountNavLinks.length > 0 ? (
-            <div className="flex min-w-0 items-center gap-4 lg:gap-5">
-              {renderNavLinks(accountNavLinks, false, true)}
+        <div className="hidden min-w-0 items-center justify-center gap-8 min-[1360px]:flex">
+          <div className="flex min-w-0 items-center gap-5">
+            {renderNavLinks(publicNavLinks)}
+          </div>
+          {desktopPlayerNavLinks.length > 0 ? (
+            <div className="flex min-w-0 items-center gap-5">
+              {renderNavLinks(desktopPlayerNavLinks, false, "player")}
             </div>
           ) : null}
+          <Link
+            href="/#games"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-stone-200 px-5 text-[0.82rem] font-bold text-zinc-950 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/60 focus-visible:ring-offset-4 focus-visible:ring-offset-black"
+          >
+            Find a game
+          </Link>
         </div>
 
-        <div className="hidden min-w-0 items-center justify-end gap-4 md:flex">
-          <div className="flex items-center gap-4 lg:gap-5">
-            {renderNavLinks(publicNavLinks)}
-            {renderNavLinks(adminNavLinks)}
-            <Link
-              href="/#games"
-              className="inline-flex min-h-9 items-center justify-center rounded-full bg-stone-200 px-4 text-sm font-bold text-zinc-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
-            >
-              Find a game
-            </Link>
-          </div>
-          {user ? <span className="h-4 w-px bg-zinc-800/70" aria-hidden="true" /> : null}
+        <div className="hidden min-w-0 items-center justify-self-end min-[1360px]:flex">
           {user ? (
-            <NotificationBell
-              unreadCount={unreadNotificationCount}
-              realtimeVersion={notificationRealtimeVersion}
-              onUnreadCountChange={onUnreadNotificationCountChange}
-            />
-          ) : null}
-          {renderAuthControls()}
+            <div className="flex min-w-0 items-center gap-3">
+              <Link
+                href="/profile"
+                aria-label={`View profile for ${displayName || "player"}`}
+                className="group inline-flex min-h-10 min-w-0 items-center gap-2.5 rounded-xl px-1.5 text-sm font-semibold text-zinc-200 transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50 focus-visible:ring-offset-4 focus-visible:ring-offset-black"
+              >
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-900 text-[0.68rem] font-bold text-stone-200 transition-colors duration-200 group-hover:border-zinc-500">
+                  {profile?.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    initials
+                  )}
+                </span>
+                <span className="max-w-28 truncate">{displayName}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="inline-flex min-h-10 items-center px-1.5 text-xs font-semibold text-zinc-500 transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50 focus-visible:ring-offset-4 focus-visible:ring-offset-black"
+              >
+                Sign out
+              </button>
+              <NotificationBell
+                unreadCount={unreadNotificationCount}
+                realtimeVersion={notificationRealtimeVersion}
+                onUnreadCountChange={onUnreadNotificationCountChange}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="inline-flex min-h-10 items-center px-2 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50 focus-visible:ring-offset-4 focus-visible:ring-offset-black"
+            >
+              Sign in
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 md:hidden">
+        <div className="flex items-center gap-2 min-[1360px]:hidden">
           {user ? (
             <NotificationBell
               unreadCount={unreadNotificationCount}
@@ -237,7 +267,7 @@ export default function Navbar({
       </div>
 
       {isMenuOpen && (
-        <div className="md:hidden space-y-5 border-t border-zinc-800/60 bg-black px-6 py-4">
+        <div className="space-y-5 border-t border-zinc-800/60 bg-black px-6 py-4 min-[1360px]:hidden">
           <div className="space-y-1">
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-zinc-600">Browse</p>
             <div className="grid gap-1">
@@ -252,7 +282,7 @@ export default function Navbar({
             </div>
           </div>
           {mobileAccountNavLinks.length > 0 ? renderMobileNavGroup("Account", mobileAccountNavLinks) : null}
-          {renderAuthControls(true)}
+          {renderMobileAuthControls()}
         </div>
       )}
     </nav>
