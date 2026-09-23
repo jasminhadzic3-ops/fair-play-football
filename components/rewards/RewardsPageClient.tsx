@@ -51,9 +51,11 @@ export default function RewardsPageClient() {
             <div className={iconClass}><RewardIcon name="people" /></div>
             <p className={labelClass}>Referral promotion</p>
             <h2 className="mt-3 max-w-[calc(100%-4rem)] text-2xl font-extrabold tracking-tight text-white sm:mt-2">Football is better with friends.</h2>
-            <p className="mt-5 text-base leading-7 text-zinc-100 sm:mt-4 sm:leading-6">Invite a new player to Fair Play and they’ll get their first game free with £5 credit. Once they complete their second paid game, you’ll get £5 Fair Play credit towards your next game.</p>
-            <p className="mt-4 text-sm leading-6 text-zinc-400 sm:mt-3 sm:leading-5">Share your personal referral code from your account.</p>
-            <div className="mt-6 sm:mt-5"><button type="button" disabled className={`${outlineButtonClass} cursor-not-allowed`} aria-disabled="true">View your referral code <span className="ml-3 text-lg" aria-hidden="true">→</span></button></div>
+            <p className="mt-5 text-base leading-7 text-zinc-100 sm:mt-4 sm:leading-6">Invite a new player using your personal referral code.</p>
+            <p className="mt-4 text-sm leading-6 text-zinc-400 sm:mt-3 sm:leading-5">Once they register with your code and verify their account, you’ll receive £5 Fair Play Wallet credit.</p>
+            <p className="mt-4 text-sm leading-6 text-zinc-400 sm:mt-3 sm:leading-5">They’ll have <strong className="font-semibold text-zinc-100">£5 waiting for them too</strong>, which unlocks after their first qualifying paid Fair Play game.</p>
+            <p className="mt-4 text-sm font-semibold leading-6 text-zinc-100 sm:mt-3 sm:leading-5">Rewards are applied automatically once eligibility is confirmed.</p>
+            <div className="mt-6 sm:mt-5"><button type="button" disabled className={`${outlineButtonClass} cursor-not-allowed`} aria-disabled="true">View and share your code <span className="ml-3 text-lg" aria-hidden="true">→</span></button></div>
           </section>
 
           <section className={`${cardClass} lg:mr-auto lg:max-w-[780px]`}>
