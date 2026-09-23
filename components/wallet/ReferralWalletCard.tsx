@@ -208,17 +208,17 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
       id="referral"
       tabIndex={-1}
       ref={sectionRef}
-      className="scroll-mt-6 rounded-[2rem] border border-[#cbb38d]/35 bg-[#15130f] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] outline-none focus:ring-2 focus:ring-[#e8d8bc]/80 sm:p-7"
+      className="scroll-mt-6 rounded-[2rem] border border-amber-200/30 bg-[#11100d] p-5 shadow-[0_18px_60px_rgba(120,88,30,0.18)] outline-none focus:ring-2 focus:ring-amber-200/80 sm:p-6"
       aria-labelledby="referral-heading"
     >
       <div className="max-w-xl">
-        <p className="text-xs font-bold uppercase text-[#dfceb1]">Referral promotion</p>
-        <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 id="referral-heading" className="text-2xl font-black text-white sm:text-3xl">
+        <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral promotion</p>
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 id="referral-heading" className="text-xl font-black tracking-tight text-white">
             Give £5. Get £5.
           </h2>
         </div>
-        <p className="mt-3 text-sm leading-6 text-stone-300">
+        <p className="mt-6 text-sm font-semibold leading-6 text-zinc-300">
           Invite a friend with your personal code. Once they register with your code and verify their account, you’ll get £5 Fair Play Wallet credit. Their £5 unlocks after their first qualifying paid game.
         </p>
       </div>
@@ -238,22 +238,22 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
         </p>
       ) : (
         <>
-          <div className="mt-7 border-y border-[#cbb38d]/20 py-5 sm:py-6">
-            <p className="text-xs font-bold uppercase text-stone-400">YOUR REFERRAL CODE</p>
-            <p className="mt-3 break-all text-3xl font-black text-[#f1e6d5] sm:text-4xl">{referralCode || "Unavailable"}</p>
+          <div className="mt-6 border-y border-amber-200/20 py-5 sm:py-6">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-zinc-500">YOUR REFERRAL CODE</p>
+            <p className="mt-3 break-all text-3xl font-black text-amber-100 sm:text-4xl">{referralCode || "Unavailable"}</p>
             {referralCode ? (
               <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
                 <button
                   type="button"
                   onClick={() => void copyCode()}
-                  className="min-h-11 rounded-full border border-stone-200/25 px-4 text-sm font-bold text-stone-100 transition hover:border-stone-100/60 hover:bg-stone-100/5 focus:outline-none focus:ring-2 focus:ring-stone-100/70"
+                  className="min-h-11 rounded-full border border-amber-200/25 px-4 text-sm font-bold text-stone-100 transition hover:border-amber-100/60 hover:bg-amber-100/5 focus:outline-none focus:ring-2 focus:ring-amber-100/70"
                 >
                   {copyLabel}
                 </button>
                 <button
                   type="button"
                   onClick={() => void shareCode()}
-                  className="min-h-11 rounded-full bg-[#eadbc3] px-4 text-sm font-bold text-stone-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#eadbc3]/80"
+                  className="min-h-11 rounded-full bg-amber-200 px-4 text-sm font-bold text-stone-950 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-200/80"
                 >
                   {shareLabel}
                 </button>
@@ -262,20 +262,20 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
           </div>
 
           {status.has_referred_reward && status.referred_reward_state === "locked" ? (
-            <div className="mt-6 border-t border-[#cbb38d]/20 pt-6">
+            <div className="mt-6 border-t border-amber-200/20 pt-6">
               <p className="text-xl font-black text-white">£5 Locked</p>
               {status.qualifying_game_found ? (
                 <>
-                  <p className="mt-3 text-sm leading-6 text-stone-200">Thank you for booking with Fair Play. We hope you enjoyed the game!</p>
-                  <p className="mt-2 text-sm leading-6 text-stone-200">Your £5 credit will be added to your wallet shortly.</p>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-zinc-300">Thank you for booking with Fair Play. We hope you enjoyed the game!</p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-zinc-300">Your £5 credit will be added to your wallet shortly.</p>
                   {eligibleAtLabel ? (
-                    <p className="mt-4 text-xs font-semibold text-[#dfceb1]">
+                    <p className="mt-4 text-xs font-semibold text-amber-200/80">
                       Expected after {eligibleAtLabel}
                     </p>
                   ) : null}
                 </>
               ) : (
-                <p className="mt-3 text-sm leading-6 text-stone-200">Please complete your first qualifying paid Fair Play game to unlock your £5 credit towards your next game.</p>
+                <p className="mt-3 text-sm font-semibold leading-6 text-zinc-300">Please complete your first qualifying paid Fair Play game to unlock your £5 credit towards your next game.</p>
               )}
             </div>
           ) : null}
