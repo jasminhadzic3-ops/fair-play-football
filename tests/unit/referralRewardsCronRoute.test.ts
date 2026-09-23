@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const runReferralVerificationReconciliationMock = vi.hoisted(() => vi.fn());
+const runReferralRewardUnlockReconciliationMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/referralRewards", () => ({
   runReferralVerificationReconciliation:
     runReferralVerificationReconciliationMock,
+  runReferralRewardUnlockReconciliation:
+    runReferralRewardUnlockReconciliationMock,
 }));
 
 import { GET } from "@/app/api/cron/referral-rewards/route";
@@ -23,14 +28,34 @@ beforeEach(() => {
     referrals_processed: 1,
     wallet_credits_issued: 1,
   });
+  runReferralRewardUnlockReconciliationMock.mockResolvedValue({
+    relationships_checked: 2,
+    referrals_unlocked: 1,
+    wallet_credits_issued: 1,
+  });
 });
 
 describe("referral rewards cron route", () => {
+  it("runs referral reconciliation hourly without changing the loyalty schedule", () => {
+    const vercel = JSON.parse(
+      readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")
+    ) as { crons: Array<{ path: string; schedule: string }> };
+
+    expect(vercel.crons.filter((cron) => cron.path === "/api/cron/referral-rewards")).toEqual([
+      { path: "/api/cron/referral-rewards", schedule: "15 * * * *" },
+    ]);
+    expect(vercel.crons).toContainEqual({
+      path: "/api/cron/loyalty-rewards",
+      schedule: "45 * * * *",
+    });
+  });
+
   it("rejects unauthorized requests without invoking reconciliation", async () => {
     const response = await GET(cronRequest());
 
     expect(response.status).toBe(401);
     expect(runReferralVerificationReconciliationMock).not.toHaveBeenCalled();
+    expect(runReferralRewardUnlockReconciliationMock).not.toHaveBeenCalled();
   });
 
   it("rejects an incorrect bearer secret", async () => {
@@ -38,6 +63,7 @@ describe("referral rewards cron route", () => {
 
     expect(response.status).toBe(401);
     expect(runReferralVerificationReconciliationMock).not.toHaveBeenCalled();
+    expect(runReferralRewardUnlockReconciliationMock).not.toHaveBeenCalled();
   });
 
   it("rejects requests when CRON_SECRET is missing", async () => {
@@ -47,6 +73,7 @@ describe("referral rewards cron route", () => {
 
     expect(response.status).toBe(401);
     expect(runReferralVerificationReconciliationMock).not.toHaveBeenCalled();
+    expect(runReferralRewardUnlockReconciliationMock).not.toHaveBeenCalled();
   });
 
   it("runs reconciliation once and disables caching", async () => {
@@ -56,10 +83,21 @@ describe("referral rewards cron route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(runReferralVerificationReconciliationMock).toHaveBeenCalledTimes(1);
+    expect(runReferralRewardUnlockReconciliationMock).toHaveBeenCalledTimes(1);
+    expect(
+      runReferralVerificationReconciliationMock.mock.invocationCallOrder[0]
+    ).toBeLessThan(runReferralRewardUnlockReconciliationMock.mock.invocationCallOrder[0]);
     expect(body).toEqual({
-      relationships_checked: 2,
-      referrals_processed: 1,
-      wallet_credits_issued: 1,
+      verification: {
+        relationships_checked: 2,
+        referrals_processed: 1,
+        wallet_credits_issued: 1,
+      },
+      unlocks: {
+        relationships_checked: 2,
+        referrals_unlocked: 1,
+        wallet_credits_issued: 1,
+      },
     });
   });
 
@@ -73,7 +111,20 @@ describe("referral rewards cron route", () => {
 
     expect(response.status).toBe(500);
     expect(body).toEqual({
-      error: "Unable to reconcile referral verifications.",
+      error: "Unable to reconcile referral rewards.",
+    });
+  });
+
+  it("does not expose unlock reconciliation errors", async () => {
+    runReferralRewardUnlockReconciliationMock.mockRejectedValueOnce(
+      new Error("private database details")
+    );
+
+    const response = await GET(cronRequest("cron-secret"));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "Unable to reconcile referral rewards.",
     });
   });
 });
