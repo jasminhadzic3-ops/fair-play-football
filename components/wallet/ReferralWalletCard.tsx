@@ -218,8 +218,8 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
             Give £5. Get £5.
           </h2>
         </div>
-        <p className="mt-6 text-sm font-semibold leading-6 text-zinc-300">
-          Invite a friend using your referral code and get £5 credit towards your next game for you and your friend. Their £5 unlocks after their first qualifying paid game.
+        <p className="mt-6 text-2xl font-black tracking-tight text-white">
+          Invite a friend with your referral code and you’ll both receive £5 Fair Play credit. Their credit unlocks after their first qualifying paid game.
         </p>
         <p className="mt-3 text-sm font-semibold leading-6 text-zinc-300">
           Rewards are applied automatically once eligibility is confirmed.
