@@ -5,9 +5,18 @@ import { supabase } from "@/lib/supabase";
 import Modal from "@/components/shared/ui/Modal";
 import TeamList from "./TeamList";
 import GameTagPills from "./GameTagPills";
+import { AUTH_MESSAGES } from "@/lib/authMessages";
 import { getFormatFromMaxPlayers } from "@/lib/gameUtils";
 import { duplicatePaidPaymentMessage } from "@/lib/sumupPaymentMessages";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
+import {
+  getEmailConfirmationRedirectUrl,
+  getEmailVerificationPath,
+  getProfileOnboardingPath,
+  isEmailVerified,
+  PENDING_SIGNUP_PROFILE_KEY,
+  type VerificationIntent,
+} from "@/lib/onboarding";
 import { REFUND_POLICY_ITEMS } from "@/lib/refundPolicy";
 import {
   createReferralSignupIntent,
@@ -66,7 +75,6 @@ type WaitingListEntry = {
   status?: string | null;
 };
 
-const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 const PENDING_SUMUP_GAME_SNAPSHOT_KEY = "pendingSumUpGameSnapshot";
 const incompletePaymentMessage =
   "Payment wasn't completed.\nYour booking has not been confirmed.";
@@ -302,8 +310,16 @@ export default function GameDetails({
     setStatusMessage(null);
   };
 
+  const openEmailVerification = (intent: VerificationIntent) => {
+    window.location.assign(getEmailVerificationPath(intent));
+  };
+
   const openPaymentModal = useCallback((checkoutId?: string | null, checkoutReference?: string | null) => {
     if (!canBookGame) {
+      return;
+    }
+    if (!isEmailVerified(user)) {
+      openEmailVerification("booking");
       return;
     }
     setShowProfileModal(false);
@@ -316,7 +332,7 @@ export default function GameDetails({
         : null
     );
     setShowPaymentModal(true);
-  }, [canBookGame]);
+  }, [canBookGame, user]);
 
   useEffect(() => {
     if (continueToPayment) {
@@ -422,6 +438,11 @@ export default function GameDetails({
       return;
     }
 
+    if (!isEmailVerified(user)) {
+      openEmailVerification("booking");
+      return;
+    }
+
     setBookingLoading(true);
     setPaymentStatus("creating");
     setPaymentMessage("Creating secure SumUp checkout...");
@@ -430,7 +451,7 @@ export default function GameDetails({
       const session = (await supabase.auth.getSession()).data.session;
 
       if (!session?.access_token) {
-        throw new Error("Please sign in again before paying.");
+        throw new Error(AUTH_MESSAGES.signInAgain);
       }
 
       const response = await fetch("/api/sumup/create-checkout", {
@@ -519,6 +540,11 @@ export default function GameDetails({
       return;
     }
 
+    if (!isEmailVerified(user)) {
+      openEmailVerification("wallet");
+      return;
+    }
+
     setBookingLoading(true);
     setPaymentCheckoutId(null);
     setPaymentCheckoutReference(null);
@@ -529,7 +555,7 @@ export default function GameDetails({
       const session = (await supabase.auth.getSession()).data.session;
 
       if (!session?.access_token) {
-        throw new Error("Please sign in again before paying with wallet.");
+        throw new Error(AUTH_MESSAGES.signInAgain);
       }
 
       const response = await fetch("/api/wallet/bookings", {
@@ -587,11 +613,16 @@ export default function GameDetails({
       localStorage.removeItem("pendingSumUpCheckoutReference");
       setAuthLoading(false);
       clearAuthState();
-      setWaitingListError("Please sign in before joining the waiting list.");
+      setWaitingListError(AUTH_MESSAGES.signInToJoinWaitingList);
       setShowPaymentModal(false);
       setAuthMode("signin");
       setAuthOpenedFromNavbar(false);
       setShowProfileModal(true);
+      return;
+    }
+
+    if (!isEmailVerified(user)) {
+      openEmailVerification("waiting-list");
       return;
     }
 
@@ -601,7 +632,7 @@ export default function GameDetails({
       const session = (await supabase.auth.getSession()).data.session;
 
       if (!session?.access_token) {
-        throw new Error("Please sign in again before joining the waiting list.");
+        throw new Error(AUTH_MESSAGES.signInAgain);
       }
 
       const response = await fetch("/api/waiting-list", {
@@ -785,25 +816,25 @@ export default function GameDetails({
     clearAuthState();
 
     if (!agreementAccepted) {
-      setAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setAuthError(AUTH_MESSAGES.acceptTerms);
       setAuthLoading(false);
       return;
     }
 
     if (!age) {
-      setAuthError("Please select your age.");
+      setAuthError(AUTH_MESSAGES.chooseAge);
       setAuthLoading(false);
       return;
     }
 
     if (!favouritePosition) {
-      setAuthError("Please select your favourite position.");
+      setAuthError(AUTH_MESSAGES.chooseFavouritePosition);
       setAuthLoading(false);
       return;
     }
 
     if (password !== confirmPassword) {
-      setAuthError("Passwords do not match.");
+      setAuthError(AUTH_MESSAGES.passwordsDoNotMatch);
       setAuthLoading(false);
       return;
     }
@@ -822,6 +853,7 @@ export default function GameDetails({
         email,
         terms_accepted_at: termsAcceptedAt,
         terms_version: AGREEMENT_VERSION,
+        onboarding_source: "email",
         ...(referralIntentId ? { referral_signup_intent_id: referralIntentId } : {}),
       };
 
@@ -834,7 +866,7 @@ export default function GameDetails({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/profile?complete_profile=1`,
+          emailRedirectTo: getEmailConfirmationRedirectUrl(window.location.origin),
           data: pendingSignupProfile,
         },
       });
@@ -843,54 +875,12 @@ export default function GameDetails({
         throw error;
       }
 
-      const currentUser = data.user ?? (await supabase.auth.getUser()).data.user;
-      if (!currentUser) {
-        const signInResult = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInResult.error) {
-          throw signInResult.error;
-        }
-      }
-
-      const sessionUser = (await supabase.auth.getUser()).data.user;
-      if (sessionUser) {
-        await supabase.from("profiles").upsert({
-          id: sessionUser.id,
-          email,
-          username: username.trim(),
-          age,
-          gender,
-          favourite_position: favouritePosition,
-          terms_accepted_at: termsAcceptedAt,
-          terms_version: AGREEMENT_VERSION,
-        });
-        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
-
-        // Refresh profile data after successful signup
-        if (onRefreshProfile) {
-          await onRefreshProfile();
-        }
-
-        window.location.href = "/profile";
+      if (data.session?.user && isEmailVerified(data.session.user)) {
+        window.location.assign(getProfileOnboardingPath("verified"));
         return;
       }
 
-      setStatusMessage(
-        sessionUser
-          ? "Profile verified and saved."
-          : referralIntentId
-          ? REFERRAL_PENDING_VERIFICATION_MESSAGE
-          : AUTH_MESSAGES.verifyAccountBeforeBooking
-      );
-      setTimeout(() => {
-        setShowPaymentModal(false);
-        setShowProfileModal(false);
-        if (authOpenedFromNavbar || !isGameFull) {
-          onClose();
-        }
-      }, 900);
+      window.location.assign(getEmailVerificationPath());
     } catch (error: any) {
       localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
       setAuthError(
@@ -920,7 +910,7 @@ export default function GameDetails({
       const signedInUser = data.user ?? data.session?.user;
 
       if (!signedInUser) {
-        throw new Error("Sign in succeeded, but the user session could not be loaded.");
+        throw new Error(AUTH_MESSAGES.sessionMissingAfterSignIn);
       }
 
       setIsClosingAfterSignIn(true);
@@ -1002,7 +992,7 @@ export default function GameDetails({
     setAuthLoading(true);
     clearAuthState();
     if (authMode === "signup" && !agreementAccepted) {
-      setAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setAuthError(AUTH_MESSAGES.acceptTerms);
       setAuthLoading(false);
       return;
     }
@@ -1014,6 +1004,7 @@ export default function GameDetails({
           email,
           terms_accepted_at: new Date().toISOString(),
           terms_version: AGREEMENT_VERSION,
+          onboarding_source: "google",
         })
       );
     }
@@ -1037,7 +1028,7 @@ export default function GameDetails({
         localStorage.removeItem("pendingJoinGameId");
       }
       setAuthLoading(false);
-      setAuthError(`Google sign in failed. ${error.message}`);
+      setAuthError(AUTH_MESSAGES.googleSignInFailed);
       return;
     }
 
@@ -1048,22 +1039,22 @@ export default function GameDetails({
     clearAuthState();
 
     if (!username.trim()) {
-      setAuthError("Please enter your username.");
+      setAuthError(AUTH_MESSAGES.enterUsername);
       return;
     }
 
     if (!age) {
-      setAuthError("Please select your age.");
+      setAuthError(AUTH_MESSAGES.chooseAge);
       return;
     }
 
     if (!favouritePosition) {
-      setAuthError("Please select your favourite position.");
+      setAuthError(AUTH_MESSAGES.chooseFavouritePosition);
       return;
     }
 
     if (!user?.id) {
-      setAuthError("Please sign in again before saving your profile.");
+      setAuthError(AUTH_MESSAGES.signInAgain);
       return;
     }
 
@@ -1087,8 +1078,8 @@ export default function GameDetails({
       await onRefreshProfile?.();
       setIsEditingProfile(false);
       setStatusMessage("Profile saved.");
-    } catch (error: any) {
-      setAuthError(error?.message || "Unable to save profile. Please try again.");
+    } catch {
+      setAuthError(AUTH_MESSAGES.saveProfileFailed);
     } finally {
       setAuthLoading(false);
     }

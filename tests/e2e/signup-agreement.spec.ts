@@ -129,7 +129,7 @@ test.describe("signup agreement", () => {
     });
     await page.getByRole("button", { name: "Create account" }).last().click();
     await expect(
-      page.getByText("Please accept the Terms of Service and Privacy Policy to create an account.")
+      page.getByText("Please accept the Terms and Privacy Policy to continue.")
     ).toBeVisible();
   });
 
@@ -141,7 +141,7 @@ test.describe("signup agreement", () => {
 
     await page.getByRole("button", { name: "Continue with Google" }).click();
     await expect(
-      page.getByText("Please accept the Terms of Service and Privacy Policy to create an account.")
+      page.getByText("Please accept the Terms and Privacy Policy to continue.")
     ).toBeVisible();
     await expect(page).toHaveURL("/");
   });
@@ -183,7 +183,8 @@ test.describe("signup agreement", () => {
     expect(capturedSignupPayload.email).toBe(email);
     expect(capturedSignupData.terms_version).toBe(AGREEMENT_VERSION);
     expect(typeof capturedSignupData.terms_accepted_at).toBe("string");
-    await expect(page.getByText("Almost there. Check your email to activate your account.")).toBeVisible();
+    await expect(page).toHaveURL(/\/verify-email$/);
+    await expect(page.getByRole("heading", { name: "Check your inbox" })).toBeVisible();
   });
 
   test("profile completion after email verification stores agreement fields", async ({ page }) => {

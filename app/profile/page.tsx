@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
+import { AUTH_MESSAGES } from "@/lib/authMessages";
 import { isBookable } from "@/lib/gameLifecycle";
+import {
+  hasRequiredPlayerDetails,
+  isEmailVerified,
+  PENDING_SIGNUP_PROFILE_KEY,
+  type PendingSignupProfile,
+} from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
 
 interface Profile {
@@ -17,17 +24,6 @@ interface Profile {
   terms_accepted_at?: string | null;
   terms_version?: string | null;
 }
-
-type PendingSignupProfile = {
-  username?: string;
-  age?: string;
-  gender?: string;
-  favouritePosition?: string;
-  favourite_position?: string;
-  email?: string;
-  terms_accepted_at?: string;
-  terms_version?: string;
-};
 
 interface NotificationGame {
   id: number;
@@ -62,7 +58,6 @@ const positionOptions = [
 ];
 const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
 const genderOptions = ["Male", "Female", "Prefer not to say"];
-const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 
 function getFallbackUsername(user: User) {
   return (
@@ -112,12 +107,14 @@ export default function ProfilePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  const [needsPlayerDetails, setNeedsPlayerDetails] = useState(false);
   const isProfileDirty =
     username.trim() !== (profile?.username || "") ||
     age !== (profile?.age || "") ||
     gender !== (profile?.gender || "") ||
     favouritePosition !== (profile?.favourite_position || "");
-  const isEmailVerified = Boolean(user?.email_confirmed_at || user?.confirmed_at);
+  const emailVerified = isEmailVerified(user);
   const displayName: string = profile?.username || username || (user ? getFallbackUsername(user) : "Player");
   const displayEmail = profile?.email || user?.email || "No email found";
   const memberSince = user?.created_at
@@ -312,90 +309,6 @@ export default function ProfilePage() {
     await loadNotifications();
     await fetchGamesPlayedCount(authUser.id);
 
-    const completeProfileFromUrl = new URLSearchParams(window.location.search).get("complete_profile") === "1";
-    const pendingProfileText = localStorage.getItem(PENDING_SIGNUP_PROFILE_KEY);
-
-    if (completeProfileFromUrl) {
-      void requestReferralVerificationReconciliation();
-    }
-
-    if (pendingProfileText || completeProfileFromUrl) {
-      try {
-        const pendingProfile = pendingProfileText
-          ? (JSON.parse(pendingProfileText) as PendingSignupProfile)
-          : {};
-        const userMetadata = authUser.user_metadata ?? {};
-        const pendingEmail = pendingProfile.email?.trim().toLowerCase();
-        const authEmail = authUser.email?.trim().toLowerCase();
-
-        if (pendingEmail && authEmail && pendingEmail !== authEmail) {
-          throw new Error("Pending profile belongs to another email.");
-        }
-
-        const completedUsername =
-          pendingProfile.username?.trim() ||
-          getStringValue(userMetadata.username).trim() ||
-          getFallbackUsername(authUser);
-        const completedAge = pendingProfile.age || getStringValue(userMetadata.age) || null;
-        const completedGender = pendingProfile.gender || getStringValue(userMetadata.gender) || null;
-        const completedFavouritePosition =
-          pendingProfile.favouritePosition ||
-          pendingProfile.favourite_position ||
-          getStringValue(userMetadata.favouritePosition) ||
-          getStringValue(userMetadata.favourite_position) ||
-          null;
-        const completedTermsAcceptedAt =
-          pendingProfile.terms_accepted_at ||
-          getStringValue(userMetadata.terms_accepted_at) ||
-          null;
-        const completedTermsVersion =
-          pendingProfile.terms_version ||
-          getStringValue(userMetadata.terms_version) ||
-          null;
-
-        const { data: completedProfile, error: completeError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: authUser.id,
-            email: authUser.email || pendingProfile.email || null,
-            username: completedUsername,
-            age: completedAge,
-            gender: completedGender,
-            favourite_position: completedFavouritePosition,
-            ...(completedTermsAcceptedAt
-              ? { terms_accepted_at: completedTermsAcceptedAt, terms_version: completedTermsVersion }
-              : {}),
-          })
-          .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
-          .single();
-
-        if (completeError) {
-          setErrorMessage(completeError.message);
-          setIsLoading(false);
-          return;
-        }
-
-        if (pendingProfileText) {
-          localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
-        }
-        if (completeProfileFromUrl) {
-          const url = new URL(window.location.href);
-          url.searchParams.delete("complete_profile");
-          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-        }
-        setProfile(completedProfile);
-        setUsername(completedProfile.username || "");
-        setAge(completedProfile.age || "");
-        setGender(completedProfile.gender || "");
-        setFavouritePosition(completedProfile.favourite_position || "");
-        setStatusMessage("Profile completed. Please check your details.");
-        setIsLoading(false);
-        return;
-      } catch {
-        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
-      }
-    }
-
     const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
       .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
@@ -408,15 +321,142 @@ export default function ProfilePage() {
       return;
     }
 
+    const searchParams = new URLSearchParams(window.location.search);
+    const completeProfileFromUrl = searchParams.get("complete_profile") === "1";
+    const onboardingSource = searchParams.get("onboarding");
+    const isOnboardingVisit =
+      completeProfileFromUrl || onboardingSource === "verified" || onboardingSource === "profile";
+    const pendingProfileText = localStorage.getItem(PENDING_SIGNUP_PROFILE_KEY);
+    let pendingProfile: PendingSignupProfile | null = null;
+
+    if (pendingProfileText) {
+      try {
+        pendingProfile = JSON.parse(pendingProfileText) as PendingSignupProfile;
+      } catch {
+        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+      }
+    }
+
+    const pendingEmail = pendingProfile?.email?.trim().toLowerCase();
+    const authEmail = authUser.email?.trim().toLowerCase();
+
+    if (pendingEmail && authEmail && pendingEmail !== authEmail) {
+      pendingProfile = null;
+      localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+    }
+
+    if (pendingProfile || isOnboardingVisit) {
+      const userMetadata = authUser.user_metadata ?? {};
+      const preferOnboardingData = onboardingSource === "verified" || onboardingSource === "profile";
+      const pendingUsername =
+        pendingProfile?.username?.trim() || getStringValue(userMetadata.username).trim();
+      const pendingAge = pendingProfile?.age || getStringValue(userMetadata.age);
+      const pendingGender = pendingProfile?.gender || getStringValue(userMetadata.gender);
+      const pendingFavouritePosition =
+        pendingProfile?.favouritePosition ||
+        pendingProfile?.favourite_position ||
+        getStringValue(userMetadata.favouritePosition) ||
+        getStringValue(userMetadata.favourite_position);
+      const completedUsername =
+        (preferOnboardingData ? pendingUsername : existingProfile?.username) ||
+        existingProfile?.username ||
+        pendingUsername ||
+        getFallbackUsername(authUser);
+      const completedAge =
+        (preferOnboardingData ? pendingAge : existingProfile?.age) ||
+        existingProfile?.age ||
+        pendingAge ||
+        null;
+      const completedGender =
+        (preferOnboardingData ? pendingGender : existingProfile?.gender) ||
+        existingProfile?.gender ||
+        pendingGender ||
+        null;
+      const completedFavouritePosition =
+        (preferOnboardingData ? pendingFavouritePosition : existingProfile?.favourite_position) ||
+        existingProfile?.favourite_position ||
+        pendingFavouritePosition ||
+        null;
+      const completedTermsAcceptedAt =
+        existingProfile?.terms_accepted_at ||
+        pendingProfile?.terms_accepted_at ||
+        getStringValue(userMetadata.terms_accepted_at) ||
+        null;
+      const completedTermsVersion =
+        existingProfile?.terms_version ||
+        pendingProfile?.terms_version ||
+        getStringValue(userMetadata.terms_version) ||
+        null;
+
+      const { data: completedProfile, error: completeError } = await supabase
+        .from("profiles")
+        .upsert({
+          id: authUser.id,
+          email: existingProfile?.email || authUser.email || pendingProfile?.email || null,
+          username: completedUsername,
+          age: completedAge,
+          gender: completedGender,
+          favourite_position: completedFavouritePosition,
+          avatar_url: existingProfile?.avatar_url ?? null,
+          ...(completedTermsAcceptedAt
+            ? { terms_accepted_at: completedTermsAcceptedAt, terms_version: completedTermsVersion }
+            : {}),
+        })
+        .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
+        .single();
+
+      if (completeError) {
+        setErrorMessage(completeError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const playerDetailsMissing = !hasRequiredPlayerDetails(completedProfile);
+
+      if (pendingProfile) {
+        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+      }
+      if (isOnboardingVisit) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("complete_profile");
+        url.searchParams.delete("onboarding");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+      if ((completeProfileFromUrl || onboardingSource === "verified") && isEmailVerified(authUser)) {
+        void requestReferralVerificationReconciliation();
+      }
+
+      setProfile(completedProfile);
+      setUsername(completedProfile.username || "");
+      setAge(completedProfile.age || "");
+      setGender(completedProfile.gender || "");
+      setFavouritePosition(completedProfile.favourite_position || "");
+      setIsOnboarding(isOnboardingVisit);
+      setNeedsPlayerDetails(isOnboardingVisit && playerDetailsMissing);
+      if (isOnboardingVisit) {
+        setIsEditingProfile(playerDetailsMissing);
+        setStatusMessage(
+          onboardingSource === "verified"
+            ? playerDetailsMissing
+              ? "Your email is verified. Add a couple of details before you play."
+              : "Your email is verified. Your profile is ready."
+            : playerDetailsMissing
+              ? "Add a couple of details before you play."
+              : "Your profile is ready."
+        );
+      }
+      setIsLoading(false);
+      return;
+    }
+
     if (existingProfile) {
       setProfile(existingProfile);
       setUsername(existingProfile.username || "");
       setAge(existingProfile.age || "");
       setGender(existingProfile.gender || "");
       setFavouritePosition(existingProfile.favourite_position || "");
-      if (completeProfileFromUrl) {
-        setStatusMessage("Profile completed. Please check your details.");
-      }
+      setIsOnboarding(false);
+      setNeedsPlayerDetails(false);
       setIsLoading(false);
       return;
     }
@@ -443,9 +483,8 @@ export default function ProfilePage() {
     setAge(newProfile.age || "");
     setGender(newProfile.gender || "");
     setFavouritePosition(newProfile.favourite_position || "");
-    if (completeProfileFromUrl) {
-      setStatusMessage("Profile completed. Please check your details.");
-    }
+    setIsOnboarding(false);
+    setNeedsPlayerDetails(false);
     setIsLoading(false);
   }, [fetchGamesPlayedCount, loadNotifications, requestReferralVerificationReconciliation]);
 
@@ -464,6 +503,18 @@ export default function ProfilePage() {
 
     if (!trimmedUsername) {
       setErrorMessage("Please enter a display name.");
+      setStatusMessage(null);
+      return;
+    }
+
+    if (needsPlayerDetails && !age) {
+      setErrorMessage("Choose your age to continue.");
+      setStatusMessage(null);
+      return;
+    }
+
+    if (needsPlayerDetails && !favouritePosition) {
+      setErrorMessage("Choose your favourite position to continue.");
       setStatusMessage(null);
       return;
     }
@@ -497,7 +548,9 @@ export default function ProfilePage() {
     setAge(data.age || "");
     setGender(data.gender || "");
     setFavouritePosition(data.favourite_position || "");
-    setStatusMessage("Profile saved.");
+    const completedOnboarding = needsPlayerDetails && hasRequiredPlayerDetails(data);
+    setNeedsPlayerDetails(false);
+    setStatusMessage(completedOnboarding ? "Your profile is ready. Find a game when you're ready." : "Profile saved.");
     setIsEditingProfile(false);
     setIsSaving(false);
   };
@@ -686,6 +739,30 @@ export default function ProfilePage() {
 
         {!isLoading && user ? (
           <div className="space-y-6">
+            {isOnboarding ? (
+              <section aria-live="polite" className="rounded-3xl border border-stone-300/20 bg-stone-200/10 px-5 py-5 sm:px-6">
+                <p className="text-xs font-bold uppercase tracking-[0.3em] text-stone-300">Welcome to Fair Play</p>
+                <h2 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
+                  {needsPlayerDetails ? "Finish your player details" : "You're ready to play"}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-stone-100">
+                  {needsPlayerDetails
+                    ? "Add your age and favourite position so your profile is ready for game day."
+                    : emailVerified
+                      ? "Your email is verified and your player profile is ready."
+                      : "Your player profile is ready."}
+                </p>
+                {!needsPlayerDetails ? (
+                  <Link
+                    href="/#games"
+                    className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-950 px-5 text-sm font-bold text-stone-100 transition hover:border-stone-200/35 hover:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                  >
+                    Find a game
+                  </Link>
+                ) : null}
+              </section>
+            ) : null}
+
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-5">
@@ -746,7 +823,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {!isEmailVerified ? (
+            {!emailVerified ? (
               <div className="rounded-[2rem] border border-stone-300/20 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
                 <span className="mb-4 inline-flex rounded-full border border-stone-300/20 bg-stone-200/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-stone-200">
                   Verification Required
@@ -755,8 +832,14 @@ export default function ProfilePage() {
                   Verify your email
                 </p>
                 <p className="mt-3 text-base leading-7 text-stone-100">
-                  Please verify your email before joining games, making payments or using the waiting list. Check your inbox and click the verification link we sent you.
+                  {AUTH_MESSAGES.verifyEmailProfileBody}
                 </p>
+                <Link
+                  href="/verify-email"
+                  className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/20 bg-stone-200/10 px-5 text-sm font-bold text-stone-100 transition hover:border-stone-200/35 hover:bg-stone-200/15 focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+                >
+                  Verify email
+                </Link>
               </div>
             ) : null}
 
@@ -764,7 +847,7 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    Personal details
+                    {needsPlayerDetails ? "Finish your player details" : "Personal details"}
                   </p>
                 </div>
                 {!isEditingProfile ? (
@@ -798,7 +881,7 @@ export default function ProfilePage() {
 
                   <div>
                     <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      Age
+                      {needsPlayerDetails ? "Age *" : "Age"}
                     </label>
                     <select
                       value={age}
@@ -834,7 +917,7 @@ export default function ProfilePage() {
 
                   <div>
                     <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      Favourite position
+                      {needsPlayerDetails ? "Favourite position *" : "Favourite position"}
                     </label>
                     <select
                       value={favouritePosition}
@@ -875,7 +958,7 @@ export default function ProfilePage() {
               )}
 
               {statusMessage ? (
-                <div className="rounded-3xl border border-stone-300/15 bg-zinc-950 p-4 text-sm font-semibold text-stone-200">
+                <div aria-live="polite" className="rounded-3xl border border-stone-300/15 bg-zinc-950 p-4 text-sm font-semibold text-stone-200">
                   {statusMessage}
                 </div>
               ) : null}
@@ -898,7 +981,7 @@ export default function ProfilePage() {
                     disabled={isSaving || !isProfileDirty}
                     className="rounded-3xl border border-stone-200/30 bg-stone-200 px-6 py-4 font-bold text-zinc-950 shadow-[0_12px_34px_rgba(214,211,209,0.16)] transition hover:border-stone-100 hover:bg-stone-100 hover:shadow-[0_14px_40px_rgba(214,211,209,0.22)] disabled:cursor-default disabled:opacity-60"
                   >
-                    {isSaving ? "Saving..." : "Save Changes"}
+                    {isSaving ? "Saving..." : needsPlayerDetails ? "Save and continue" : "Save Changes"}
                   </button>
                   <button
                     type="button"

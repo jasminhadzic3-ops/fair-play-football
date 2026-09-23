@@ -11,6 +11,16 @@ import Navbar from "@/components/shared/layout/Navbar";
 import Hero from "@/components/shared/layout/Hero";
 import Footer from "@/components/shared/layout/Footer";
 import Modal from "@/components/shared/ui/Modal";
+import { AUTH_MESSAGES } from "@/lib/authMessages";
+import {
+  getEmailConfirmationRedirectUrl,
+  getEmailVerificationPath,
+  getProfileOnboardingPath,
+  hasRequiredPlayerDetails,
+  isEmailVerified,
+  PENDING_SIGNUP_PROFILE_KEY,
+  type PendingSignupProfile,
+} from "@/lib/onboarding";
 import { AGREEMENT_VERSION, SIGNUP_AGREEMENT_LABEL } from "@/lib/signupAgreement";
 import { REFUND_POLICY_ITEMS } from "@/lib/refundPolicy";
 import {
@@ -35,7 +45,6 @@ import {
   validateReferralCode,
 } from "@/lib/referralSignup";
 
-const PENDING_SIGNUP_PROFILE_KEY = "fairPlayPendingSignupProfile";
 const PENDING_SUMUP_CHECKOUT_REFERENCE_KEY = "pendingSumUpCheckoutReference";
 const PENDING_SUMUP_GAME_SNAPSHOT_KEY = "pendingSumUpGameSnapshot";
 const incompletePaymentMessage =
@@ -365,10 +374,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   async function loadOrCreateProfile(authUser: User) {
     const existingProfile = await fetchProfile(authUser.id);
     const pendingSignupProfileText = localStorage.getItem(PENDING_SIGNUP_PROFILE_KEY);
-    let pendingSignupProfile: {
-      terms_accepted_at?: string;
-      terms_version?: string;
-    } | null = null;
+    let pendingSignupProfile: PendingSignupProfile | null = null;
 
     if (pendingSignupProfileText) {
       try {
@@ -378,8 +384,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       }
     }
 
+    const shouldPreservePendingProfile = pendingSignupProfile?.onboarding_source === "google";
+
     if (existingProfile) {
-      if (pendingSignupProfileText) {
+      if (pendingSignupProfileText && !shouldPreservePendingProfile) {
         localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
       }
       return existingProfile;
@@ -414,7 +422,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     }
 
     setProfile(data);
-    if (pendingSignupProfileText) {
+    if (pendingSignupProfileText && !shouldPreservePendingProfile) {
       localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
     }
     return data;
@@ -892,7 +900,27 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
   async function runPostAuthWork(session: { user: User; access_token: string }) {
     try {
-      await loadOrCreateProfile(session.user);
+      const loadedProfile = await loadOrCreateProfile(session.user);
+      const pendingSignupProfileText = localStorage.getItem(PENDING_SIGNUP_PROFILE_KEY);
+      let pendingSignupProfile: PendingSignupProfile | null = null;
+
+      if (pendingSignupProfileText) {
+        try {
+          pendingSignupProfile = JSON.parse(pendingSignupProfileText) as PendingSignupProfile;
+        } catch {
+          localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+        }
+      }
+
+      if (pendingSignupProfile?.onboarding_source === "google") {
+        if (!hasRequiredPlayerDetails(loadedProfile)) {
+          window.location.replace(getProfileOnboardingPath("profile"));
+          return;
+        }
+
+        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
+      }
+
       await fetchUnreadNotificationCount();
       openGameFromNotification();
       continuePendingJoin();
@@ -1175,7 +1203,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       const signedInUser = data.user ?? data.session?.user;
 
       if (!signedInUser) {
-        throw new Error("Sign in succeeded, but the user session could not be loaded.");
+        throw new Error(AUTH_MESSAGES.sessionMissingAfterSignIn);
       }
 
       setShowNavbarAuthModal(false);
@@ -1189,8 +1217,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           console.error("Unable to load profile after sign in:", profileError);
         });
       }
-    } catch (error: any) {
-      setNavbarAuthError(`Sign in failed. ${error?.message || "Please verify your email and password."}`);
+    } catch {
+      setNavbarAuthError(AUTH_MESSAGES.signInFailed);
     } finally {
       setNavbarAuthLoading(false);
     }
@@ -1230,7 +1258,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setNavbarAuthStatus(null);
 
     if (navbarAuthMode === "signup" && !navbarAgreementAccepted) {
-      setNavbarAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setNavbarAuthError(AUTH_MESSAGES.acceptTerms);
       setNavbarAuthLoading(false);
       return;
     }
@@ -1242,6 +1270,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           email: navbarAuthEmail,
           terms_accepted_at: new Date().toISOString(),
           terms_version: AGREEMENT_VERSION,
+          onboarding_source: "google",
         })
       );
     }
@@ -1258,7 +1287,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     if (error) {
       setNavbarAuthLoading(false);
-      setNavbarAuthError(`Google sign in failed. ${error.message}`);
+      setNavbarAuthError(AUTH_MESSAGES.googleSignInFailed);
       return;
     }
 
@@ -1293,25 +1322,25 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setNavbarAuthStatus(null);
 
     if (!navbarAgreementAccepted) {
-      setNavbarAuthError("Please accept the Terms of Service and Privacy Policy to create an account.");
+      setNavbarAuthError(AUTH_MESSAGES.acceptTerms);
       setNavbarAuthLoading(false);
       return;
     }
 
     if (!navbarAuthAge) {
-      setNavbarAuthError("Please select your age.");
+      setNavbarAuthError(AUTH_MESSAGES.chooseAge);
       setNavbarAuthLoading(false);
       return;
     }
 
     if (!navbarAuthFavouritePosition) {
-      setNavbarAuthError("Please select your favourite position.");
+      setNavbarAuthError(AUTH_MESSAGES.chooseFavouritePosition);
       setNavbarAuthLoading(false);
       return;
     }
 
     if (navbarAuthPassword !== navbarAuthConfirmPassword) {
-      setNavbarAuthError("Passwords do not match.");
+      setNavbarAuthError(AUTH_MESSAGES.passwordsDoNotMatch);
       setNavbarAuthLoading(false);
       return;
     }
@@ -1330,6 +1359,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         email: navbarAuthEmail,
         terms_accepted_at: termsAcceptedAt,
         terms_version: AGREEMENT_VERSION,
+        onboarding_source: "email",
         ...(referralIntentId ? { referral_signup_intent_id: referralIntentId } : {}),
       };
 
@@ -1339,7 +1369,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         email: navbarAuthEmail,
         password: navbarAuthPassword,
         options: {
-          emailRedirectTo: `${window.location.origin}/profile?complete_profile=1`,
+          emailRedirectTo: getEmailConfirmationRedirectUrl(window.location.origin),
           data: pendingSignupProfile,
         },
       });
@@ -1348,44 +1378,16 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         throw error;
       }
 
-      const currentUser = data.user ?? (await supabase.auth.getUser()).data.user;
-      if (!currentUser) {
-        const signInResult = await supabase.auth.signInWithPassword({
-          email: navbarAuthEmail,
-          password: navbarAuthPassword,
-        });
-        if (signInResult.error) {
-          throw signInResult.error;
-        }
-      }
-
-      const sessionUser = (await supabase.auth.getUser()).data.user;
-      if (sessionUser) {
-        await supabase.from("profiles").upsert({
-          id: sessionUser.id,
-          email: navbarAuthEmail,
-          username: navbarAuthUsername.trim(),
-          age: navbarAuthAge,
-          gender: navbarAuthGender,
-          favourite_position: navbarAuthFavouritePosition,
-          terms_accepted_at: termsAcceptedAt,
-          terms_version: AGREEMENT_VERSION,
-        });
-        localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
-        await loadOrCreateProfile(sessionUser);
-        await fetchUnreadNotificationCount();
-        closeNavbarAuthModal();
-        window.location.href = "/profile";
+      if (data.session?.user && isEmailVerified(data.session.user)) {
+        window.location.assign(getProfileOnboardingPath("verified"));
         return;
       }
 
-      setNavbarAuthStatus("Almost there. Check your email to activate your account.");
-    } catch (error: any) {
+      window.location.assign(getEmailVerificationPath());
+    } catch {
       localStorage.removeItem(PENDING_SIGNUP_PROFILE_KEY);
       setNavbarAuthError(
-        navbarReferralCode.trim()
-          ? REFERRAL_SIGNUP_ERROR_MESSAGE
-          : error?.message || "Unable to create account. Please try again."
+        navbarReferralCode.trim() ? REFERRAL_SIGNUP_ERROR_MESSAGE : AUTH_MESSAGES.createAccountFailed
       );
     } finally {
       setNavbarAuthLoading(false);
