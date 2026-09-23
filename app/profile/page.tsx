@@ -156,6 +156,32 @@ export default function ProfilePage() {
     window.setTimeout(() => setNotificationMessage(null), 5000);
   };
 
+  const requestReferralVerificationReconciliation = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        return;
+      }
+
+      const response = await fetch("/api/referrals/verification-reconcile", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        console.warn("Referral verification reconciliation was not completed.");
+      }
+    } catch (error) {
+      console.warn("Unable to request referral verification reconciliation:", error);
+    }
+  }, []);
+
   const getAvatarExtension = (file: File) => {
     const mimeExtension = file.type.split("/")[1]?.toLowerCase();
 
@@ -289,6 +315,10 @@ export default function ProfilePage() {
     const completeProfileFromUrl = new URLSearchParams(window.location.search).get("complete_profile") === "1";
     const pendingProfileText = localStorage.getItem(PENDING_SIGNUP_PROFILE_KEY);
 
+    if (completeProfileFromUrl) {
+      void requestReferralVerificationReconciliation();
+    }
+
     if (pendingProfileText || completeProfileFromUrl) {
       try {
         const pendingProfile = pendingProfileText
@@ -417,7 +447,7 @@ export default function ProfilePage() {
       setStatusMessage("Profile completed. Please check your details.");
     }
     setIsLoading(false);
-  }, [fetchGamesPlayedCount, loadNotifications]);
+  }, [fetchGamesPlayedCount, loadNotifications, requestReferralVerificationReconciliation]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
