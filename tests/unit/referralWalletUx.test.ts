@@ -32,17 +32,27 @@ describe("referral wallet UX", () => {
     expect(referralCardSource).toContain('aria-live="polite"');
   });
 
-  it("keeps the approved locked-state copy and removes future timing at the eligible_at deadline", () => {
-    expect(referralCardSource).toContain("£5 Locked");
+  it("presents the locked reward as one database-projected progress unit", () => {
+    expect(referralCardSource).toContain('"Locked £5 referral credit"');
+    expect(referralCardSource).toContain("Your £5 referral credit");
+    expect(referralCardSource).toContain("sm:grid-cols-[auto_1fr]");
+    expect(referralCardSource).toContain("size-16");
+    expect(referralCardSource).toContain("className=\"size-8\"");
+    expect(referralCardSource).toContain("towards your next booking.");
     expect(referralCardSource).toContain(
-      "Please complete your first qualifying paid Fair Play game to unlock your £5 credit towards your next game."
+      "We hope you enjoyed the game. Your first qualifying game is complete, and your £5 credit will appear in your wallet shortly."
     );
-    expect(referralCardSource).toContain("Thank you for booking with Fair Play. We hope you enjoyed the game!");
-    expect(referralCardSource).toContain("Your £5 credit will be added to your wallet shortly.");
-    expect(referralCardSource).toContain("eligibleAt.getTime() <= currentTime");
-    expect(referralCardSource).toContain("Expected after");
-    expect(referralCardSource).toContain("window.setTimeout(() => setCurrentTime(Date.now()), timeoutDelay)");
-    expect(referralCardSource).toContain("window.clearTimeout(timeout)");
+    expect(referralCardSource).toContain("{status.qualifying_game_found ? 1 : 0} of 1 game completed");
+    expect(referralCardSource).toContain("status.qualifying_game_found ? \"w-full\" : \"w-0\"");
+    expect(referralCardSource).toContain(
+      "Complete your first paid game to unlock £5 credit towards your next booking."
+    );
+    expect(referralCardSource).toContain(
+      "We hope you enjoyed the game. Your first qualifying game is complete, and your £5 credit will appear in your wallet shortly."
+    );
+    expect(referralCardSource).not.toContain("Expected after");
+    expect(referralCardSource).not.toContain("£5 Locked");
+    expect(referralCardSource).not.toContain("automatically shortly");
   });
 
   it("does not add a separate activation or unlocked reward state", () => {

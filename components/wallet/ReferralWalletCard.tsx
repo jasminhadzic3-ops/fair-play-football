@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-const MAX_TIMEOUT_MS = 2_147_483_647;
-
 type ReferralStatus = {
   referral_code: string | null;
   has_referred_reward: boolean;
@@ -43,24 +41,6 @@ function parseReferralStatus(data: unknown): ReferralStatus {
   return values as unknown as ReferralStatus;
 }
 
-function formatFutureEligibleAt(value: string | null, currentTime: number) {
-  if (!value) {
-    return null;
-  }
-
-  const eligibleAt = new Date(value);
-
-  if (Number.isNaN(eligibleAt.getTime()) || eligibleAt.getTime() <= currentTime) {
-    return null;
-  }
-
-  return eligibleAt.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
-}
-
 export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) {
   const [status, setStatus] = useState<ReferralStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +48,6 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
   const [copyLabel, setCopyLabel] = useState("Copy code");
   const [shareLabel, setShareLabel] = useState("Share code");
   const [feedback, setFeedback] = useState("");
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const sectionRef = useRef<HTMLElement | null>(null);
   const hasHandledReferralHashRef = useRef(false);
 
@@ -134,30 +113,9 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
   }, []);
 
   const referralCode = status?.referral_code?.trim() || null;
-  const isLockedRewardPending =
+  const hasLockedReward =
     status?.has_referred_reward === true &&
-    status.referred_reward_state === "locked" &&
-    status.qualifying_game_found;
-  const eligibleAtMs = status?.eligible_at ? new Date(status.eligible_at).getTime() : null;
-  const eligibleAtLabel = isLockedRewardPending
-    ? formatFutureEligibleAt(status?.eligible_at ?? null, currentTime)
-    : null;
-
-  useEffect(() => {
-    if (
-      !isLockedRewardPending ||
-      eligibleAtMs === null ||
-      Number.isNaN(eligibleAtMs) ||
-      eligibleAtMs <= currentTime
-    ) {
-      return;
-    }
-
-    const timeoutDelay = Math.max(0, Math.min(eligibleAtMs - Date.now(), MAX_TIMEOUT_MS));
-    const timeout = window.setTimeout(() => setCurrentTime(Date.now()), timeoutDelay);
-
-    return () => window.clearTimeout(timeout);
-  }, [currentTime, eligibleAtMs, isLockedRewardPending]);
+    status.referred_reward_state === "locked";
 
   const copyCode = async () => {
     if (!referralCode) return;
@@ -211,41 +169,120 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
       className="scroll-mt-6 rounded-[2rem] border border-amber-200/30 bg-[#11100d] p-5 shadow-[0_18px_60px_rgba(120,88,30,0.18)] outline-none focus:ring-2 focus:ring-amber-200/80 sm:p-6"
       aria-labelledby="referral-heading"
     >
-      <div className="max-w-xl">
-        <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral promotion</p>
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 id="referral-heading" className="text-xl font-black tracking-tight text-white">
-            Give £5. Get £5.
-          </h2>
-        </div>
-      </div>
-      <p className="mt-6 max-w-none text-2xl font-black tracking-tight text-white">
-        Invite a friend with your referral code and you’ll both receive £5 Fair Play credit. Their credit unlocks after their first qualifying paid game.
-      </p>
-      <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-zinc-300">
-        Rewards are applied automatically once eligibility is confirmed.
-      </p>
+      <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral promotion</p>
 
       <p className="sr-only" aria-live="polite">
         {feedback}
       </p>
 
       {isLoading ? (
-        <div className="mt-7 space-y-3" aria-label="Loading referral details">
+        <div className="mt-5 space-y-3" aria-label="Loading referral details">
+          <h2 id="referral-heading" className="sr-only">Referral promotion</h2>
+          <div className="h-7 w-52 animate-pulse rounded-full bg-stone-100/10" />
           <div className="h-3 w-32 animate-pulse rounded-full bg-stone-100/10" />
           <div className="h-24 w-full animate-pulse rounded-2xl bg-stone-100/10" />
         </div>
       ) : hasError || !status ? (
-        <p className="mt-7 text-sm font-semibold leading-6 text-stone-400">
-          Referral details are currently unavailable. Please try again later.
-        </p>
+        <div className="mt-2">
+          <h2 id="referral-heading" className="text-xl font-black tracking-tight text-white">
+            Give £5. Get £5.
+          </h2>
+          <p className="mt-6 text-sm font-semibold leading-6 text-stone-400">
+            Referral details are currently unavailable. Please try again later.
+          </p>
+        </div>
       ) : (
         <>
-          <div className="mt-6 border-y border-amber-200/20 py-5 sm:py-6">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-zinc-500">YOUR REFERRAL CODE</p>
-            <p className="mt-3 break-all text-3xl font-black text-amber-100 sm:text-4xl">{referralCode || "Unavailable"}</p>
+          {hasLockedReward ? (
+            <div className="mt-2">
+              <h2 id="referral-heading" className="text-xl font-black tracking-tight text-white">
+                Your £5 referral credit
+              </h2>
+
+              <div className="mt-6 rounded-[1.5rem] border border-amber-200/15 bg-black/20 p-4 sm:p-5">
+                <div className="grid gap-5 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-7">
+                  <div
+                    className="flex items-center gap-4"
+                    aria-label={status.qualifying_game_found ? "Referral credit completed" : "Locked £5 referral credit"}
+                  >
+                    <span className="text-3xl font-black tracking-tight text-amber-100 sm:text-4xl">£5</span>
+                    <span className={`flex size-16 items-center justify-center rounded-full border text-amber-100 sm:size-[4.5rem] ${
+                      status.qualifying_game_found
+                        ? "border-amber-200/35 bg-amber-200/15"
+                        : "border-amber-200/25 bg-amber-200/10"
+                    }`}>
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        className="size-8"
+                      >
+                        {status.qualifying_game_found ? (
+                          <path d="m5.5 12.5 4.1 4.1L18.5 7.8" />
+                        ) : (
+                          <>
+                            <rect x="5.5" y="10" width="13" height="10" rx="2.5" />
+                            <path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10" />
+                          </>
+                        )}
+                      </svg>
+                    </span>
+                  </div>
+
+                  <p className="max-w-xl text-sm font-semibold leading-6 text-zinc-300">
+                    {status.qualifying_game_found
+                      ? "We hope you enjoyed the game. Your first qualifying game is complete, and your £5 credit will appear in your wallet shortly."
+                      : "Complete your first paid game to unlock £5 credit towards your next booking."}
+                  </p>
+                </div>
+
+                <div className="mt-6 border-t border-amber-200/15 pt-5">
+                  <p className="text-xl font-black tracking-tight text-white">
+                    {status.qualifying_game_found ? 1 : 0} of 1 game completed
+                  </p>
+                  <div
+                    className="mt-4 h-2.5 overflow-hidden rounded-full border border-amber-200/25 bg-amber-200/5"
+                    role="progressbar"
+                    aria-label={`${status.qualifying_game_found ? 1 : 0} of 1 game completed`}
+                    aria-valuemin={0}
+                    aria-valuemax={1}
+                    aria-valuenow={status.qualifying_game_found ? 1 : 0}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`block h-full rounded-full bg-amber-200 transition-[width] ${
+                        status.qualifying_game_found ? "w-full" : "w-0"
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2">
+              <h2 id="referral-heading" className="text-xl font-black tracking-tight text-white">
+                Give £5. Get £5.
+              </h2>
+              <p className="mt-6 max-w-none text-2xl font-black tracking-tight text-white">
+                Invite a friend with your referral code and you’ll both receive £5 Fair Play credit. Their credit unlocks after their first qualifying paid game.
+              </p>
+              <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-zinc-300">
+                Rewards are applied automatically once eligibility is confirmed.
+              </p>
+            </div>
+          )}
+
+          <div className="mt-7 rounded-[1.5rem] border border-amber-200/15 bg-black/20 p-4 sm:flex sm:items-end sm:justify-between sm:gap-6 sm:p-5">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-200/60">YOUR REFERRAL CODE</p>
+              <p className="mt-2 break-all text-3xl font-black tracking-[0.04em] text-amber-100 sm:text-4xl">
+                {referralCode || "Unavailable"}
+              </p>
+            </div>
             {referralCode ? (
-              <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+              <div className="mt-5 grid shrink-0 grid-cols-2 gap-2 sm:mt-0 sm:flex">
                 <button
                   type="button"
                   onClick={() => void copyCode()}
@@ -263,25 +300,6 @@ export default function ReferralWalletCard({ userId }: ReferralWalletCardProps) 
               </div>
             ) : null}
           </div>
-
-          {status.has_referred_reward && status.referred_reward_state === "locked" ? (
-            <div className="mt-6 border-t border-amber-200/20 pt-6">
-              <p className="text-xl font-black text-white">£5 Locked</p>
-              {status.qualifying_game_found ? (
-                <>
-                  <p className="mt-3 text-sm font-semibold leading-6 text-zinc-300">Thank you for booking with Fair Play. We hope you enjoyed the game!</p>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-zinc-300">Your £5 credit will be added to your wallet shortly.</p>
-                  {eligibleAtLabel ? (
-                    <p className="mt-4 text-xs font-semibold text-amber-200/80">
-                      Expected after {eligibleAtLabel}
-                    </p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="mt-3 text-sm font-semibold leading-6 text-zinc-300">Please complete your first qualifying paid Fair Play game to unlock your £5 credit towards your next game.</p>
-              )}
-            </div>
-          ) : null}
 
         </>
       )}
