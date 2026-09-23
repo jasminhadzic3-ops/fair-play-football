@@ -1265,6 +1265,28 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     window.setTimeout(() => setNavbarAuthLoading(false), 2500);
   };
 
+  const validateNavbarReferralCode = async () => {
+    const code = normalizeReferralCode(navbarReferralCode);
+    setNavbarReferralCode(code);
+    setNavbarReferralStatus(null);
+    setNavbarReferralError(null);
+
+    if (!code) {
+      return;
+    }
+
+    try {
+      const result = await validateReferralCode(code);
+      if (result.valid) {
+        setNavbarReferralStatus(REFERRAL_APPLIED_MESSAGE);
+      } else {
+        setNavbarReferralError(REFERRAL_INVALID_MESSAGE);
+      }
+    } catch {
+      setNavbarReferralError(REFERRAL_INVALID_MESSAGE);
+    }
+  };
+
   const handleNavbarCreateAccount = async () => {
     setNavbarAuthLoading(true);
     setNavbarAuthError(null);
