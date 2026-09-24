@@ -79,7 +79,7 @@ describe("referral wallet UX", () => {
     expect(rewardsPageSource).toContain(
       "Only attended, paid Fair Play bookings count. Cancelled, refunded, complimentary and third-party bookings are excluded. Your progress is tracked automatically in your account."
     );
-    expect(rewardsPageSource).toContain("Referral promotion");
+    expect(rewardsPageSource).toContain("Referral reward");
     expect(rewardsPageSource).toContain("Invite a friend. Earn a free game.");
     expect(rewardsPageSource).toContain("Invite a new player using your personal referral code.");
     expect(rewardsPageSource).toContain("Once they register with your code and verify their account, you’ll receive £5 Fair Play Wallet credit.");

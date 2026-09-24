@@ -52,7 +52,7 @@ const rewardsSections: RewardsSection[] = [
   },
   {
     id: "referral-promotion",
-    label: "Referral promotion",
+    label: "Referral reward",
     heading: "Invite a friend. Earn a free game.",
     body: "Invite a new player using your personal referral code.",
     supportingText:
