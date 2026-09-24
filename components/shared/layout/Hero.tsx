@@ -24,18 +24,22 @@ export default function Hero() {
 
             <div className="space-y-4 px-2 md:px-0">
               <h1 className="text-2xl md:text-2xl font-extrabold text-white leading-tight tracking-[-0.03em] md:tracking-[-0.02em] drop-shadow-[0_1px_15px_rgba(255,255,255,0.08)]">
-                Play football in North London. No team needed.
+                Fair Play is more than just a rule of the game.
               </h1>
-              <p className="mx-auto max-w-[42rem] text-base font-normal leading-[1.65] text-zinc-300 md:text-[18px]">
-                Book friendly, organised 6v6, 7v7 and 8v8 games on quality pitches. Come alone or with friends, choose a time that suits you and pay online. Games from £5.
-              </p>
-              <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-zinc-200 md:text-base">
+              <div className="mx-auto max-w-[42rem] space-y-5 text-base font-normal leading-[1.65] text-zinc-300 md:text-[18px]">
+                <p>
+                  It’s about building a friendly football community where people can enjoy regular games, meet new players and play without pressure or commitment.
+                </p>
+                <p>
+                  Our goal is simple: to make football affordable, welcoming and easy to join for everyone, so even when your friends aren’t available, you can still find a game and play.
+                </p>
+                <p>
+                  Most importantly, we want every game to have a friendly and respectful atmosphere where having fun comes first.
+                </p>
+              </div>
+              <div className="inline-flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm font-semibold text-zinc-200 md:text-base">
                 <span>No team needed</span>
-                <span className="hidden h-4 w-px bg-white/15 sm:block" />
-                <span>Mixed 18+ games</span>
-                <span className="hidden h-4 w-px bg-white/15 sm:block" />
                 <span>Quality 3G pitches</span>
-                <span className="hidden h-4 w-px bg-white/15 sm:block" />
                 <span>Bibs and balls provided</span>
               </div>
             </div>
