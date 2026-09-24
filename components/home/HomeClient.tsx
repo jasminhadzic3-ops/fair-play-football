@@ -44,6 +44,11 @@ import {
   REFERRAL_SIGNUP_ERROR_MESSAGE,
   validateReferralCode,
 } from "@/lib/referralSignup";
+import {
+  clearGoogleReferralIntent,
+  consumeGoogleReferralIntent,
+  storeGoogleReferralIntent,
+} from "@/lib/referralGoogleIntent";
 
 const PENDING_SUMUP_CHECKOUT_REFERENCE_KEY = "pendingSumUpCheckoutReference";
 const PENDING_SUMUP_GAME_SNAPSHOT_KEY = "pendingSumUpGameSnapshot";
@@ -913,6 +918,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       }
 
       if (pendingSignupProfile?.onboarding_source === "google") {
+        if (pendingSignupProfile.referral_signup_intent_id) {
+          await consumeGoogleReferralIntent(session.access_token);
+        }
+
         if (!hasRequiredPlayerDetails(loadedProfile)) {
           window.location.replace(getProfileOnboardingPath("profile"));
           return;
@@ -1263,6 +1272,21 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       return;
     }
 
+    let referralIntentId: string | null = null;
+    if (navbarAuthMode === "signup" && navbarReferralCode.trim()) {
+      try {
+        referralIntentId = await createReferralSignupIntent(navbarReferralCode);
+        if (!referralIntentId) {
+          throw new Error("Invalid referral code");
+        }
+        await storeGoogleReferralIntent(referralIntentId);
+      } catch {
+        setNavbarAuthError(REFERRAL_SIGNUP_ERROR_MESSAGE);
+        setNavbarAuthLoading(false);
+        return;
+      }
+    }
+
     if (navbarAuthMode === "signup") {
       localStorage.setItem(
         PENDING_SIGNUP_PROFILE_KEY,
@@ -1271,6 +1295,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
           terms_accepted_at: new Date().toISOString(),
           terms_version: AGREEMENT_VERSION,
           onboarding_source: "google",
+          ...(referralIntentId ? { referral_signup_intent_id: referralIntentId } : {}),
         })
       );
     }
@@ -1286,6 +1311,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     });
 
     if (error) {
+      await clearGoogleReferralIntent();
       setNavbarAuthLoading(false);
       setNavbarAuthError(AUTH_MESSAGES.googleSignInFailed);
       return;
@@ -1546,8 +1572,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                     ))}
                   </select>
                 </div>
-                <div className="sm:col-span-2">
-                  <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">Referral code (optional)</label>
+                <div className="rounded-[1.5rem] border border-amber-200/20 bg-amber-200/[0.03] p-4 sm:col-span-2 sm:p-5">
+                  <label className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral Codes</label>
                   <input
                     value={navbarReferralCode}
                     onChange={(event) => {
@@ -1556,14 +1582,14 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                       setNavbarReferralError(null);
                     }}
                     onBlur={() => void validateNavbarReferralCode()}
-                    className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-white/30"
+                    className="mt-3 w-full rounded-3xl border border-amber-200/25 bg-[#11100d] px-5 py-4 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-amber-200/70 focus:ring-1 focus:ring-amber-200/20"
                     placeholder="e.g. JASMIN7K4"
                     autoCapitalize="characters"
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <p className="mt-2 text-xs text-zinc-500">Referral codes are currently available for email signups only.</p>
-                  {navbarReferralStatus ? <p className="mt-2 text-sm font-semibold text-emerald-300">{navbarReferralStatus}</p> : null}
+                  <p className="mt-2 text-xs text-zinc-500">Enter your referral code here</p>
+                  {navbarReferralStatus ? <p className="mt-2 text-sm font-semibold text-amber-100">{navbarReferralStatus}</p> : null}
                   {navbarReferralError ? <p className="mt-2 text-sm text-rose-200">{navbarReferralError}</p> : null}
                 </div>
               </div>

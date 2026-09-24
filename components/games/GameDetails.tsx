@@ -27,6 +27,7 @@ import {
   REFERRAL_SIGNUP_ERROR_MESSAGE,
   validateReferralCode,
 } from "@/lib/referralSignup";
+import { clearGoogleReferralIntent, storeGoogleReferralIntent } from "@/lib/referralGoogleIntent";
 
 interface GameDetailsProps {
   isOpen: boolean;
@@ -997,6 +998,21 @@ export default function GameDetails({
       return;
     }
 
+    let referralIntentId: string | null = null;
+    if (authMode === "signup" && referralCode.trim()) {
+      try {
+        referralIntentId = await createReferralSignupIntent(referralCode);
+        if (!referralIntentId) {
+          throw new Error("Invalid referral code");
+        }
+        await storeGoogleReferralIntent(referralIntentId);
+      } catch {
+        setAuthError(REFERRAL_SIGNUP_ERROR_MESSAGE);
+        setAuthLoading(false);
+        return;
+      }
+    }
+
     if (authMode === "signup") {
       localStorage.setItem(
         PENDING_SIGNUP_PROFILE_KEY,
@@ -1005,6 +1021,7 @@ export default function GameDetails({
           terms_accepted_at: new Date().toISOString(),
           terms_version: AGREEMENT_VERSION,
           onboarding_source: "google",
+          ...(referralIntentId ? { referral_signup_intent_id: referralIntentId } : {}),
         })
       );
     }
@@ -1024,6 +1041,7 @@ export default function GameDetails({
     });
 
     if (error) {
+      await clearGoogleReferralIntent();
       if (!authOpenedFromNavbar && isGameFull && !alreadyJoined) {
         localStorage.removeItem("pendingJoinGameId");
       }
@@ -1662,8 +1680,8 @@ export default function GameDetails({
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="text-sm uppercase tracking-[0.3em] text-zinc-500">Referral code (optional)</label>
+                  <div className="rounded-[1.5rem] border border-amber-200/20 bg-amber-200/[0.03] p-4 sm:p-5">
+                    <label className="text-sm font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral Codes</label>
                     <input
                       value={referralCode}
                       onChange={(event) => {
@@ -1672,14 +1690,14 @@ export default function GameDetails({
                         setReferralError(null);
                       }}
                       onBlur={() => void validateSignupReferralCode()}
-                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white outline-none focus:border-white/30 transition-colors duration-150 ease-out sm:py-3"
+                      className="mt-3 w-full rounded-3xl border border-amber-200/25 bg-[#11100d] px-4 py-2.5 text-white outline-none transition-colors duration-150 ease-out focus:border-amber-200/70 focus:ring-1 focus:ring-amber-200/20 sm:py-3"
                       placeholder="e.g. JASMIN7K4"
                       autoCapitalize="characters"
                       autoComplete="off"
                       spellCheck={false}
                     />
-                    <p className="mt-2 text-xs text-zinc-500">Referral codes are currently available for email signups only.</p>
-                    {referralStatus ? <p className="mt-2 text-sm font-semibold text-emerald-300">{referralStatus}</p> : null}
+                    <p className="mt-2 text-xs text-zinc-500">Enter your referral code here</p>
+                    {referralStatus ? <p className="mt-2 text-sm font-semibold text-amber-100">{referralStatus}</p> : null}
                     {referralError ? <p className="mt-2 text-sm text-rose-200">{referralError}</p> : null}
                   </div>
                 </>
