@@ -40,24 +40,26 @@ export default function Hero() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 mt-2 w-full justify-center">
-              <a
-                href="#games"
-                className="inline-flex items-center justify-center px-8 py-4 bg-white text-black font-semibold rounded-full shadow-lg shadow-white/10 transition-transform duration-300 hover:-translate-y-0.5"
-              >
-                Find a game
-              </a>
-              <a
-                href="#how-it-works"
-                className="inline-flex items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-8 py-4 font-semibold text-stone-200 transition-transform duration-300 hover:-translate-y-0.5 hover:border-stone-200/35 hover:bg-zinc-800"
-              >
-                How it works
-              </a>
+            <div className="mt-2 flex w-full flex-col items-center gap-4">
+              <div className="flex w-full flex-col justify-center gap-4 sm:flex-row">
+                <a
+                  href="#games"
+                  className="inline-flex items-center justify-center px-8 py-4 bg-white text-black font-semibold rounded-full shadow-lg shadow-white/10 transition-transform duration-300 hover:-translate-y-0.5"
+                >
+                  Find a game
+                </a>
+                <a
+                  href="#how-it-works"
+                  className="inline-flex items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-8 py-4 font-semibold text-stone-200 transition-transform duration-300 hover:-translate-y-0.5 hover:border-stone-200/35 hover:bg-zinc-800"
+                >
+                  How it works
+                </a>
+              </div>
               <Link
                 href="/rewards"
-                className="inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/20 bg-zinc-900 px-8 py-4 font-semibold text-stone-200 transition-transform duration-300 hover:-translate-y-0.5 hover:border-stone-200/35 hover:bg-zinc-800"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-amber-200/30 bg-zinc-900 px-10 py-4 font-semibold text-amber-100 transition-transform duration-300 hover:-translate-y-0.5 hover:border-amber-100/45 hover:bg-zinc-800 sm:w-auto sm:min-w-[16rem]"
               >
-                Rewards &amp; perks
+                Loyalty &amp; Referral Rewards
               </Link>
             </div>
           </div>
