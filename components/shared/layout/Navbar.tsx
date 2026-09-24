@@ -57,8 +57,8 @@ export default function Navbar({
 
   const accountNavLinks = [
     ...(user ? [{ label: "My Bookings", href: "/my-bookings" }] : []),
-    ...(user ? [{ label: "Wallet & Rewards", href: "/wallet" }] : []),
     ...(user ? [{ label: "Profile", href: "/profile" }] : []),
+    ...(user ? [{ label: "Wallet & Rewards", href: "/wallet" }] : []),
   ];
 
   const adminNavLinks = [
@@ -70,8 +70,12 @@ export default function Navbar({
     ...adminNavLinks,
   ];
 
+  const nonProfileAccountNavLinks = accountNavLinks.filter((link) => link.href !== "/profile");
+
   const desktopPlayerNavLinks = [
-    ...accountNavLinks.filter((link) => link.href !== "/profile"),
+    ...nonProfileAccountNavLinks.slice(0, 1),
+    ...accountNavLinks.filter((link) => link.href === "/profile"),
+    ...nonProfileAccountNavLinks.slice(1),
     ...adminNavLinks,
   ];
 
@@ -183,7 +187,7 @@ export default function Navbar({
           </span>
         </Link>
 
-        <div className="hidden min-w-0 items-center justify-center gap-10 min-[1360px]:flex">
+        <div className="hidden min-w-0 items-center justify-center gap-24 min-[1360px]:flex">
           <div className="flex min-w-0 items-center gap-4">
             {renderNavLinks(publicNavLinks)}
           </div>
