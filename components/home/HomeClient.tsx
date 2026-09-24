@@ -2159,18 +2159,23 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
                 About
               </p>
-              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+              <h2 className="mt-3 max-w-[34rem] text-3xl font-extrabold tracking-tight text-white md:text-4xl">
                 Fair Play is about more than just playing a game.
               </h2>
-              <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300 md:text-lg">
-                It’s about building a friendly football community where people can enjoy regular games, meet new players and play without pressure or commitment.
-                <br />
-                Our aim is simple: to make football affordable, welcoming and easy to join for everyone, regardless of your level.
-                <br />
-                Most importantly, we want every game to have a friendly and respectful atmosphere where having fun comes first.
-                <br />
-                Come and try your first Fair Play game for free using the Fair Play <strong>Referral Reward</strong> and see what we’re all about.
-              </p>
+              <div className="mt-4 max-w-[34rem] space-y-5 text-base leading-7 text-zinc-300 md:text-lg">
+                <p>
+                  It’s about building a friendly football community where people can enjoy regular games, meet new players and play without pressure or commitment.
+                </p>
+                <p>
+                  Our aim is simple: to make football affordable, welcoming and easy to join for everyone, regardless of your level.
+                </p>
+                <p>
+                  Most importantly, we want every game to have a friendly and respectful atmosphere where having fun comes first.
+                </p>
+                <p className="border-t border-zinc-800/80 pt-5">
+                  Come and try your first Fair Play game for free using the Fair Play <strong>Referral Reward</strong> and see what we’re all about.
+                </p>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-stone-200/15 bg-stone-200 px-5 py-5 text-zinc-950 shadow-[0_18px_54px_rgba(214,211,209,0.12)]">
