@@ -2160,11 +2160,16 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 About
               </p>
               <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                Friendly games, good vibes and all skill levels welcome.
+                Fair Play is about more than just playing a game.
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300 md:text-lg">
-                Fair Play Football is a co-ed 18+ football platform that organises friendly games across North
-                London. Whether you play every week or haven't kicked a ball in years, you're welcome to join.
+                It’s about building a friendly football community where people can enjoy regular games, meet new players and play without pressure or commitment.
+                <br />
+                Our aim is simple: to make football affordable, welcoming and easy to join for everyone, regardless of your level.
+                <br />
+                Most importantly, we want every game to have a friendly and respectful atmosphere where having fun comes first.
+                <br />
+                Come and try your first Fair Play game for free using the Fair Play <strong>Referral Reward</strong> and see what we’re all about.
               </p>
             </div>
 

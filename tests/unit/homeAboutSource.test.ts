@@ -14,10 +14,10 @@ describe("homepage about section source", () => {
     expect(navbarSource).toContain('href: "/#venues"');
     expect(navbarSource).toContain('href: "/#faq"');
     expect(homePageSource).toContain('<section id="about"');
-    expect(homePageSource).toContain("Friendly games, good vibes and all skill levels welcome.");
-    expect(homePageSource).toContain("co-ed 18+ football platform");
-    expect(homePageSource).toContain("organises friendly games across North");
-    expect(homePageSource).toContain("haven't kicked a ball in years");
+    expect(homePageSource).toContain("Fair Play is about more than just playing a game.");
+    expect(homePageSource).toContain("It’s about building a friendly football community where people can enjoy regular games, meet new players and play without pressure or commitment.");
+    expect(homePageSource).toContain("Our aim is simple: to make football affordable, welcoming and easy to join for everyone, regardless of your level.");
+    expect(homePageSource).toContain("Come and try your first Fair Play game for free using the Fair Play <strong>Referral Reward</strong> and see what we’re all about.");
     expect(homePageSource).toContain("Beginners, returning players and regular players");
   });
 
