@@ -51,7 +51,6 @@ export default function Navbar({
 
   const publicNavLinks = [
     { label: "Games", href: "/#games" },
-    { label: "How it works", href: "/#how-it-works" },
     { label: "Venues", href: "/#venues" },
     { label: "FAQ", href: "/#faq" },
   ];
@@ -120,6 +119,8 @@ export default function Navbar({
         className={
           isMobile
             ? `flex items-center gap-2 py-2 font-medium transition ${isActive ? "text-white" : "text-gray-300 hover:text-white"}`
+            : link.href === "/wallet"
+              ? "inline-flex min-h-10 items-center whitespace-nowrap rounded-full bg-stone-200 px-4 text-[0.82rem] font-bold text-zinc-950 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/60 focus-visible:ring-offset-4 focus-visible:ring-offset-black"
             : `relative inline-flex min-h-10 items-center whitespace-nowrap text-[0.82rem] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/50 focus-visible:ring-offset-4 focus-visible:ring-offset-black ${desktopLinkTone}`
         }
         aria-current={isActive ? "page" : undefined}
@@ -182,21 +183,15 @@ export default function Navbar({
           </span>
         </Link>
 
-        <div className="hidden min-w-0 items-center justify-center gap-8 min-[1360px]:flex">
-          <div className="relative left-3 flex min-w-0 items-center gap-5">
+        <div className="hidden min-w-0 items-center justify-center gap-10 min-[1360px]:flex">
+          <div className="flex min-w-0 items-center gap-4">
             {renderNavLinks(publicNavLinks)}
           </div>
           {desktopPlayerNavLinks.length > 0 ? (
-            <div className="relative -left-3 flex min-w-0 items-center gap-5">
+            <div className="flex min-w-0 items-center gap-4">
               {renderNavLinks(desktopPlayerNavLinks, false, "player")}
             </div>
           ) : null}
-          <Link
-            href="/#games"
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-stone-200 px-5 text-[0.82rem] font-bold text-zinc-950 transition-colors duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/60 focus-visible:ring-offset-4 focus-visible:ring-offset-black"
-          >
-            Find a game
-          </Link>
         </div>
 
         <div className="hidden min-w-0 items-center justify-self-end min-[1360px]:flex">
@@ -272,6 +267,10 @@ export default function Navbar({
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-zinc-600">Browse</p>
             <div className="grid gap-1">
               {renderNavLinks(publicNavLinks, true)}
+              {renderNavLinks(
+                [{ label: "How it works", href: "/#how-it-works" }],
+                true
+              )}
               <Link
                 href="/#games"
                 className="flex items-center gap-2 py-2 font-semibold text-stone-200 transition hover:text-white"
