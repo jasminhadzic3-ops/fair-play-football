@@ -2159,8 +2159,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
                 About
               </p>
-              <h2 className="mt-3 max-w-[34rem] text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                Welcome to Fair Play Football
+              <h2 className="mt-3 max-w-[34rem] text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+                Welcome to Fair Play
               </h2>
               <div className="mt-4 max-w-[34rem] space-y-5 text-base leading-7 text-zinc-300 md:text-lg">
                 <p>

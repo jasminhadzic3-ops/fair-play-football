@@ -14,7 +14,7 @@ describe("homepage about section source", () => {
     expect(navbarSource).toContain('href: "/#venues"');
     expect(navbarSource).toContain('href: "/#faq"');
     expect(homePageSource).toContain('<section id="about"');
-    expect(homePageSource).toContain("Welcome to Fair Play Football");
+    expect(homePageSource).toContain("Welcome to Fair Play");
     expect(homePageSource).toContain("Football is more than just 60 minutes on a pitch. It’s the feeling of turning up, switching off from everything else for an hour, meeting new people and simply enjoying the game.");
     expect(homePageSource).toContain("Our <strong>Loyalty and Referral Rewards</strong> are designed as practical perks");
     expect(homePageSource).toContain("We want Fair Play to become a community people genuinely enjoy being part of, built around good football, good people and the game we all love.");
