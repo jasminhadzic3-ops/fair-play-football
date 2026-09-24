@@ -1,6 +1,7 @@
 import Footer from "@/components/shared/layout/Footer";
 import Link from "next/link";
 import BackButton from "@/components/rewards/BackButton";
+import LoyaltyRewardAction from "@/components/rewards/LoyaltyRewardAction";
 
 export const metadata = {
   title: "Rewards & Perks | Fair Play Football",
@@ -80,7 +81,6 @@ const rewardsSections: RewardsSection[] = [
 
 const cardClass = "relative overflow-hidden rounded-[2rem] border border-zinc-800 bg-[#080b0d] p-6 shadow-[0_18px_54px_rgba(0,0,0,0.3)] sm:p-6";
 const iconClass = "absolute right-6 top-6 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300";
-const primaryActionClass = "mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-emerald-400 px-5 text-sm font-bold text-white transition hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60";
 const outlineActionClass = "mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-bold text-zinc-100 transition hover:border-white hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-zinc-300/60";
 
 export default function RewardsPage() {
@@ -128,10 +128,12 @@ export default function RewardsPage() {
                   >
                     {item.action.label} <span className="ml-3 text-lg" aria-hidden="true">→</span>
                   </a>
+                ) : index === 0 ? (
+                    <LoyaltyRewardAction />
                 ) : (
-                  <Link href={item.action.href} className={index === 0 ? primaryActionClass : outlineActionClass}>
-                    {item.action.label} <span className="ml-3 text-lg" aria-hidden="true">→</span>
-                  </Link>
+                    <Link href={item.action.href} className={outlineActionClass}>
+                      {item.action.label} <span className="ml-3 text-lg" aria-hidden="true">→</span>
+                    </Link>
                 )}
               </section>
             ))}
