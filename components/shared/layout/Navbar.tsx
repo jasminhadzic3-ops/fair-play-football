@@ -183,11 +183,11 @@ export default function Navbar({
         </Link>
 
         <div className="hidden min-w-0 items-center justify-center gap-8 min-[1360px]:flex">
-          <div className="flex min-w-0 items-center gap-5">
+          <div className="relative left-3 flex min-w-0 items-center gap-5">
             {renderNavLinks(publicNavLinks)}
           </div>
           {desktopPlayerNavLinks.length > 0 ? (
-            <div className="flex min-w-0 items-center gap-5">
+            <div className="relative -left-3 flex min-w-0 items-center gap-5">
               {renderNavLinks(desktopPlayerNavLinks, false, "player")}
             </div>
           ) : null}
