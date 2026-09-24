@@ -53,7 +53,7 @@ const rewardsSections: RewardsSection[] = [
   {
     id: "referral-promotion",
     label: "Referral promotion",
-    heading: "Football is better with friends.",
+    heading: "Invite a friend. Earn a free game.",
     body: "Invite a new player using your personal referral code.",
     supportingText:
       "Once they register with your code and verify their account, you’ll receive £5 Fair Play Wallet credit.",
