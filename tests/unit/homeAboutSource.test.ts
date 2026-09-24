@@ -88,6 +88,8 @@ describe("homepage about section source", () => {
   });
 
   it("shows approved game discovery and signed-out Sign Up CTAs", () => {
+    expect(homePageSource).toContain("Find a game. Book your spot. Play.");
+    expect(homePageSource).toContain("Browse upcoming games, choose the time and venue that works for you, and book your game in seconds. Come alone or bring friends, the game is already waiting.");
     expect(homePageSource).toContain('href="#games"');
     expect(homePageSource).toContain("Find a game");
     expect(homePageSource).toContain("View upcoming games");

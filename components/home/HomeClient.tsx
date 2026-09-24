@@ -1848,10 +1848,10 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 Games
               </p>
               <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-                Choose your next game
+                Find a game. Book your spot. Play.
               </h2>
               <p className="mt-2 text-base md:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-                Book individually or with friends. Select a date, venue and level that suits you.
+                Browse upcoming games, choose the time and venue that works for you, and book your game in seconds. Come alone or bring friends, the game is already waiting.
               </p>
             </div>
           ) : null}
