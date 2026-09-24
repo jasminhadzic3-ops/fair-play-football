@@ -14,7 +14,8 @@ import {
 
 type BookingConfirmedEmailParams = {
   bookingId: number;
-  paymentId: number;
+  paymentId: number | null;
+  paymentMethod?: "sumup" | "wallet" | "free";
   userId: string;
   gameId: number;
   playerName: string;
@@ -78,7 +79,8 @@ export async function sendBookingConfirmedEmail(params: BookingConfirmedEmailPar
   const playerName = profile?.username || params.playerName || "Player";
   const gameLocation = game.location || "TBD";
   const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
-  const total = formatPrice(params.amount ?? game.price, params.currency);
+  const isFreeBooking = params.paymentMethod === "free";
+  const total = isFreeBooking ? "FREE" : formatPrice(params.amount ?? game.price, params.currency);
   const bookingUrl = getGameUrl(params.gameId);
   const subject = "You're Booked In ⚽";
   const idempotencyKey = `booking_confirmed:booking:${params.bookingId}`;

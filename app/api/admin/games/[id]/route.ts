@@ -19,6 +19,7 @@ type GamePayload = {
   kickoff_date?: unknown;
   kickoff_time?: unknown;
   price?: unknown;
+  pricing_mode?: unknown;
   max_players?: unknown;
   tags?: unknown;
 };
@@ -33,7 +34,8 @@ function parseGamePayload(body: GamePayload | null) {
   const kickoff = hasStructuredKickoff
     ? parseLondonKickoff(body?.kickoff_date, body?.kickoff_time)
     : null;
-  const price = Number(body?.price);
+  const pricingMode = body?.pricing_mode === "free" ? "free" : body?.pricing_mode === "paid" ? "paid" : null;
+  const price = pricingMode === "free" ? 0 : Number(body?.price);
   const maxPlayers = Number(body?.max_players);
   const tags = parseGameTags(body?.tags);
 
@@ -41,7 +43,7 @@ function parseGamePayload(body: GamePayload | null) {
     !title ||
     !location ||
     (hasStructuredKickoff ? !kickoff : !legacyTime) ||
-    Number.isNaN(price) ||
+    !pricingMode || Number.isNaN(price) || (pricingMode === "paid" && price <= 0) ||
     Number.isNaN(maxPlayers) ||
     ![12, 14, 16].includes(maxPlayers) ||
     !tags
@@ -55,6 +57,7 @@ function parseGamePayload(body: GamePayload | null) {
     time: kickoff?.displayTime ?? legacyTime,
     ...(kickoff ? { starts_at: kickoff.startsAtIso } : {}),
     price,
+    pricing_mode: pricingMode,
     max_players: maxPlayers,
     tags,
   };
@@ -221,6 +224,23 @@ export async function PATCH(
         { error: "Please fill in all fields with a valid London kickoff date and time. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8), with up to 5 valid tags." },
         { status: 400 }
       );
+    }
+
+    const { data: existingGame, error: existingGameError } = await supabaseAdmin
+      .from("games").select("pricing_mode").eq("id", gameId).single();
+    if (existingGameError || !existingGame) {
+      return Response.json({ error: existingGameError?.message || "Game not found." }, { status: existingGameError ? 500 : 404 });
+    }
+    if (existingGame.pricing_mode !== payload.pricing_mode) {
+      const [bookings, payments, wallet] = await Promise.all([
+        supabaseAdmin.from("bookings").select("id", { count: "exact", head: true }).eq("game_id", gameId),
+        supabaseAdmin.from("booking_payments").select("id", { count: "exact", head: true }).eq("game_id", gameId),
+        supabaseAdmin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("game_id", gameId),
+      ]);
+      if (bookings.error || payments.error || wallet.error) return Response.json({ error: "Unable to verify booking history." }, { status: 500 });
+      if ((bookings.count ?? 0) > 0 || (payments.count ?? 0) > 0 || (wallet.count ?? 0) > 0) {
+        return Response.json({ error: "Booking type cannot be changed after bookings or financial history exist." }, { status: 409 });
+      }
     }
 
     const { data, error } = await supabaseAdmin

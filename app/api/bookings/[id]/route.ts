@@ -65,7 +65,7 @@ export async function DELETE(
 
     const { data: sourceGame, error: sourceGameError } = await supabaseAdmin
       .from("games")
-      .select("id,status,starts_at,archived_at")
+      .select("id,status,starts_at,archived_at,pricing_mode")
       .eq("id", booking.game_id)
       .maybeSingle();
 
@@ -85,6 +85,7 @@ export async function DELETE(
     const result = await cancelPlayerBookingWithRefundPolicy({
       bookingId,
       userId: user.id,
+      pricingMode: sourceGame?.pricing_mode === "free" ? "free" : "paid",
     });
 
     if (!result.success) {

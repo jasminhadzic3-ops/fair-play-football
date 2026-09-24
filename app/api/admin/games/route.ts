@@ -11,6 +11,7 @@ type GamePayload = {
   kickoff_date?: unknown;
   kickoff_time?: unknown;
   price?: unknown;
+  pricing_mode?: unknown;
   max_players?: unknown;
   tags?: unknown;
 };
@@ -19,7 +20,8 @@ function parseGamePayload(body: GamePayload | null) {
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const location = typeof body?.location === "string" ? body.location.trim() : "";
   const kickoff = parseLondonKickoff(body?.kickoff_date, body?.kickoff_time);
-  const price = Number(body?.price);
+  const pricingMode = body?.pricing_mode === "free" ? "free" : body?.pricing_mode === "paid" ? "paid" : null;
+  const price = pricingMode === "free" ? 0 : Number(body?.price);
   const maxPlayers = Number(body?.max_players);
   const tags = parseGameTags(body?.tags);
 
@@ -27,7 +29,7 @@ function parseGamePayload(body: GamePayload | null) {
     !title ||
     !location ||
     !kickoff ||
-    Number.isNaN(price) ||
+    !pricingMode || Number.isNaN(price) || (pricingMode === "paid" && price <= 0) ||
     Number.isNaN(maxPlayers) ||
     ![12, 14, 16].includes(maxPlayers) ||
     !tags
@@ -41,6 +43,7 @@ function parseGamePayload(body: GamePayload | null) {
     time: kickoff.displayTime,
     starts_at: kickoff.startsAtIso,
     price,
+    pricing_mode: pricingMode,
     max_players: maxPlayers,
     tags,
   };

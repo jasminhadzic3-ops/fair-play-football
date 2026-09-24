@@ -17,7 +17,8 @@ interface Game {
   title: string;
   location: string;
   time?: string;
-  price?: number;
+    price?: number;
+    pricing_mode?: "paid" | "free";
   status?: string | null;
   starts_at?: string | null;
   archived_at?: string | null;
@@ -74,7 +75,7 @@ export default function MyBookingsPage() {
 
     const { data: gameData, error: gameError } = await supabase
       .from("games")
-      .select("id, title, location, time, price, status, starts_at, archived_at")
+      .select("id, title, location, time, price, pricing_mode, status, starts_at, archived_at")
       .in("id", gameIds);
 
     if (gameError) {
@@ -250,12 +251,10 @@ export default function MyBookingsPage() {
                         <p className="text-sm font-semibold text-zinc-200">{game.time || "TBD"}</p>
                       </div>
                       <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
-                        <p className="text-sm font-semibold text-zinc-200">£{game.price ?? 0}</p>
+                        <p className="text-sm font-semibold text-zinc-200">{game.pricing_mode === "free" ? "FREE" : `£${game.price ?? 0}`}</p>
                       </div>
                     </div>
-                    <p className="mt-2 text-sm font-semibold text-stone-300">
-                      Payment status: Paid
-                    </p>
+                    {game.pricing_mode !== "free" ? <p className="mt-2 text-sm font-semibold text-stone-300">Payment status: Paid</p> : null}
                   </div>
 
                   <button

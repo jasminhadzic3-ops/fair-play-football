@@ -13,8 +13,8 @@ export type PlayerBookingCancellationRpcResult = {
   game_id: number | null;
   released: boolean | null;
   refund_eligible: boolean | null;
-  payment_method: "sumup" | "wallet" | "legacy" | null;
-  refund_policy: "eligible_24h" | "ineligible_within_24h" | "support_required" | null;
+  payment_method: "sumup" | "wallet" | "free" | "legacy" | null;
+  refund_policy: "eligible_24h" | "ineligible_within_24h" | "not_applicable" | "support_required" | null;
   source_credit_transaction_id: number | null;
   refund_request_id: number | null;
   wallet_restoration_transaction_id: number | null;
@@ -39,8 +39,8 @@ export type PlayerBookingCancellationResult = {
   gameId: number | null;
   released: boolean;
   refundEligible: boolean;
-  paymentMethod: "sumup" | "wallet" | "legacy" | null;
-  refundPolicy: "eligible_24h" | "ineligible_within_24h" | "support_required" | null;
+  paymentMethod: "sumup" | "wallet" | "free" | "legacy" | null;
+  refundPolicy: "eligible_24h" | "ineligible_within_24h" | "not_applicable" | "support_required" | null;
   sourceCreditTransactionId: number | null;
   refundRequestId: number | null;
   walletRestorationTransactionId: number | null;
@@ -58,8 +58,8 @@ type PlayerBookingCancellationRow = {
 type PlayerBookingCancellationFallbackRow = {
   booking_id: number;
   game_id: number;
-  payment_method: "sumup" | "wallet" | "legacy";
-  refund_policy: "eligible_24h" | "ineligible_within_24h" | "support_required";
+  payment_method: "sumup" | "wallet" | "free" | "legacy";
+  refund_policy: "eligible_24h" | "ineligible_within_24h" | "not_applicable" | "support_required";
   status: string | null;
   source_credit_transaction_id: number | null;
   refund_request_id: number | null;
@@ -292,14 +292,19 @@ async function sendCancellationEmailAfterRelease(
 export async function cancelPlayerBookingWithRefundPolicy({
   bookingId,
   userId,
+  pricingMode = "paid",
 }: {
   bookingId: number;
   userId: string;
+  pricingMode?: "paid" | "free";
 }): Promise<PlayerBookingCancellationResult> {
-  const { data, error } = await supabaseAdmin.rpc("cancel_player_booking_with_refund_policy", {
+  const { data, error } = await supabaseAdmin.rpc(
+    pricingMode === "free" ? "cancel_free_booking" : "cancel_player_booking_with_refund_policy",
+    {
     p_booking_id: bookingId,
     p_user_id: userId,
-  });
+    }
+  );
 
   if (error) {
     throw error;

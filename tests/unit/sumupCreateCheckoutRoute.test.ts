@@ -173,6 +173,17 @@ describe("SumUp checkout creation", () => {
     expect(createSumUpCheckoutMock).not.toHaveBeenCalled();
   });
 
+  it("refuses a free game before creating a SumUp checkout", async () => {
+    state.games = [{
+      id: 10, title: "Free Football", location: "Pitch 1", time: "Friday 8pm", price: 0,
+      pricing_mode: "free", status: "active", starts_at: "2099-07-24T20:00:00.000Z", archived_at: null,
+    }];
+
+    const response = await POST(checkoutRequest() as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(409);
+    expect(createSumUpCheckoutMock).not.toHaveBeenCalled();
+  });
+
   it("rejects completed games before creating a SumUp checkout", async () => {
     state.games = [
       {

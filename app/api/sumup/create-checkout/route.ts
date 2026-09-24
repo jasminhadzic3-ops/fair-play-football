@@ -52,12 +52,19 @@ export async function POST(request: NextRequest) {
 
     const { data: game, error: gameError } = await supabaseAdmin
       .from("games")
-      .select("id,title,location,time,price,status,starts_at,archived_at")
+      .select("id,title,location,time,price,pricing_mode,status,starts_at,archived_at")
       .eq("id", gameId)
       .single();
 
     if (gameError || !game) {
       return Response.json({ error: "Game not found." }, { status: 404 });
+    }
+
+    if (game.pricing_mode === "free") {
+      return Response.json(
+        { error: "This is a free game. Please join it without payment." },
+        { status: 409 }
+      );
     }
 
     if (game.status === "cancelled") {

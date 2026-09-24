@@ -12,7 +12,8 @@ type RunPostBookingActionsParams = {
   gameId: number;
   playerName: string;
   bookingConfirmation?: {
-    paymentId: number;
+    paymentId: number | null;
+    paymentMethod?: "sumup" | "wallet" | "free";
     amount?: number | null;
     currency?: string | null;
     checkoutId?: string | null;
@@ -52,11 +53,13 @@ export async function runPostBookingActions({
         gameId,
         metadata: {
           payment_id: bookingConfirmation.paymentId,
+          payment_method: bookingConfirmation.paymentMethod ?? null,
         },
         send: () =>
           sendBookingConfirmedEmail({
             bookingId,
             paymentId: bookingConfirmation.paymentId,
+            paymentMethod: bookingConfirmation.paymentMethod,
             userId,
             gameId,
             playerName,

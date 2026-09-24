@@ -12,6 +12,7 @@ interface GameCardProps {
     location: string;
     time?: string;
     price?: number;
+    pricing_mode?: "paid" | "free";
     format?: string;
     host?: string;
     playerName?: string;
@@ -194,7 +195,7 @@ export default function GameCard({
             <p className="break-words text-sm text-zinc-300 md:text-base">{game.location}</p>
             <p className="text-sm font-semibold text-zinc-400">{formatAndDuration}</p>
             <GameTagPills tags={game.tags} />
-            <p className="text-sm font-semibold text-stone-200">{formatPrice(game.price)}</p>
+            <p className="text-sm font-semibold text-stone-200">{game.pricing_mode === "free" ? "FREE" : formatPrice(game.price)}</p>
             <p className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300 border border-emerald-500/20">
               {formatAvailability(spotsLeft)}
             </p>

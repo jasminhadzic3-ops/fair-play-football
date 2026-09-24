@@ -19,6 +19,7 @@ type GameData = {
   id: number;
   title: string | null;
   price: number | null;
+  pricing_mode: "paid" | "free" | null;
   status: string | null;
   starts_at: string | null;
   archived_at: string | null;
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         supabaseAdmin
           .from("games")
-          .select("id,title,price,status,starts_at,archived_at")
+          .select("id,title,price,pricing_mode,status,starts_at,archived_at")
           .eq("id", gameId)
           .maybeSingle<GameData>(),
         supabaseAdmin
@@ -152,6 +153,13 @@ export async function POST(request: NextRequest) {
 
     if (!game) {
       return Response.json({ error: "Game not found." }, { status: 404 });
+    }
+
+    if (game.pricing_mode === "free") {
+      return Response.json(
+        { error: "This is a free game. Please join it without using your wallet." },
+        { status: 409 }
+      );
     }
 
     if (game.status === "cancelled") {

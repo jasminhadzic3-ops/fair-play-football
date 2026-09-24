@@ -38,6 +38,7 @@ interface GameDetailsProps {
     location: string;
     time?: string;
     price?: number;
+    pricing_mode?: "paid" | "free";
     format?: string;
     max_players?: number;
     tags?: string[] | null;
@@ -169,6 +170,7 @@ export default function GameDetails({
   const gameFormat = getFormatFromMaxPlayers(maxPlayers);
   const spotsLeft = maxPlayers - gameBookings.length;
   const gamePrice = Number(game.price ?? 0);
+  const isFreeGame = game.pricing_mode === "free";
 
   useEffect(() => {
     if (profile) {
@@ -226,9 +228,9 @@ export default function GameDetails({
         (booking) => booking.player_name.trim().toLowerCase() === normalizedProfileName
       );
   const canBookGame = !isGameFull && !alreadyJoined;
-  const canPayWithWallet =
+  const canPayWithWallet = !isFreeGame &&
     isAuthenticated && walletBalance !== null && walletBalance >= gamePrice && gamePrice > 0;
-  const showWalletSection = isAuthenticated && (walletBalanceLoading || walletBalance !== null);
+  const showWalletSection = !isFreeGame && isAuthenticated && (walletBalanceLoading || walletBalance !== null);
   const isReturnPaymentChecking = paymentReturnStatus === "checking";
 
   useEffect(() => {
@@ -597,6 +599,29 @@ export default function GameDetails({
     } finally {
       setBookingLoading(false);
     }
+  };
+
+  const handleFreeBooking = async () => {
+    if (!canBookGame || bookingLoading) return;
+    if (!isEmailVerified(user)) { openEmailVerification("booking"); return; }
+    setBookingLoading(true);
+    setPaymentStatus("creating");
+    setPaymentMessage("Confirming your free place...");
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session?.access_token) throw new Error(AUTH_MESSAGES.signInAgain);
+      const response = await fetch("/api/free-bookings", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }, body: JSON.stringify({ gameId: game.id }) });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Unable to book this free game.");
+      setPaymentStatus("paid");
+      setPaymentMessage("Your spot is confirmed and everything is set.");
+      localStorage.setItem("fairPlayBookingsUpdatedAt", String(Date.now()));
+      await onPaymentComplete?.();
+      setShowPaymentModal(false);
+    } catch (error) {
+      setPaymentStatus("failed");
+      setPaymentMessage(error instanceof Error ? error.message : "Unable to book this free game.");
+    } finally { setBookingLoading(false); }
   };
 
   const joinWaitingList = async () => {
@@ -1193,7 +1218,7 @@ export default function GameDetails({
             <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
               Match Fee
             </p>
-            <p className="text-stone-200 font-bold text-sm sm:text-lg">£{game.price}</p>
+            <p className="text-stone-200 font-bold text-sm sm:text-lg">{isFreeGame ? "FREE" : `£${game.price}`}</p>
           </div>
           <div className="bg-zinc-800 rounded-3xl p-3 border border-zinc-700 sm:p-4">
             <p className="text-gray-400 text-xs mb-1.5 uppercase tracking-[0.25em] sm:text-sm sm:mb-2 sm:tracking-[0.3em]">
@@ -1222,7 +1247,7 @@ export default function GameDetails({
           )}
         </div>
 
-        <div className="border-t border-zinc-800 pt-3 sm:pt-6">
+        {!isFreeGame ? <div className="border-t border-zinc-800 pt-3 sm:pt-6">
           <h3 className="text-base font-bold text-white mb-2.5 sm:text-lg sm:mb-4">Rules</h3>
           <ul className="space-y-2.5 text-gray-300 text-sm sm:space-y-3">
             <li className="flex gap-3">
@@ -1270,7 +1295,7 @@ export default function GameDetails({
               <span>Most importantly, have fun</span>
             </li>
           </ul>
-        </div>
+        </div> : null}
 
         <div className="border-t border-zinc-800 pt-3 sm:pt-6">
           <div className="flex items-center justify-between gap-4">
@@ -1951,7 +1976,7 @@ export default function GameDetails({
           setShowProfileModal(false);
           setShowPaymentModal(false);
         }}
-        title="Secure checkout"
+        title={isFreeGame ? "Book your free place" : "Secure checkout"}
       >
         <div className="space-y-3 sm:space-y-6">
           <div className="rounded-[2rem] border border-zinc-700 bg-zinc-950/95 p-3 shadow-[0_20px_70px_rgba(15,23,42,0.55)] sm:p-6">
@@ -1963,19 +1988,19 @@ export default function GameDetails({
               </div>
               <div className="rounded-3xl bg-zinc-900 px-4 py-2.5 text-right sm:py-3">
                 <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:tracking-[0.35em]">Total</p>
-                <p className="text-2xl font-bold text-stone-100 sm:text-3xl">£{game.price}</p>
+                <p className="text-2xl font-bold text-stone-100 sm:text-3xl">{isFreeGame ? "FREE" : `£${game.price}`}</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5">
+          {!isFreeGame ? <div className="rounded-3xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 sm:text-sm sm:tracking-[0.3em]">Secure payment</p>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
               {canPayWithWallet
                 ? "Use your Fair Play Football wallet balance for this booking, or pay by card instead."
                 : "All card payments are processed securely through SumUp. You’ll be able to choose your preferred payment method, including card, Apple Pay or Google Pay, during checkout."}
             </p>
-          </div>
+          </div> : null}
 
           <div className="rounded-3xl border border-zinc-700 bg-zinc-950/80 p-3 sm:p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-zinc-500 mb-3 sm:text-sm sm:tracking-[0.3em] sm:mb-4">Order details</p>
@@ -1984,10 +2009,10 @@ export default function GameDetails({
                 { label: "Username", value: profileName },
                 { label: "Position", value: favouritePosition || "Midfielder" },
                 { label: "Email", value: profile?.email || user?.email || email || "you@example.com" },
-                {
+                ...(!isFreeGame ? [{
                   label: "Payment",
                   value: canPayWithWallet ? "Wallet or SumUp Secure Checkout" : "SumUp Secure Checkout",
-                },
+                }] : []),
               ].map((field) => (
                 <div key={field.label} className="rounded-3xl bg-zinc-900 px-4 py-3 sm:py-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">{field.label}</p>
@@ -2025,7 +2050,11 @@ export default function GameDetails({
           ) : null}
 
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1.6fr)_minmax(12rem,0.7fr)]">
-            {canPayWithWallet ? (
+            {isFreeGame ? (
+              <button onClick={handleFreeBooking} disabled={!canBookGame || bookingLoading} className="rounded-3xl bg-stone-200 px-6 py-3 text-zinc-950 font-bold transition enabled:hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4">
+                {isGameFull ? "Game Full" : alreadyJoined ? "Already Joined" : "Book free place"}
+              </button>
+            ) : canPayWithWallet ? (
               <div className="grid gap-2">
                 <button
                   onClick={handleWalletBooking}
