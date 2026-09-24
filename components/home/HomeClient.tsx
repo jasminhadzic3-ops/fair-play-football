@@ -2160,20 +2160,23 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 About
               </p>
               <h2 className="mt-3 max-w-[34rem] text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                Fair Play is about more than just playing a game.
+                Welcome to Fair Play Football
               </h2>
               <div className="mt-4 max-w-[34rem] space-y-5 text-base leading-7 text-zinc-300 md:text-lg">
                 <p>
-                  It’s about building a friendly football community where people can enjoy regular games, meet new players and play without pressure or commitment.
+                  Football is more than just 60 minutes on a pitch. It’s the feeling of turning up, switching off from everything else for an hour, meeting new people and simply enjoying the game.
                 </p>
                 <p>
-                  Our aim is simple: to make football affordable, welcoming and easy to join for everyone, regardless of your level.
+                  Fair Play was built around that feeling, creating a place where football feels social, enjoyable and easy to come back to week after week.
                 </p>
                 <p>
-                  Most importantly, we want every game to have a friendly and respectful atmosphere where having fun comes first.
+                  As the community grows, we’re also introducing more ways to give something back to our players. Our <strong>Loyalty and Referral Rewards</strong> are designed as practical perks that help you play more often, reward you for being part of the community and make it easier to bring your friends along too.
                 </p>
-                <p className="border-t border-zinc-800/80 pt-5">
-                  Come and try your first Fair Play game for free using the Fair Play <strong>Referral Reward</strong> and see what we’re all about.
+                <p>
+                  Play regularly and earn free games. Refer a friend and you can both benefit. You can find all the latest reward details directly on the Fair Play website.
+                </p>
+                <p>
+                  We want Fair Play to become a community people genuinely enjoy being part of, built around good football, good people and the game we all love.
                 </p>
               </div>
             </div>
