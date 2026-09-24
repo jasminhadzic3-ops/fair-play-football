@@ -28,7 +28,6 @@ describe("homepage about section source", () => {
   });
 
   it("covers how it works, player expectations, locations and FAQs", () => {
-    expect(homePageSource).toContain("Choose a game. Book your place. Turn up and play.");
     expect(homePageSource).toContain("Pick the date, venue and playing style that suits you.");
     expect(homePageSource).toContain("Pay securely online and receive your game details immediately.");
     expect(homePageSource).toContain("Turn up and play");

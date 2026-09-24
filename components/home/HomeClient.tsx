@@ -2197,12 +2197,9 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
                 How It Works
               </p>
-              <h3 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-                Choose a game. Book your place. Turn up and play.
-              </h3>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
               {[
                 {
                   number: "1",
