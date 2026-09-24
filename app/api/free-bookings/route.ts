@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     if (!user.email_confirmed_at && !user.confirmed_at) {
-      return Response.json({ error: AUTH_MESSAGES.verifyEmailBeforePayment }, { status: 403 });
+      return Response.json({ error: AUTH_MESSAGES.verifyAccountBeforeBooking }, { status: 403 });
     }
 
     const body = (await request.json().catch(() => null)) as FreeBookingPayload | null;
