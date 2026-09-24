@@ -113,14 +113,27 @@ function formatPrice(price?: number) {
 
 function formatAvailability(spotsLeft: number) {
   if (spotsLeft <= 0) {
-    return "Full – join waiting list";
+    return { text: "Game full", className: "border-zinc-700/70 bg-zinc-800/70 text-zinc-400" };
   }
 
-  if (spotsLeft <= 4) {
-    return `${spotsLeft} ${spotsLeft === 1 ? "place" : "places"} left`;
+  if (spotsLeft <= 2) {
+    return {
+      text: `Almost full · ${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} remaining`,
+      className: "border-rose-200/20 bg-rose-300/10 text-rose-200",
+    };
   }
 
-  return "Spaces available";
+  if (spotsLeft <= 5) {
+    return {
+      text: `Filling up fast · ${spotsLeft} spots remaining`,
+      className: "border-amber-200/20 bg-amber-300/10 text-amber-200",
+    };
+  }
+
+  return {
+    text: `${spotsLeft} spots available`,
+    className: "border-emerald-200/20 bg-emerald-300/10 text-emerald-200",
+  };
 }
 
 export default function GameCard({
@@ -160,6 +173,7 @@ export default function GameCard({
     bookings.filter((booking) => booking.game_id === game.id).length;
 
   const formatBadge = getFormatFromMaxPlayers(maxPlayers);
+  const availability = formatAvailability(spotsLeft);
   const durationMinutes = getGameDurationMinutes(game);
   const playingStyleLabel = getPlayingStyleLabel(game.tags);
   const formatAndDuration = [
@@ -196,8 +210,8 @@ export default function GameCard({
             <p className="text-sm font-semibold text-zinc-400">{formatAndDuration}</p>
             <GameTagPills tags={game.tags} />
             <p className="text-sm font-semibold text-stone-200">{game.pricing_mode === "free" ? "FREE" : formatPrice(game.price)}</p>
-            <p className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300 border border-emerald-500/20">
-              {formatAvailability(spotsLeft)}
+            <p className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium tracking-[0.01em] ${availability.className}`}>
+              {availability.text}
             </p>
           </div>
 
