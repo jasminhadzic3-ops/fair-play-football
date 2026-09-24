@@ -1681,7 +1681,7 @@ export default function GameDetails({
                     </select>
                   </div>
                   <div className="rounded-[1.5rem] border border-amber-200/20 bg-amber-200/[0.03] p-4 sm:p-5">
-                    <label className="text-sm font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral Codes</label>
+                    <label className="text-sm font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral code</label>
                     <input
                       value={referralCode}
                       onChange={(event) => {
@@ -1691,13 +1691,12 @@ export default function GameDetails({
                       }}
                       onBlur={() => void validateSignupReferralCode()}
                       className="mt-3 w-full rounded-3xl border border-amber-200/25 bg-[#11100d] px-4 py-2.5 text-white outline-none transition-colors duration-150 ease-out focus:border-amber-200/70 focus:ring-1 focus:ring-amber-200/20 sm:py-3"
-                      placeholder="e.g. JASMIN7K4"
+                      placeholder="Enter referral code"
                       autoCapitalize="characters"
                       autoComplete="off"
                       spellCheck={false}
                     />
-                    <p className="mt-2 text-xs text-zinc-500">Enter your referral code here</p>
-                    {referralStatus ? <p className="mt-2 text-sm font-semibold text-amber-100">{referralStatus}</p> : null}
+                    {referralStatus ? <p className="mt-2 text-sm font-semibold text-amber-100">{referralStatus} ✓</p> : null}
                     {referralError ? <p className="mt-2 text-sm text-rose-200">{referralError}</p> : null}
                   </div>
                 </>

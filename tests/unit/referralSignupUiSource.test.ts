@@ -9,12 +9,14 @@ const details = readFileSync(resolve(repoRoot, "components/games/GameDetails.tsx
 describe("email referral signup UI", () => {
   it("provides the optional field and friendly validation wording in both email signup flows", () => {
     for (const source of [home, details]) {
-      expect(source).toContain("Referral Codes");
+      expect(source).toContain("Referral code");
       expect(source).not.toContain("Referral &amp; Promo Codes");
       expect(source).not.toContain("Referral code (optional)");
       expect(source).toContain("border-amber-200/20");
       expect(source).toContain("focus:border-amber-200/70");
-      expect(source).toContain("Enter your referral code here");
+      expect(source).toContain("Enter referral code");
+      expect(source).toMatch(/referralStatus\} ✓|navbarReferralStatus\} ✓/);
+      expect(source).not.toContain("Enter your referral code here");
       expect(source).toContain("text-amber-100");
       expect(source).toContain("REFERRAL_APPLIED_MESSAGE");
       expect(source).toContain("REFERRAL_INVALID_MESSAGE");

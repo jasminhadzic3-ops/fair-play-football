@@ -1573,7 +1573,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                   </select>
                 </div>
                 <div className="rounded-[1.5rem] border border-amber-200/20 bg-amber-200/[0.03] p-4 sm:col-span-2 sm:p-5">
-                  <label className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral Codes</label>
+                  <label className="text-xs font-bold uppercase tracking-[0.3em] text-amber-200/80">Referral code</label>
                   <input
                     value={navbarReferralCode}
                     onChange={(event) => {
@@ -1583,13 +1583,12 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                     }}
                     onBlur={() => void validateNavbarReferralCode()}
                     className="mt-3 w-full rounded-3xl border border-amber-200/25 bg-[#11100d] px-5 py-4 text-white outline-none transition-colors duration-150 ease-out placeholder:text-zinc-600 focus:border-amber-200/70 focus:ring-1 focus:ring-amber-200/20"
-                    placeholder="e.g. JASMIN7K4"
+                    placeholder="Enter referral code"
                     autoCapitalize="characters"
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <p className="mt-2 text-xs text-zinc-500">Enter your referral code here</p>
-                  {navbarReferralStatus ? <p className="mt-2 text-sm font-semibold text-amber-100">{navbarReferralStatus}</p> : null}
+                  {navbarReferralStatus ? <p className="mt-2 text-sm font-semibold text-amber-100">{navbarReferralStatus} ✓</p> : null}
                   {navbarReferralError ? <p className="mt-2 text-sm text-rose-200">{navbarReferralError}</p> : null}
                 </div>
               </div>
