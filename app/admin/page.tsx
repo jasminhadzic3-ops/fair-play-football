@@ -1831,18 +1831,6 @@ export default function AdminPage() {
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-zinc-200">Booking type</label>
-              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-black p-1.5">
-                {(["paid", "free"] as const).map((mode) => (
-                  <button key={mode} type="button" disabled={bookingTypeLocked} onClick={() => { setPricingMode(mode); if (mode === "free") setPrice("0"); }} className={`rounded-xl px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${pricingMode === mode ? "bg-stone-200 text-zinc-950" : "text-zinc-400 hover:text-white"}`}>
-                    {mode === "paid" ? "£5 Paid" : "FREE"}
-                  </button>
-                ))}
-              </div>
-              {pricingMode === "free" ? <p className="mt-2 text-sm text-zinc-400">Players can book this game without payment.</p> : null}
-              {bookingTypeLocked ? <p className="mt-2 text-sm text-amber-200">Booking type cannot be changed after bookings or financial history exist.</p> : null}
-            </div>
-            <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
                 Player Accounts
               </p>
@@ -2173,6 +2161,19 @@ export default function AdminPage() {
                   className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-zinc-200">Booking type</label>
+              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-black p-1.5">
+                {["paid", "free"].map((mode) => (
+                  <button key={mode} type="button" disabled={bookingTypeLocked} onClick={() => { setPricingMode(mode as "paid" | "free"); if (mode === "free") setPrice("0"); }} className={`rounded-xl px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${pricingMode === mode ? "bg-stone-200 text-zinc-950" : "text-zinc-400 hover:text-white"}`}>
+                    {mode === "paid" ? "£5 Paid" : "FREE"}
+                  </button>
+                ))}
+              </div>
+              {pricingMode === "free" ? <p className="mt-2 text-sm text-zinc-400">Players can book this game without payment.</p> : null}
+              {bookingTypeLocked ? <p className="mt-2 text-sm text-amber-200">Booking type cannot be changed after bookings or financial history exist.</p> : null}
             </div>
 
             <div>
