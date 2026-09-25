@@ -28,6 +28,10 @@ import {
   validateReferralCode,
 } from "@/lib/referralSignup";
 import { clearGoogleReferralIntent, storeGoogleReferralIntent } from "@/lib/referralGoogleIntent";
+import {
+  clearRememberMePreference,
+  prepareAuthPersistence,
+} from "@/lib/authPersistence";
 
 interface GameDetailsProps {
   isOpen: boolean;
@@ -120,6 +124,7 @@ export default function GameDetails({
   const [recoverySent, setRecoverySent] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signin");
+  const [rememberMe, setRememberMe] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -377,6 +382,7 @@ export default function GameDetails({
       clearAuthState();
       setShowPaymentModal(false);
       setAuthMode("signin");
+      setRememberMe(true);
       setAuthOpenedFromNavbar(true);
       setShowProfileModal(true);
       onOpenAuthModalHandled?.();
@@ -432,6 +438,7 @@ export default function GameDetails({
     clearAuthState();
     setShowPaymentModal(false);
     setAuthMode("signin");
+    setRememberMe(true);
     setAuthOpenedFromNavbar(false);
     setShowProfileModal(true);
   };
@@ -642,6 +649,7 @@ export default function GameDetails({
       setWaitingListError(AUTH_MESSAGES.signInToJoinWaitingList);
       setShowPaymentModal(false);
       setAuthMode("signin");
+      setRememberMe(true);
       setAuthOpenedFromNavbar(false);
       setShowProfileModal(true);
       return;
@@ -865,6 +873,8 @@ export default function GameDetails({
       return;
     }
 
+    prepareAuthPersistence(rememberMe);
+
     try {
       const termsAcceptedAt = new Date().toISOString();
       const referralIntentId = referralCode.trim()
@@ -922,6 +932,7 @@ export default function GameDetails({
   const handleSignIn = async () => {
     setAuthLoading(true);
     clearAuthState();
+    prepareAuthPersistence(rememberMe);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -1022,6 +1033,8 @@ export default function GameDetails({
       setAuthLoading(false);
       return;
     }
+
+    prepareAuthPersistence(rememberMe);
 
     let referralIntentId: string | null = null;
     if (authMode === "signup" && referralCode.trim()) {
@@ -1134,6 +1147,7 @@ export default function GameDetails({
     } else {
       await supabase.auth.signOut();
     }
+    clearRememberMePreference();
     setShowPaymentModal(false);
     setShowProfileModal(false);
     setUsername("");
@@ -1818,6 +1832,30 @@ export default function GameDetails({
                       </span>
                     </label>
                   ) : null}
+
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl px-1 py-1 text-sm text-zinc-300 transition focus-within:ring-2 focus-within:ring-stone-200/40">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(event) => setRememberMe(event.target.checked)}
+                      className="sr-only"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                        rememberMe
+                          ? "border-stone-200 bg-stone-200 text-zinc-950"
+                          : "border-zinc-600 bg-zinc-950 text-transparent"
+                      }`}
+                    >
+                      {rememberMe ? (
+                        <svg viewBox="0 0 16 16" fill="none" className="size-3" stroke="currentColor" strokeWidth="2">
+                          <path d="m3.5 8 3 3 6-6" />
+                        </svg>
+                      ) : null}
+                    </span>
+                    <span>Remember me</span>
+                  </label>
                 </>
               ) : null}
 

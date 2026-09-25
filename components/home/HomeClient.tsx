@@ -49,6 +49,10 @@ import {
   consumeGoogleReferralIntent,
   storeGoogleReferralIntent,
 } from "@/lib/referralGoogleIntent";
+import {
+  clearRememberMePreference,
+  prepareAuthPersistence,
+} from "@/lib/authPersistence";
 
 const PENDING_SUMUP_CHECKOUT_REFERENCE_KEY = "pendingSumUpCheckoutReference";
 const PENDING_SUMUP_GAME_SNAPSHOT_KEY = "pendingSumUpGameSnapshot";
@@ -165,6 +169,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const [navbarReferralError, setNavbarReferralError] = useState<string | null>(null);
   const [navbarAgreementAccepted, setNavbarAgreementAccepted] = useState(false);
   const [navbarAuthMode, setNavbarAuthMode] = useState<"signin" | "signup">("signin");
+  const [navbarRememberMe, setNavbarRememberMe] = useState(true);
   const [navbarAuthLoading, setNavbarAuthLoading] = useState(false);
   const [navbarAuthError, setNavbarAuthError] = useState<string | null>(null);
   const [navbarAuthStatus, setNavbarAuthStatus] = useState<string | null>(null);
@@ -1105,6 +1110,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setPendingCheckoutReference(null);
     setCheckoutGameId(null);
     await supabase.auth.signOut();
+    clearRememberMePreference();
     setUser(null);
     setProfile(null);
     setIsAdmin(false);
@@ -1119,6 +1125,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setNavbarAuthError(null);
     setNavbarAuthStatus(null);
     setNavbarAuthMode("signin");
+    setNavbarRememberMe(true);
     setShowNavbarAuthModal(true);
   };
 
@@ -1152,6 +1159,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
   const returnToNavbarSignIn = () => {
     closeNavbarRecoveryModal();
     setNavbarAuthMode("signin");
+    setNavbarRememberMe(true);
     setShowNavbarAuthModal(true);
   };
 
@@ -1170,6 +1178,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
 
     const timeout = window.setTimeout(() => {
       setNavbarAuthMode("signin");
+      setNavbarRememberMe(true);
       setNavbarAuthError(null);
       setNavbarAuthStatus(null);
 
@@ -1198,6 +1207,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
     setNavbarAuthLoading(true);
     setNavbarAuthError(null);
     setNavbarAuthStatus(null);
+    prepareAuthPersistence(navbarRememberMe);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -1271,6 +1281,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       setNavbarAuthLoading(false);
       return;
     }
+
+    prepareAuthPersistence(navbarRememberMe);
 
     let referralIntentId: string | null = null;
     if (navbarAuthMode === "signup" && navbarReferralCode.trim()) {
@@ -1370,6 +1382,8 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
       setNavbarAuthLoading(false);
       return;
     }
+
+    prepareAuthPersistence(navbarRememberMe);
 
     try {
       const termsAcceptedAt = new Date().toISOString();
@@ -1678,6 +1692,30 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 </span>
               </label>
             ) : null}
+
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl px-1 py-1 text-sm text-zinc-300 transition focus-within:ring-2 focus-within:ring-stone-200/40">
+              <input
+                type="checkbox"
+                checked={navbarRememberMe}
+                onChange={(event) => setNavbarRememberMe(event.target.checked)}
+                className="sr-only"
+              />
+              <span
+                aria-hidden="true"
+                className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                  navbarRememberMe
+                    ? "border-stone-200 bg-stone-200 text-zinc-950"
+                    : "border-zinc-600 bg-zinc-950 text-transparent"
+                }`}
+              >
+                {navbarRememberMe ? (
+                  <svg viewBox="0 0 16 16" fill="none" className="size-3" stroke="currentColor" strokeWidth="2">
+                    <path d="m3.5 8 3 3 6-6" />
+                  </svg>
+                ) : null}
+              </span>
+              <span>Remember me</span>
+            </label>
 
             <button
               type="button"
@@ -2443,6 +2481,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                     type="button"
                     onClick={() => {
                       setNavbarAuthMode("signup");
+                      setNavbarRememberMe(true);
                       setNavbarAuthError(null);
                       setNavbarAuthStatus(null);
                       setShowNavbarAuthModal(true);
