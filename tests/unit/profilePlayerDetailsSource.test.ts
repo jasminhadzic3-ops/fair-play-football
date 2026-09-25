@@ -26,7 +26,7 @@ describe("profile player-details source", () => {
 
   it("does not render an empty movement profile", () => {
     expect(profileSource).toContain("profile?.accelerate_type || accelerateType ?");
-    expect(profileSource).toContain("Movement profile");
+    expect(profileSource).toContain("AcceleRATE Type");
   });
 
   it("supports a floating desktop/mobile player-details modal with keyboard/outside close", () => {

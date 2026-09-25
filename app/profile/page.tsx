@@ -1149,7 +1149,7 @@ export default function ProfilePage() {
 
               {profile?.accelerate_type || accelerateType ? (
                 <div className="rounded-[2rem] border border-stone-200/45 bg-zinc-950 p-5 sm:p-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.3em] text-stone-400">Movement profile</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.3em] text-stone-400">AcceleRATE Type</p>
                   <p className="mt-3 text-xl font-bold tracking-tight text-white">
                     {profile?.accelerate_type || accelerateType}
                   </p>
