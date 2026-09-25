@@ -4,6 +4,7 @@ const supabaseFromMock = vi.hoisted(() => vi.fn());
 const sendBookingConfirmedEmailMock = vi.hoisted(() => vi.fn());
 const sendEmailWithDeliveryTrackingMock = vi.hoisted(() => vi.fn());
 const sendGameHalfFullEmailsMock = vi.hoisted(() => vi.fn());
+const sendGameFullEmailsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabaseAdmin", () => ({
   supabaseAdmin: {
@@ -21,6 +22,10 @@ vi.mock("@/lib/email/deliveryTracking", () => ({
 
 vi.mock("@/lib/email/gameHalfFull", () => ({
   sendGameHalfFullEmails: sendGameHalfFullEmailsMock,
+}));
+
+vi.mock("@/lib/email/gameFull", () => ({
+  sendGameFullEmails: sendGameFullEmailsMock,
 }));
 
 import { runPostBookingActions } from "@/lib/postBookingActions";
@@ -53,6 +58,7 @@ beforeEach(() => {
   setupTrackingWithDurableSkip();
   sendBookingConfirmedEmailMock.mockResolvedValue({ id: "email-1" });
   sendGameHalfFullEmailsMock.mockResolvedValue({ skipped: true, sentCount: 0 });
+  sendGameFullEmailsMock.mockResolvedValue({ skipped: true, sentCount: 0 });
 });
 
 describe("runPostBookingActions", () => {
@@ -92,6 +98,8 @@ describe("runPostBookingActions", () => {
       })
     );
     expect(sendBookingConfirmedEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendGameFullEmailsMock).toHaveBeenCalledTimes(2);
+    expect(sendGameFullEmailsMock).toHaveBeenCalledWith({ gameId: 10 });
   });
 
   it("uses the same durable key for duplicate wallet booking actions", async () => {

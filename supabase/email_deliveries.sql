@@ -19,7 +19,7 @@ create table if not exists public.email_deliveries (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint email_deliveries_type_check
-    check (email_type in ('booking_confirmation', 'game_half_full')),
+    check (email_type in ('booking_confirmation', 'game_half_full', 'game_full')),
   constraint email_deliveries_status_check
     check (status in ('sending', 'sent', 'failed')),
   constraint email_deliveries_attempts_check

@@ -3,6 +3,7 @@ import "server-only";
 import { sendBookingConfirmedEmail } from "@/lib/email/bookingConfirmed";
 import { sendEmailWithDeliveryTracking } from "@/lib/email/deliveryTracking";
 import { sendGameHalfFullEmails } from "@/lib/email/gameHalfFull";
+import { sendGameFullEmails } from "@/lib/email/gameFull";
 import { createBookingConfirmedNotification } from "@/lib/notifications";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -111,6 +112,18 @@ export async function runPostBookingActions({
     });
   } catch (emailError) {
     console.error("Unable to send game half full email:", {
+      gameId,
+      bookingId,
+      error: emailError,
+    });
+  }
+
+  try {
+    await sendGameFullEmails({
+      gameId,
+    });
+  } catch (emailError) {
+    console.error("Unable to send game full email:", {
       gameId,
       bookingId,
       error: emailError,

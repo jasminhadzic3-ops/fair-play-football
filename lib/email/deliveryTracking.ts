@@ -2,7 +2,7 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-type EmailDeliveryType = "booking_confirmation" | "game_half_full";
+type EmailDeliveryType = "booking_confirmation" | "game_half_full" | "game_full";
 
 type EmailDeliveryClaim = {
   delivery_id: number;

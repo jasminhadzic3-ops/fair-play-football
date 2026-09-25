@@ -191,7 +191,7 @@ begin
   ) then
     alter table public.email_deliveries
     add constraint email_deliveries_type_check
-    check (email_type in ('booking_confirmation', 'game_half_full'));
+    check (email_type in ('booking_confirmation', 'game_half_full', 'game_full'));
   end if;
 
   if not exists (

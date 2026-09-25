@@ -34,8 +34,17 @@ describe("email delivery tracking SQL", () => {
 
   it("limits delivery tracking to the approved email types", () => {
     const migration = readSql("supabase/email_deliveries.sql");
+    const baseSchema = readSql("supabase/base_schema.sql");
+    const gameFullMigration = readSql("supabase/migrations/20260925150000_allow_game_full_email_delivery.sql");
 
-    expect(migration).toContain("check (email_type in ('booking_confirmation', 'game_half_full'))");
+    for (const sql of [migration, baseSchema, gameFullMigration]) {
+      expect(sql).toContain("'game_full'");
+    }
+    expect(migration).toContain("check (email_type in ('booking_confirmation', 'game_half_full', 'game_full'))");
+    expect(baseSchema).toContain("check (email_type in ('booking_confirmation', 'game_half_full', 'game_full'))");
+    expect(gameFullMigration).toContain("drop constraint if exists email_deliveries_type_check");
+    expect(gameFullMigration).toContain("add constraint email_deliveries_type_check");
+    expect(gameFullMigration).toContain("check (email_type in ('booking_confirmation', 'game_half_full', 'game_full'))");
     expect(migration).toContain("check (status in ('sending', 'sent', 'failed'))");
   });
 
