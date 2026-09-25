@@ -2134,7 +2134,7 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
         <>
       <section className="bg-black px-6 pb-8 text-white">
         <div className="mx-auto max-w-5xl rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_14px_42px_rgba(0,0,0,0.18)] sm:p-6">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-5">
             <div>
               <h2 className="text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Coming alone? You’ll fit right in.
@@ -2143,12 +2143,6 @@ export default function HomeClient({ initialPaymentReturnReference = null }: Hom
                 Most Fair Play players book individually. Your host welcomes the group, provides the equipment and balances the teams. Arrive 10 minutes early and we’ll take care of the rest.
               </p>
             </div>
-            <a
-              href="#games"
-              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-stone-200/50"
-            >
-              Find your first game
-            </a>
           </div>
         </div>
       </section>
