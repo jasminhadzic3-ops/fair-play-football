@@ -68,6 +68,24 @@ export default function ConfirmEmailPage() {
           throw new Error("email was not verified");
         }
 
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.access_token) {
+          try {
+            await fetch("/api/referrals/verification-reconcile", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              cache: "no-store",
+            });
+          } catch (error) {
+            console.warn("Unable to request referral verification reconciliation:", error);
+          }
+        }
+
         clearConfirmationUrl();
         window.location.replace(getProfileOnboardingPath("verified"));
       } catch {

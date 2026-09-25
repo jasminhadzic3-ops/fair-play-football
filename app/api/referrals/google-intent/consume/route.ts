@@ -1,4 +1,5 @@
 import { getAuthenticatedUser } from "@/lib/sumupPayments";
+import { runReferralVerificationReconciliation } from "@/lib/referralRewards";
 import { assertSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabaseAdmin";
 import { GOOGLE_REFERRAL_INTENT_COOKIE } from "@/lib/referralGoogleIntent";
 
@@ -71,6 +72,14 @@ export async function POST(request: Request) {
 
     if (error) {
       throw error;
+    }
+
+    if (data === true && user.email_confirmed_at) {
+      try {
+        await runReferralVerificationReconciliation();
+      } catch (error) {
+        console.error("Unable to reconcile Google referral verification:", error);
+      }
     }
 
     return Response.json(

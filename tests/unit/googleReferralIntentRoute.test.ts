@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 const getAuthenticatedUserMock = vi.hoisted(() => vi.fn());
 const rpcMock = vi.hoisted(() => vi.fn());
+const runReferralVerificationReconciliationMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sumupPayments", () => ({
   getAuthenticatedUser: getAuthenticatedUserMock,
@@ -11,6 +12,9 @@ vi.mock("@/lib/sumupPayments", () => ({
 vi.mock("@/lib/supabaseAdmin", () => ({
   assertSupabaseAdminConfigured: vi.fn(),
   supabaseAdmin: { rpc: rpcMock },
+}));
+vi.mock("@/lib/referralRewards", () => ({
+  runReferralVerificationReconciliation: runReferralVerificationReconciliationMock,
 }));
 
 import { POST as consumePOST } from "@/app/api/referrals/google-intent/consume/route";
@@ -21,6 +25,11 @@ const root = resolve(__dirname, "../..");
 describe("Google referral intent routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runReferralVerificationReconciliationMock.mockResolvedValue({
+      relationships_checked: 1,
+      referrals_processed: 1,
+      wallet_credits_issued: 1,
+    });
   });
 
   it("sets only a valid opaque intent cookie", async () => {
@@ -58,7 +67,10 @@ describe("Google referral intent routes", () => {
   });
 
   it("uses the verified bearer user and clears the cookie after a successful RPC call", async () => {
-    getAuthenticatedUserMock.mockResolvedValue({ id: "new-google-user" });
+    getAuthenticatedUserMock.mockResolvedValue({
+      id: "new-google-user",
+      email_confirmed_at: "2026-09-25T10:00:00.000Z",
+    });
     rpcMock.mockResolvedValue({ data: true, error: null });
     const response = await consumePOST(
       new Request("http://localhost/api/referrals/google-intent/consume", {
@@ -76,10 +88,14 @@ describe("Google referral intent routes", () => {
       p_referred_user_id: "new-google-user",
     });
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(runReferralVerificationReconciliationMock).toHaveBeenCalledTimes(1);
   });
 
   it("clears the cookie for a definitive processed=false response", async () => {
-    getAuthenticatedUserMock.mockResolvedValue({ id: "existing-google-user" });
+    getAuthenticatedUserMock.mockResolvedValue({
+      id: "existing-google-user",
+      email_confirmed_at: "2026-09-25T10:00:00.000Z",
+    });
     rpcMock.mockResolvedValue({ data: false, error: null });
 
     const response = await consumePOST(
@@ -95,6 +111,7 @@ describe("Google referral intent routes", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ processed: false });
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(runReferralVerificationReconciliationMock).not.toHaveBeenCalled();
   });
 
   it("rejects malformed cookies without calling the RPC and clears them", async () => {
@@ -133,6 +150,33 @@ describe("Google referral intent routes", () => {
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "Unable to complete the referral sign-up." });
     expect(response.headers.get("set-cookie")).toBeNull();
+    expect(runReferralVerificationReconciliationMock).not.toHaveBeenCalled();
+  });
+
+  it("clears the cookie and succeeds when best-effort reconciliation fails after consumption", async () => {
+    getAuthenticatedUserMock.mockResolvedValue({
+      id: "new-google-user",
+      email_confirmed_at: "2026-09-25T10:00:00.000Z",
+    });
+    rpcMock.mockResolvedValue({ data: true, error: null });
+    runReferralVerificationReconciliationMock.mockRejectedValueOnce(
+      new Error("temporary reconciliation failure")
+    );
+
+    const response = await consumePOST(
+      new Request("http://localhost/api/referrals/google-intent/consume", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer verified-token",
+          cookie: "fair_play_google_referral_intent=11111111-1111-4111-8111-111111111111",
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ processed: true });
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(rpcMock).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a missing cookie as a safe no-op", async () => {

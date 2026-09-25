@@ -31,6 +31,9 @@ describe("signup and onboarding source flow", () => {
     expect(confirmationSource).toContain("supabase.auth.exchangeCodeForSession(code)");
     expect(confirmationSource).toContain('getProfileOnboardingPath("verified")');
     expect(confirmationSource).toContain("clearConfirmationUrl()");
+    expect(confirmationSource).toContain('fetch("/api/referrals/verification-reconcile", {');
+    expect(confirmationSource).toContain("Authorization: `Bearer ${session.access_token}`");
+    expect(confirmationSource).toContain("Unable to request referral verification reconciliation:");
   });
 
   it("preserves server guards by handing unverified game actions to verification before requests", () => {
