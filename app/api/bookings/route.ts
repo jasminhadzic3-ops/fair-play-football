@@ -7,9 +7,10 @@ type BookingRow = {
   user_id: string | null;
 };
 
-type ProfileAvatarRow = {
+type RosterProfileRow = {
   id: string;
   avatar_url: string | null;
+  favourite_position: string | null;
 };
 
 async function getAuthenticatedUserId(authHeader: string | null) {
@@ -43,32 +44,37 @@ export async function GET(request: Request) {
     }
 
     const bookingRows = (bookings ?? []) as BookingRow[];
+    const currentUserGameIds = new Set(
+      currentUserId
+        ? bookingRows
+            .filter((booking) => booking.user_id === currentUserId)
+            .map((booking) => booking.game_id)
+        : []
+    );
     const bookedUserIds = currentUserId
       ? Array.from(
           new Set(
             bookingRows
+              .filter((booking) => currentUserGameIds.has(booking.game_id))
               .map((booking) => booking.user_id)
               .filter((userId): userId is string => Boolean(userId))
           )
         )
       : [];
 
-    let avatarUrlByUserId = new Map<string, string | null>();
+    let rosterProfileByUserId = new Map<string, RosterProfileRow>();
 
     if (bookedUserIds.length > 0) {
       const { data: profiles, error: profilesError } = await supabaseAdmin
         .from("profiles")
-        .select("id,avatar_url")
+        .select("id,avatar_url,favourite_position")
         .in("id", bookedUserIds);
 
       if (profilesError) {
-        console.warn("Unable to load player avatars:", profilesError.message);
+        console.warn("Unable to load player roster profiles:", profilesError.message);
       } else {
-        avatarUrlByUserId = new Map(
-          ((profiles ?? []) as ProfileAvatarRow[]).map((profile) => [
-            profile.id,
-            profile.avatar_url,
-          ])
+        rosterProfileByUserId = new Map(
+          ((profiles ?? []) as RosterProfileRow[]).map((profile) => [profile.id, profile])
         );
       }
     }
@@ -79,8 +85,15 @@ export async function GET(request: Request) {
         game_id: booking.game_id,
         player_name: booking.player_name,
         is_current_user: Boolean(currentUserId && booking.user_id === currentUserId),
-        ...(currentUserId
-          ? { avatar_url: booking.user_id ? avatarUrlByUserId.get(booking.user_id) ?? null : null }
+        ...(currentUserId && currentUserGameIds.has(booking.game_id)
+          ? {
+              avatar_url: booking.user_id
+                ? rosterProfileByUserId.get(booking.user_id)?.avatar_url ?? null
+                : null,
+              favourite_position: booking.user_id
+                ? rosterProfileByUserId.get(booking.user_id)?.favourite_position ?? null
+                : null,
+            }
           : {}),
       })),
     });

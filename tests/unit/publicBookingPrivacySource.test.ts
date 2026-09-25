@@ -20,10 +20,19 @@ describe("public booking privacy source", () => {
     expect(files.teamList).not.toContain("booking.user_id ===");
   });
 
-  it("keeps raw user ids server-side and omits them from the public response payload", () => {
+  it("keeps raw user ids server-side and limits profile enrichment to shared game rosters", () => {
     expect(files.bookingsRoute).toContain("getAuthenticatedUserId");
     expect(files.bookingsRoute).toContain("is_current_user: Boolean");
-    expect(files.bookingsRoute).not.toContain("avatar_url");
+    expect(files.bookingsRoute).toContain("currentUserGameIds.has(booking.game_id)");
+    expect(files.bookingsRoute).toContain('select("id,avatar_url,favourite_position")');
     expect(files.bookingsRoute).not.toContain("user_id: booking.user_id");
+  });
+
+  it("renders optional roster avatars and positions without exposing placeholder profile data", () => {
+    expect(files.teamList).toContain("booking.avatar_url");
+    expect(files.teamList).toContain("booking.favourite_position");
+    expect(files.teamList).toContain('Goalkeeper: "GK"');
+    expect(files.teamList).toContain('Midfielder: "MID"');
+    expect(files.teamList).not.toContain("Position unavailable");
   });
 });
