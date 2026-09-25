@@ -872,7 +872,7 @@ export default function ProfilePage() {
               </section>
             ) : null}
 
-            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+            <div className="rounded-[2rem] border border-stone-200/45 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-5">
                   <label className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center sm:h-28 sm:w-28">
@@ -940,7 +940,7 @@ export default function ProfilePage() {
                   ) : null}
                 </div>
               </div>
-              <div className="mt-5 flex items-center justify-between rounded-3xl border border-stone-300/15 bg-zinc-900 px-5 py-3">
+              <div className="mt-5 flex items-center justify-between rounded-3xl border border-stone-200/45 bg-zinc-900 px-5 py-3">
                 <p className="text-xs font-bold tracking-[0.12em] text-stone-300">
                   Profile Complete
                 </p>
@@ -970,7 +970,7 @@ export default function ProfilePage() {
               </div>
             ) : null}
 
-            <div className="space-y-6 rounded-[2rem] border border-zinc-800 bg-zinc-900 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+            <div className="space-y-6 rounded-[2rem] border border-stone-200/45 bg-zinc-900 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
@@ -1112,7 +1112,7 @@ export default function ProfilePage() {
                   ].filter((field): field is { label: string; value: string } => Boolean(field)).map((field) => (
                     <div
                       key={field.label}
-                      className="flex items-center justify-between gap-4 rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-4"
+                      className="flex items-center justify-between gap-4 rounded-3xl border border-stone-200/35 bg-zinc-950 px-5 py-4"
                     >
                       <p className="shrink-0 text-xs uppercase tracking-[0.25em] text-zinc-500">
                         {field.label}
@@ -1132,14 +1132,14 @@ export default function ProfilePage() {
               ) : null}
 
               {profile?.left_foot_rating != null || profile?.right_foot_rating != null || leftFootRating !== null || rightFootRating !== null ? (
-                <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 sm:p-6">
+                <div className="rounded-[2rem] border border-stone-200/45 bg-zinc-950 p-5 sm:p-6">
                   <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Foot ability</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-stone-200/35 bg-zinc-900 px-4 py-3">
                       <span className="text-sm text-zinc-500">Left</span>
                       <span className="text-lg tracking-[0.18em] text-stone-200">{formatFootRating(profile?.left_foot_rating ?? leftFootRating)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-stone-200/35 bg-zinc-900 px-4 py-3">
                       <span className="text-sm text-zinc-500">Right</span>
                       <span className="text-lg tracking-[0.18em] text-stone-200">{formatFootRating(profile?.right_foot_rating ?? rightFootRating)}</span>
                     </div>
@@ -1148,7 +1148,7 @@ export default function ProfilePage() {
               ) : null}
 
               {profile?.accelerate_type || accelerateType ? (
-                <div className="rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-5 sm:p-6">
+                <div className="rounded-[2rem] border border-stone-200/45 bg-zinc-950 p-5 sm:p-6">
                   <p className="text-xs font-bold uppercase tracking-[0.3em] text-stone-400">Movement profile</p>
                   <p className="mt-3 text-xl font-bold tracking-tight text-white">
                     {profile?.accelerate_type || accelerateType}
