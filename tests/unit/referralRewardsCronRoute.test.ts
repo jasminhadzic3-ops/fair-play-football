@@ -36,15 +36,16 @@ beforeEach(() => {
 });
 
 describe("referral rewards cron route", () => {
-  it("registers the referral recovery route hourly with Vercel Cron", () => {
+  it("does not register referral rewards with Vercel Cron because QStash owns scheduling", () => {
     const vercel = JSON.parse(
       readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")
     ) as { crons: Array<{ path: string; schedule: string }> };
 
-    expect(vercel.crons).toContainEqual({
-      path: "/api/cron/referral-rewards",
-      schedule: "15 * * * *",
-    });
+    expect(
+      vercel.crons.filter(
+        (cron) => cron.path === "/api/cron/referral-rewards"
+      )
+    ).toEqual([]);
   });
 
   it("rejects unauthorized requests without invoking reconciliation", async () => {
