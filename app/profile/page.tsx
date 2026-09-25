@@ -325,7 +325,8 @@ export default function ProfilePage() {
       .maybeSingle();
 
     if (profileError) {
-      setErrorMessage(profileError.message);
+      console.error("Unable to load player profile:", profileError.message);
+      setErrorMessage("We couldn’t load your player profile right now. Please try again.");
       setIsLoading(false);
       return;
     }
@@ -439,7 +440,8 @@ export default function ProfilePage() {
         .single();
 
       if (completeError) {
-        setErrorMessage(completeError.message);
+        console.error("Unable to complete player profile:", completeError.message);
+        setErrorMessage("We couldn’t finish setting up your player profile right now. Please try again.");
         setIsLoading(false);
         return;
       }
@@ -512,7 +514,8 @@ export default function ProfilePage() {
       .single();
 
     if (createError) {
-      setErrorMessage(createError.message);
+      console.error("Unable to create player profile:", createError.message);
+      setErrorMessage("We couldn’t create your player profile right now. Please try again.");
       setIsLoading(false);
       return;
     }
@@ -861,11 +864,26 @@ export default function ProfilePage() {
                     </p>
                   </div>
                 </div>
-                <div className="w-full rounded-3xl border border-zinc-800 bg-zinc-900 px-5 py-4 sm:w-auto sm:min-w-36">
-                  <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                    Games Played
-                  </p>
-                  <p className="mt-2 text-4xl font-black text-stone-200">{gamesPlayedCount}</p>
+                <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-36">
+                  <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-5 py-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                      Games Played
+                    </p>
+                    <p className="mt-2 text-4xl font-black text-stone-200">{gamesPlayedCount}</p>
+                  </div>
+                  {!isEditingProfile ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusMessage(null);
+                        setErrorMessage(null);
+                        setIsEditingProfile(true);
+                      }}
+                      className="inline-flex min-h-11 items-center justify-center rounded-full border border-stone-300/25 bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-stone-200/50"
+                    >
+                      Edit profile
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <div className="mt-5 flex items-center justify-between rounded-3xl border border-stone-300/15 bg-zinc-900 px-5 py-3">
@@ -905,19 +923,6 @@ export default function ProfilePage() {
                     {needsPlayerDetails ? "Player details" : "Personal details"}
                   </p>
                 </div>
-                {!isEditingProfile ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatusMessage(null);
-                      setErrorMessage(null);
-                      setIsEditingProfile(true);
-                    }}
-                    className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-stone-300/20 bg-zinc-950 px-5 text-sm font-bold text-stone-200 transition hover:border-stone-200/35 hover:bg-zinc-800 sm:w-auto"
-                  >
-                    Edit Profile
-                  </button>
-                ) : null}
               </div>
 
               {isEditingProfile ? (
