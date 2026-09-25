@@ -179,7 +179,6 @@ export async function sendGameFullEmails({ gameId }: GameFullEmailParams) {
       ctaHref: WHATSAPP_GROUP_URL,
       ctaLabel: "Join the WhatsApp group",
       footerText: "Thanks for playing with Fair Play. See you on the pitch.",
-      showCopyright: true,
       introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">Hi ${escapeHtml(greetingName)},</p>
         ${renderEmailParagraphs([
