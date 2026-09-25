@@ -111,7 +111,7 @@ function formatPrice(price?: number) {
   return `${priceLabel} per player`;
 }
 
-function formatAvailability(spotsLeft: number) {
+function formatAvailability(spotsLeft: number, confirmedPlayers: number) {
   if (spotsLeft <= 0) {
     return { text: "Game full", className: "border-zinc-700/70 bg-zinc-800/70 text-zinc-400" };
   }
@@ -123,7 +123,7 @@ function formatAvailability(spotsLeft: number) {
     };
   }
 
-  if (spotsLeft <= 5) {
+  if (confirmedPlayers >= 6) {
     return {
       text: `Filling up fast · ${spotsLeft} spots remaining`,
       className: "border-amber-200/20 bg-amber-300/10 text-amber-200",
@@ -168,12 +168,11 @@ export default function GameCard({
   }, [openAuthModal, openDetails, onOpenDetailsHandled]);
 
   const maxPlayers = game.max_players || 12;
-  const spotsLeft =
-    maxPlayers -
-    bookings.filter((booking) => booking.game_id === game.id).length;
+  const confirmedPlayers = bookings.filter((booking) => booking.game_id === game.id).length;
+  const spotsLeft = maxPlayers - confirmedPlayers;
 
   const formatBadge = getFormatFromMaxPlayers(maxPlayers);
-  const availability = formatAvailability(spotsLeft);
+  const availability = formatAvailability(spotsLeft, confirmedPlayers);
   const durationMinutes = getGameDurationMinutes(game);
   const playingStyleLabel = getPlayingStyleLabel(game.tags);
   const formatAndDuration = [
