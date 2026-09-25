@@ -216,7 +216,7 @@ export default function GameCard({
 
           <div className="md:text-right">
             <span className="inline-flex min-h-11 items-center justify-center rounded-full bg-stone-200 px-5 text-sm font-bold text-zinc-950 transition-colors">
-              Book your place
+              Join this game
             </span>
           </div>
         </div>
