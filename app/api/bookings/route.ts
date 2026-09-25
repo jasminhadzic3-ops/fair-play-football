@@ -9,8 +9,12 @@ type BookingRow = {
 
 type RosterProfileRow = {
   id: string;
+  username: string | null;
   avatar_url: string | null;
   favourite_position: string | null;
+  secondary_position: string | null;
+  preferred_foot: string | null;
+  accelerate_type: string | null;
 };
 
 async function getAuthenticatedUserId(authHeader: string | null) {
@@ -59,7 +63,7 @@ export async function GET(request: Request) {
     if (bookedUserIds.length > 0) {
       const { data: profiles, error: profilesError } = await supabaseAdmin
         .from("profiles")
-        .select("id,avatar_url,favourite_position")
+        .select("id,username,avatar_url,favourite_position,secondary_position,preferred_foot,accelerate_type")
         .in("id", bookedUserIds);
 
       if (profilesError) {
@@ -85,6 +89,18 @@ export async function GET(request: Request) {
               favourite_position: booking.user_id
                 ? rosterProfileByUserId.get(booking.user_id)?.favourite_position ?? null
                 : null,
+              ...(booking.user_id
+                ? {
+                    player_details: {
+                      display_name: rosterProfileByUserId.get(booking.user_id)?.username?.trim() || booking.player_name,
+                      avatar_url: rosterProfileByUserId.get(booking.user_id)?.avatar_url ?? null,
+                      primary_position: rosterProfileByUserId.get(booking.user_id)?.favourite_position ?? null,
+                      secondary_position: rosterProfileByUserId.get(booking.user_id)?.secondary_position ?? null,
+                      preferred_foot: rosterProfileByUserId.get(booking.user_id)?.preferred_foot ?? null,
+                      accelerate_type: rosterProfileByUserId.get(booking.user_id)?.accelerate_type ?? null,
+                    },
+                  }
+                : {}),
             }
           : {}),
       })),

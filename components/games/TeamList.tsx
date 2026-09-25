@@ -1,5 +1,14 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import {
+  ACCELERATE_DESCRIPTIONS,
+  POSITION_SHORT_LABELS,
+  getInitials,
+  type AccelerateType,
+  type PlayerPosition,
+} from "@/lib/playerProfile";
+
 interface Booking {
   id: number;
   game_id: number;
@@ -7,25 +16,14 @@ interface Booking {
   is_current_user?: boolean | null;
   avatar_url?: string | null;
   favourite_position?: string | null;
-}
-
-const positionLabels: Record<string, string> = {
-  Goalkeeper: "GK",
-  Defender: "DEF",
-  Midfielder: "MID",
-  Forward: "FWD",
-  Winger: "WING",
-  Flexible: "FLEX",
-};
-
-function getInitials(playerName: string) {
-  return playerName
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase())
-    .slice(0, 2)
-    .join("") || "FP";
+  player_details?: {
+    display_name: string;
+    avatar_url: string | null;
+    primary_position: string | null;
+    secondary_position: string | null;
+    preferred_foot: string | null;
+    accelerate_type: string | null;
+  } | null;
 }
 
 interface TeamListProps {
@@ -42,6 +40,82 @@ export default function TeamList({
   const midpoint = Math.ceil(bookings.length / 2);
   const teamA = bookings.slice(0, midpoint);
   const teamB = bookings.slice(midpoint);
+  const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedBookingId(null);
+      }
+    };
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (listRef.current && !listRef.current.contains(event.target as Node)) {
+        setSelectedBookingId(null);
+      }
+    };
+
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+    };
+  }, []);
+
+  const renderPlayerDetails = (booking: Booking) => {
+    if (!booking.player_details) {
+      return null;
+    }
+
+    const details = booking.player_details;
+    const displayName = details.display_name || booking.player_name;
+    const primaryPosition = details.primary_position && POSITION_SHORT_LABELS[details.primary_position as PlayerPosition]
+      ? POSITION_SHORT_LABELS[details.primary_position as PlayerPosition]
+      : null;
+    const secondaryPosition = details.secondary_position && POSITION_SHORT_LABELS[details.secondary_position as PlayerPosition]
+      ? POSITION_SHORT_LABELS[details.secondary_position as PlayerPosition]
+      : null;
+    const movementDescription = details.accelerate_type
+      ? ACCELERATE_DESCRIPTIONS[details.accelerate_type as AccelerateType]
+      : null;
+
+    return (
+      <div role="dialog" aria-label={`${displayName} player details`} className="mt-2 rounded-2xl border border-stone-200/15 bg-zinc-950/95 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.3)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-200/20 bg-stone-200 text-sm font-black text-zinc-950">
+              {details.avatar_url ? (
+                <img src={details.avatar_url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+              ) : (
+                getInitials(displayName)
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold text-white">{displayName}</p>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {primaryPosition ? <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-300">{primaryPosition}</span> : null}
+                {secondaryPosition ? <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{secondaryPosition}</span> : null}
+              </div>
+            </div>
+          </div>
+          <button type="button" onClick={() => setSelectedBookingId(null)} className="shrink-0 rounded-full px-2 py-1 text-xs font-semibold text-zinc-500 hover:bg-white/5 hover:text-white" aria-label="Close player details">
+            Close
+          </button>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+          {details.preferred_foot ? <div className="rounded-xl bg-white/[0.04] p-2.5"><p className="text-zinc-500">Preferred foot</p><p className="mt-1 font-semibold text-stone-200">{details.preferred_foot}</p></div> : null}
+        </div>
+        {details.accelerate_type ? (
+          <div className="mt-3 border-t border-white/[0.08] pt-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">Movement profile</p>
+            <p className="mt-1 text-sm font-bold text-white">{details.accelerate_type}</p>
+            {movementDescription ? <p className="mt-1 text-xs leading-5 text-zinc-500">{movementDescription}</p> : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderTeam = (team: Booking[], teamName: string, teamMarker: string) => (
     <section className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-zinc-950/75 shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
@@ -67,22 +141,21 @@ export default function TeamList({
       <div className="space-y-2 p-2.5 sm:p-3">
         {team.map((booking) => {
           const isCurrentUserBooking = currentUserId && booking.is_current_user === true;
-          const initials = getInitials(booking.player_name);
+          const displayName = booking.player_details?.display_name || booking.player_name;
+          const initials = getInitials(displayName);
           const position = booking.favourite_position
-            ? positionLabels[booking.favourite_position]
+            ? POSITION_SHORT_LABELS[booking.favourite_position as PlayerPosition]
             : null;
 
           return (
-            <div
-              key={booking.id}
-              className="group flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-transparent bg-white/[0.035] px-3 py-2.5 transition-colors hover:border-white/10 hover:bg-white/[0.055] sm:px-3.5"
-            >
+            <div key={booking.id}>
+              <div className="group flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-transparent bg-white/[0.035] px-3 py-2.5 transition-colors hover:border-white/10 hover:bg-white/[0.055] sm:px-3.5">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-zinc-800 text-xs font-bold tracking-[0.06em] text-stone-100 shadow-[0_8px_24px_rgba(0,0,0,0.3)] sm:size-12">
                   {booking.avatar_url ? (
                     <img
                       src={booking.avatar_url}
-                      alt={`${booking.player_name} profile`}
+                      alt={`${displayName} profile`}
                       loading="lazy"
                       decoding="async"
                       className="h-full w-full object-cover"
@@ -94,7 +167,7 @@ export default function TeamList({
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
                     <p className="truncate text-sm font-semibold text-stone-100 sm:text-[15px]">
-                      {booking.player_name}
+                      {displayName}
                     </p>
                     {isCurrentUserBooking ? (
                       <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300/80">
@@ -109,15 +182,29 @@ export default function TeamList({
                   ) : null}
                 </div>
               </div>
-              {isCurrentUserBooking ? (
-                <button
-                  type="button"
-                  onClick={() => onLeaveGame(booking.id)}
-                  className="shrink-0 rounded-full px-2.5 py-2 text-[11px] font-semibold text-zinc-500 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20 sm:px-3"
-                >
-                  Leave
-                </button>
-              ) : null}
+              <div className="flex shrink-0 items-center gap-1">
+                {booking.player_details ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBookingId(selectedBookingId === booking.id ? null : booking.id)}
+                    aria-expanded={selectedBookingId === booking.id}
+                    className="rounded-full px-2.5 py-2 text-[11px] font-semibold text-stone-300 transition hover:bg-stone-200/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/30 sm:px-3"
+                  >
+                    Player details
+                  </button>
+                ) : null}
+                {isCurrentUserBooking ? (
+                  <button
+                    type="button"
+                    onClick={() => onLeaveGame(booking.id)}
+                    className="rounded-full px-2.5 py-2 text-[11px] font-semibold text-zinc-500 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20 sm:px-3"
+                  >
+                    Leave
+                  </button>
+                ) : null}
+              </div>
+              </div>
+              {selectedBookingId === booking.id ? renderPlayerDetails(booking) : null}
             </div>
           );
         })}
@@ -135,7 +222,7 @@ export default function TeamList({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 md:gap-4">
+    <div ref={listRef} className="grid grid-cols-1 gap-3.5 md:grid-cols-2 md:gap-4">
       {renderTeam(teamA, "Team A", "A")}
       {renderTeam(teamB, "Team B", "B")}
     </div>

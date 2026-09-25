@@ -6,6 +6,12 @@ export type PendingSignupProfile = {
   gender?: string;
   favouritePosition?: string;
   favourite_position?: string;
+  secondaryPosition?: string;
+  secondary_position?: string;
+  preferredFoot?: string;
+  preferred_foot?: string;
+  accelerateType?: string;
+  accelerate_type?: string;
   email?: string;
   terms_accepted_at?: string;
   terms_version?: string;

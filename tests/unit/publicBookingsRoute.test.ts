@@ -133,6 +133,14 @@ describe("public bookings route", () => {
         is_current_user: true,
         avatar_url: "https://example.com/current-player.jpg",
         favourite_position: "Midfielder",
+        player_details: {
+          display_name: "Current Player",
+          avatar_url: "https://example.com/current-player.jpg",
+          primary_position: "Midfielder",
+          secondary_position: null,
+          preferred_foot: null,
+          accelerate_type: null,
+        },
       },
       {
         id: 101,
@@ -141,6 +149,14 @@ describe("public bookings route", () => {
         is_current_user: false,
         avatar_url: null,
         favourite_position: "Defender",
+        player_details: {
+          display_name: "Other Player",
+          avatar_url: null,
+          primary_position: "Defender",
+          secondary_position: null,
+          preferred_foot: null,
+          accelerate_type: null,
+        },
       },
       {
         id: 102,
@@ -149,6 +165,14 @@ describe("public bookings route", () => {
         is_current_user: false,
         avatar_url: "https://example.com/different-game.jpg",
         favourite_position: "Forward",
+        player_details: {
+          display_name: "Different Game Player",
+          avatar_url: "https://example.com/different-game.jpg",
+          primary_position: "Forward",
+          secondary_position: null,
+          preferred_foot: null,
+          accelerate_type: null,
+        },
       },
       {
         id: 103,
@@ -157,6 +181,14 @@ describe("public bookings route", () => {
         is_current_user: false,
         avatar_url: null,
         favourite_position: null,
+        player_details: {
+          display_name: "Player Without Profile Details",
+          avatar_url: null,
+          primary_position: null,
+          secondary_position: null,
+          preferred_foot: null,
+          accelerate_type: null,
+        },
       },
     ]);
     expect(JSON.stringify(body)).not.toContain("user-1");

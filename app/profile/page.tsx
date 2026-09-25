@@ -12,6 +12,13 @@ import {
   type PendingSignupProfile,
 } from "@/lib/onboarding";
 import { supabase } from "@/lib/supabase";
+import {
+  ACCELERATE_DESCRIPTIONS,
+  ACCELERATE_OPTIONS,
+  PLAYER_POSITION_OPTIONS,
+  PREFERRED_FOOT_OPTIONS,
+  getInitials,
+} from "@/lib/playerProfile";
 
 interface Profile {
   id: string;
@@ -20,6 +27,9 @@ interface Profile {
   age: string | null;
   gender: string | null;
   favourite_position: string | null;
+  secondary_position: string | null;
+  preferred_foot: string | null;
+  accelerate_type: string | null;
   avatar_url: string | null;
   terms_accepted_at?: string | null;
   terms_version?: string | null;
@@ -48,14 +58,6 @@ interface WaitingListNotification {
   game?: NotificationGame;
 }
 
-const positionOptions = [
-  "Goalkeeper",
-  "Defender",
-  "Midfielder",
-  "Forward",
-  "Winger",
-  "Flexible",
-];
 const ageOptions = Array.from({ length: 45 }, (_, index) => String(index + 16));
 const genderOptions = ["Male", "Female", "Prefer not to say"];
 
@@ -97,6 +99,9 @@ export default function ProfilePage() {
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
   const [favouritePosition, setFavouritePosition] = useState("");
+  const [secondaryPosition, setSecondaryPosition] = useState("");
+  const [preferredFoot, setPreferredFoot] = useState("");
+  const [accelerateType, setAccelerateType] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -113,7 +118,10 @@ export default function ProfilePage() {
     username.trim() !== (profile?.username || "") ||
     age !== (profile?.age || "") ||
     gender !== (profile?.gender || "") ||
-    favouritePosition !== (profile?.favourite_position || "");
+    favouritePosition !== (profile?.favourite_position || "") ||
+    secondaryPosition !== (profile?.secondary_position || "") ||
+    preferredFoot !== (profile?.preferred_foot || "") ||
+    accelerateType !== (profile?.accelerate_type || "");
   const emailVerified = isEmailVerified(user);
   const displayName: string = profile?.username || username || (user ? getFallbackUsername(user) : "Player");
   const displayEmail = profile?.email || user?.email || "No email found";
@@ -131,18 +139,16 @@ export default function ProfilePage() {
     Boolean(profile?.favourite_position || favouritePosition),
   ].filter(Boolean).length;
   const profileCompletenessPercent = Math.round((profileCompletenessCount / 5) * 100);
-  const initials = displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part: string) => part[0]?.toUpperCase())
-    .join("") || "FP";
+  const initials = getInitials(displayName);
 
   const resetProfileForm = () => {
     setUsername(profile?.username || "");
     setAge(profile?.age || "");
     setGender(profile?.gender || "");
     setFavouritePosition(profile?.favourite_position || "");
+    setSecondaryPosition(profile?.secondary_position || "");
+    setPreferredFoot(profile?.preferred_foot || "");
+    setAccelerateType(profile?.accelerate_type || "");
     setIsEditingProfile(false);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -300,6 +306,9 @@ export default function ProfilePage() {
       setAge("");
       setGender("");
       setFavouritePosition("");
+      setSecondaryPosition("");
+      setPreferredFoot("");
+      setAccelerateType("");
       setNotifications([]);
       setGamesPlayedCount(0);
       setIsLoading(false);
@@ -311,7 +320,7 @@ export default function ProfilePage() {
 
     const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
-      .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url,terms_accepted_at,terms_version")
       .eq("id", authUser.id)
       .maybeSingle();
 
@@ -377,6 +386,27 @@ export default function ProfilePage() {
         existingProfile?.favourite_position ||
         pendingFavouritePosition ||
         null;
+      const completedSecondaryPosition =
+        existingProfile?.secondary_position ||
+        pendingProfile?.secondaryPosition ||
+        pendingProfile?.secondary_position ||
+        getStringValue(userMetadata.secondaryPosition) ||
+        getStringValue(userMetadata.secondary_position) ||
+        null;
+      const completedPreferredFoot =
+        existingProfile?.preferred_foot ||
+        pendingProfile?.preferredFoot ||
+        pendingProfile?.preferred_foot ||
+        getStringValue(userMetadata.preferredFoot) ||
+        getStringValue(userMetadata.preferred_foot) ||
+        null;
+      const completedAccelerateType =
+        existingProfile?.accelerate_type ||
+        pendingProfile?.accelerateType ||
+        pendingProfile?.accelerate_type ||
+        getStringValue(userMetadata.accelerateType) ||
+        getStringValue(userMetadata.accelerate_type) ||
+        null;
       const completedTermsAcceptedAt =
         existingProfile?.terms_accepted_at ||
         pendingProfile?.terms_accepted_at ||
@@ -397,12 +427,15 @@ export default function ProfilePage() {
           age: completedAge,
           gender: completedGender,
           favourite_position: completedFavouritePosition,
+          secondary_position: completedSecondaryPosition,
+          preferred_foot: completedPreferredFoot,
+          accelerate_type: completedAccelerateType,
           avatar_url: existingProfile?.avatar_url ?? null,
           ...(completedTermsAcceptedAt
             ? { terms_accepted_at: completedTermsAcceptedAt, terms_version: completedTermsVersion }
             : {}),
         })
-        .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
+        .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url,terms_accepted_at,terms_version")
         .single();
 
       if (completeError) {
@@ -431,6 +464,9 @@ export default function ProfilePage() {
       setAge(completedProfile.age || "");
       setGender(completedProfile.gender || "");
       setFavouritePosition(completedProfile.favourite_position || "");
+      setSecondaryPosition(completedProfile.secondary_position || "");
+      setPreferredFoot(completedProfile.preferred_foot || "");
+      setAccelerateType(completedProfile.accelerate_type || "");
       setIsOnboarding(isOnboardingVisit);
       setNeedsPlayerDetails(isOnboardingVisit && playerDetailsMissing);
       if (isOnboardingVisit) {
@@ -455,6 +491,9 @@ export default function ProfilePage() {
       setAge(existingProfile.age || "");
       setGender(existingProfile.gender || "");
       setFavouritePosition(existingProfile.favourite_position || "");
+      setSecondaryPosition(existingProfile.secondary_position || "");
+      setPreferredFoot(existingProfile.preferred_foot || "");
+      setAccelerateType(existingProfile.accelerate_type || "");
       setIsOnboarding(false);
       setNeedsPlayerDetails(false);
       setIsLoading(false);
@@ -469,7 +508,7 @@ export default function ProfilePage() {
         email: authUser.email,
         username: fallbackUsername,
       })
-      .select("id,email,username,age,gender,favourite_position,avatar_url,terms_accepted_at,terms_version")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url,terms_accepted_at,terms_version")
       .single();
 
     if (createError) {
@@ -483,6 +522,9 @@ export default function ProfilePage() {
     setAge(newProfile.age || "");
     setGender(newProfile.gender || "");
     setFavouritePosition(newProfile.favourite_position || "");
+    setSecondaryPosition(newProfile.secondary_position || "");
+    setPreferredFoot(newProfile.preferred_foot || "");
+    setAccelerateType(newProfile.accelerate_type || "");
     setIsOnboarding(false);
     setNeedsPlayerDetails(false);
     setIsLoading(false);
@@ -523,6 +565,10 @@ export default function ProfilePage() {
     setStatusMessage(null);
     setErrorMessage(null);
 
+    const normalizedSecondaryPosition = secondaryPosition && secondaryPosition !== favouritePosition
+      ? secondaryPosition
+      : null;
+
     const { data, error } = await supabase
       .from("profiles")
       .upsert({
@@ -532,9 +578,12 @@ export default function ProfilePage() {
         age: age || null,
         gender: gender || null,
         favourite_position: favouritePosition || null,
+        secondary_position: normalizedSecondaryPosition,
+        preferred_foot: preferredFoot || null,
+        accelerate_type: accelerateType || null,
         avatar_url: profile?.avatar_url ?? null,
       })
-      .select("id,email,username,age,gender,favourite_position,avatar_url")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url")
       .single();
 
     if (error) {
@@ -548,6 +597,9 @@ export default function ProfilePage() {
     setAge(data.age || "");
     setGender(data.gender || "");
     setFavouritePosition(data.favourite_position || "");
+    setSecondaryPosition(data.secondary_position || "");
+    setPreferredFoot(data.preferred_foot || "");
+    setAccelerateType(data.accelerate_type || "");
     const completedOnboarding = needsPlayerDetails && hasRequiredPlayerDetails(data);
     setNeedsPlayerDetails(false);
     setStatusMessage(completedOnboarding ? "Your profile is ready. Find a game when you're ready." : "Profile saved.");
@@ -609,7 +661,7 @@ export default function ProfilePage() {
       .from("profiles")
       .update({ avatar_url: publicUrl })
       .eq("id", user.id)
-      .select("id,email,username,age,gender,favourite_position,avatar_url")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url")
       .single();
 
     if (error) {
@@ -766,8 +818,8 @@ export default function ProfilePage() {
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-5">
-                  <label className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center">
-                    <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-stone-300/25 bg-stone-200 text-2xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)]">
+                  <label className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center sm:h-28 sm:w-28">
+                    <span className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-stone-300/25 bg-stone-200 text-3xl font-black text-zinc-950 shadow-[0_16px_44px_rgba(214,211,209,0.16)] sm:h-28 sm:w-28">
                       {profile?.avatar_url ? (
                         <img
                           src={profile.avatar_url}
@@ -778,8 +830,11 @@ export default function ProfilePage() {
                         initials
                       )}
                     </span>
-                    <span className="absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-white">
-                      {isUploadingAvatar ? "Uploading" : "Upload Photo"}
+                    <span className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border border-zinc-950 bg-stone-200 text-sm text-zinc-950 shadow-lg" aria-hidden="true">
+                      {isUploadingAvatar ? "…" : "＋"}
+                    </span>
+                    <span className="absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap text-center text-[0.6rem] font-bold uppercase tracking-[0.16em] text-zinc-400">
+                      {isUploadingAvatar ? "Uploading" : profile?.avatar_url ? "Change photo" : "Add photo"}
                     </span>
                     <input
                       type="file"
@@ -925,12 +980,71 @@ export default function ProfilePage() {
                       className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
                     >
                       <option value="">Select a position</option>
-                      {positionOptions.map((position) => (
+                      {PLAYER_POSITION_OPTIONS.map((position) => (
+                        <option key={position} value={position}>
+                          {position}
+                        </option>
+                      ))}
+                      </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Secondary position
+                    </label>
+                    <select
+                      value={secondaryPosition}
+                      onChange={(event) => setSecondaryPosition(event.target.value)}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="">No secondary position</option>
+                      {PLAYER_POSITION_OPTIONS.filter((position) => position !== favouritePosition).map((position) => (
                         <option key={position} value={position}>
                           {position}
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Preferred foot
+                    </label>
+                    <select
+                      value={preferredFoot}
+                      onChange={(event) => setPreferredFoot(event.target.value)}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="">No preference selected</option>
+                      {PREFERRED_FOOT_OPTIONS.map((foot) => (
+                        <option key={foot} value={foot}>
+                          {foot}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      AcceleRATE type
+                    </label>
+                    <select
+                      value={accelerateType}
+                      onChange={(event) => setAccelerateType(event.target.value)}
+                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="">No movement profile selected</option>
+                      {ACCELERATE_OPTIONS.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                    {accelerateType ? (
+                      <p className="mt-2 text-sm leading-6 text-zinc-500">
+                        {ACCELERATE_DESCRIPTIONS[accelerateType as keyof typeof ACCELERATE_DESCRIPTIONS]}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               ) : (
@@ -938,10 +1052,18 @@ export default function ProfilePage() {
                   {[
                     { label: "Display name", value: profile?.username || username || "—" },
                     { label: "Email", value: displayEmail },
-                    { label: "Age", value: profile?.age || age || "—" },
-                    { label: "Gender", value: profile?.gender || gender || "—" },
-                    { label: "Favourite position", value: profile?.favourite_position || favouritePosition || "—" },
-                  ].map((field) => (
+                    profile?.age || age ? { label: "Age", value: profile?.age || age } : null,
+                    profile?.gender || gender ? { label: "Gender", value: profile?.gender || gender } : null,
+                    profile?.favourite_position || favouritePosition
+                      ? { label: "Favourite position", value: profile?.favourite_position || favouritePosition }
+                      : null,
+                    profile?.secondary_position || secondaryPosition
+                      ? { label: "Secondary position", value: profile?.secondary_position || secondaryPosition }
+                      : null,
+                    profile?.preferred_foot || preferredFoot
+                      ? { label: "Preferred foot", value: profile?.preferred_foot || preferredFoot }
+                      : null,
+                  ].filter((field): field is { label: string; value: string } => Boolean(field)).map((field) => (
                     <div
                       key={field.label}
                       className="flex items-center justify-between gap-4 rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-4"
@@ -960,6 +1082,18 @@ export default function ProfilePage() {
               {statusMessage ? (
                 <div aria-live="polite" className="rounded-3xl border border-stone-300/15 bg-zinc-950 p-4 text-sm font-semibold text-stone-200">
                   {statusMessage}
+                </div>
+              ) : null}
+
+              {profile?.accelerate_type || accelerateType ? (
+                <div className="rounded-[2rem] border border-stone-300/15 bg-zinc-950 p-5 sm:p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.3em] text-stone-400">Movement profile</p>
+                  <p className="mt-3 text-xl font-bold tracking-tight text-white">
+                    {profile?.accelerate_type || accelerateType}
+                  </p>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
+                    {ACCELERATE_DESCRIPTIONS[(profile?.accelerate_type || accelerateType) as keyof typeof ACCELERATE_DESCRIPTIONS]}
+                  </p>
                 </div>
               ) : null}
 
