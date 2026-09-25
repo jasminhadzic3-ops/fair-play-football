@@ -1270,7 +1270,7 @@ export default function GameDetails({
             </li>
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>
-              <span>8v8 format</span>
+              <span>{gameFormat} format</span>
             </li>
             <li className="flex gap-3">
               <span className="text-stone-300">✓</span>

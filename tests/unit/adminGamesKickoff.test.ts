@@ -27,14 +27,18 @@ const state: {
   insertPayload: GamePayload | null;
   updatePayload: GamePayload | null;
   selectedGame: GamePayload | null;
+  bookingCount: number;
 } = {
   insertPayload: null,
   updatePayload: null,
   selectedGame: null,
+  bookingCount: 0,
 };
 
 class MockSupabaseQuery {
   constructor(private table: string) {}
+
+  private headCount = false;
 
   insert(payload: GamePayload) {
     expect(this.table).toBe("games");
@@ -52,8 +56,19 @@ class MockSupabaseQuery {
     return this;
   }
 
-  select() {
+  select(_columns?: string, options?: { count?: string; head?: boolean }) {
+    this.headCount = Boolean(options?.head);
     return this;
+  }
+
+  then<TResult1 = unknown, TResult2 = never>(
+    onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+  ) {
+    return Promise.resolve(this.headCount ? { data: null, error: null, count: state.bookingCount } : { data: null, error: null }).then(
+      onfulfilled,
+      onrejected
+    );
   }
 
   async single<T>() {
@@ -87,6 +102,7 @@ beforeEach(() => {
   state.insertPayload = null;
   state.updatePayload = null;
   state.selectedGame = null;
+  state.bookingCount = 0;
 });
 
 describe("admin game structured kickoff handling", () => {
@@ -204,6 +220,46 @@ describe("admin game structured kickoff handling", () => {
       max_players: 12,
     });
     expect(state.updatePayload).not.toHaveProperty("starts_at");
+  });
+
+  it("allows a safe capacity increase while preserving the booking history", async () => {
+    state.bookingCount = 14;
+    state.selectedGame = { pricing_mode: "paid", max_players: 14 };
+
+    const response = await PATCH(
+      adminRequest({
+        title: "Eight-a-side",
+        location: "London",
+        time: "Sunday 3pm",
+        price: 5,
+        max_players: 16,
+        tags: ["8-a-side"],
+      }) as Parameters<typeof PATCH>[0],
+      { params: Promise.resolve({ id: "123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.updatePayload).toMatchObject({ max_players: 16, tags: ["8-a-side"] });
+  });
+
+  it("rejects reducing capacity below existing bookings", async () => {
+    state.bookingCount = 14;
+    state.selectedGame = { pricing_mode: "paid", max_players: 16 };
+
+    const response = await PATCH(
+      adminRequest({
+        title: "Seven-a-side",
+        location: "London",
+        time: "Sunday 3pm",
+        price: 5,
+        max_players: 12,
+        tags: ["6-a-side"],
+      }) as Parameters<typeof PATCH>[0],
+      { params: Promise.resolve({ id: "123" }) }
+    );
+
+    expect(response.status).toBe(409);
+    expect(state.updatePayload).toBeNull();
   });
 
   it("archives only past, cancelled or legacy games with the archive fields", async () => {

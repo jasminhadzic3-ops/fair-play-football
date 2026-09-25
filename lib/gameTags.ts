@@ -72,3 +72,37 @@ export function hasMatchingGameFormatTag(tags: readonly GameTag[], maxPlayers: n
 
   return taggedMaxPlayers === undefined || taggedMaxPlayers === maxPlayers;
 }
+
+export function getGameFormatTag(maxPlayers: number): GameTag | null {
+  if (maxPlayers === 12) return "6-a-side";
+  if (maxPlayers === 14) return "7-a-side";
+  if (maxPlayers === 16) return "8-a-side";
+  return null;
+}
+
+/** Keep an explicitly selected format tag aligned with capacity. */
+export function synchronizeGameFormatTag(
+  tags: readonly GameTag[],
+  maxPlayers: number
+): GameTag[] | null {
+  const expectedFormatTag = getGameFormatTag(maxPlayers);
+
+  if (!expectedFormatTag) {
+    return null;
+  }
+
+  let replacedFormat = false;
+  return tags.reduce<GameTag[]>((result, tag) => {
+    if (!isGameFormatTag(tag)) {
+      result.push(tag);
+      return result;
+    }
+
+    if (!replacedFormat) {
+      result.push(expectedFormatTag);
+      replacedFormat = true;
+    }
+
+    return result;
+  }, []);
+}

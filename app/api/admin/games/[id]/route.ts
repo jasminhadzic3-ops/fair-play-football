@@ -227,10 +227,21 @@ export async function PATCH(
       );
     }
 
-    const { data: existingGame, error: existingGameError } = await supabaseAdmin
-      .from("games").select("pricing_mode").eq("id", gameId).single();
+    const [{ data: existingGame, error: existingGameError }, { count: bookingCount, error: bookingCountError }] = await Promise.all([
+      supabaseAdmin.from("games").select("pricing_mode,max_players").eq("id", gameId).single(),
+      supabaseAdmin.from("bookings").select("id", { count: "exact", head: true }).eq("game_id", gameId),
+    ]);
     if (existingGameError || !existingGame) {
       return Response.json({ error: existingGameError?.message || "Game not found." }, { status: existingGameError ? 500 : 404 });
+    }
+    if (bookingCountError) {
+      return Response.json({ error: "Unable to verify booking capacity." }, { status: 500 });
+    }
+    if ((bookingCount ?? 0) > payload.max_players) {
+      return Response.json(
+        { error: `Capacity cannot be reduced below the ${bookingCount} confirmed booking${bookingCount === 1 ? "" : "s"}.` },
+        { status: 409 }
+      );
     }
     if (existingGame.pricing_mode !== payload.pricing_mode) {
       const [bookings, payments, wallet] = await Promise.all([

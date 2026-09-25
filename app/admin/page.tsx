@@ -16,6 +16,7 @@ import {
   MAX_GAME_TAGS,
   getGameFormatMaxPlayers,
   isGameFormatTag,
+  synchronizeGameFormatTag,
   type GameTag,
 } from "@/lib/gameTags";
 
@@ -833,6 +834,7 @@ export default function AdminPage() {
     const numericMaxPlayers = Number(maxPlayers);
     const hasStructuredKickoff = Boolean(kickoffDate && kickoffTime);
     const hasPartialKickoff = Boolean(kickoffDate || kickoffTime);
+    const synchronizedTags = synchronizeGameFormatTag(selectedTags, numericMaxPlayers);
 
     if (
       !title.trim() ||
@@ -841,7 +843,8 @@ export default function AdminPage() {
       (hasPartialKickoff && !hasStructuredKickoff) ||
       Number.isNaN(numericPrice) || (pricingMode === "paid" && numericPrice <= 0) ||
       Number.isNaN(numericMaxPlayers) ||
-      ![12, 14, 16].includes(numericMaxPlayers)
+      ![12, 14, 16].includes(numericMaxPlayers) ||
+      !synchronizedTags
     ) {
       alert("Please fill in all fields with a valid kickoff date and time. Max players must be 12 (6v6), 14 (7v7), or 16 (8v8).");
       return;
@@ -873,7 +876,7 @@ export default function AdminPage() {
         price: numericPrice,
         pricing_mode: pricingMode,
         max_players: numericMaxPlayers,
-        tags: selectedTags,
+        tags: synchronizedTags,
       };
 
       const response = await fetchWithTimeout(
@@ -916,8 +919,7 @@ export default function AdminPage() {
     setKickoffTime(formValues.kickoffTime);
     setPrice(String(game.price));
     setPricingMode(game.pricing_mode === "free" ? "free" : "paid");
-    const taggedMaxPlayers = getGameFormatMaxPlayers(game.tags ?? []);
-    setMaxPlayers(String(taggedMaxPlayers ?? game.max_players));
+    setMaxPlayers(String(game.max_players));
     setSelectedTags(game.tags ?? []);
     highlightForm();
     scrollToElement(formSectionRef.current);
@@ -2227,7 +2229,14 @@ export default function AdminPage() {
                 type="number"
                 inputMode="numeric"
                 value={maxPlayers}
-                onChange={(e) => setMaxPlayers(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setMaxPlayers(value);
+                  const synchronizedTags = synchronizeGameFormatTag(selectedTags, Number(value));
+                  if (synchronizedTags) {
+                    setSelectedTags(synchronizedTags);
+                  }
+                }}
                 className="w-full rounded-2xl border border-zinc-800 bg-black px-6 py-4 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30"
               />
             </div>
