@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   ACCELERATE_DESCRIPTIONS,
+  formatFootRating,
   POSITION_SHORT_LABELS,
   getInitials,
   type AccelerateType,
@@ -23,7 +24,8 @@ interface Booking {
     gender?: string | null;
     primary_position: string | null;
     secondary_position: string | null;
-    preferred_foot: string | null;
+    left_foot_rating: number | null;
+    right_foot_rating: number | null;
     accelerate_type: string | null;
   } | null;
 }
@@ -79,7 +81,8 @@ export default function TeamList({
       { label: "Gender", value: details.gender || "N/A" },
       { label: "Primary position", value: primaryPosition || "N/A" },
       { label: "Secondary position", value: secondaryPosition || "N/A" },
-      { label: "Preferred foot", value: details.preferred_foot || "N/A" },
+      { label: "Left foot", value: formatFootRating(details.left_foot_rating) },
+      { label: "Right foot", value: formatFootRating(details.right_foot_rating) },
       { label: "AcceleRATE Type", value: details.accelerate_type || "N/A" },
     ];
 

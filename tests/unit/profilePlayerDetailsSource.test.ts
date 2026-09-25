@@ -8,7 +8,14 @@ const teamListSource = readFileSync(join(process.cwd(), "components/games/TeamLi
 describe("profile player-details source", () => {
   it("loads and persists the optional football profile fields", () => {
     expect(profileSource).toContain("secondary_position");
-    expect(profileSource).toContain("preferred_foot");
+    expect(profileSource).toContain("left_foot_rating");
+    expect(profileSource).toContain("right_foot_rating");
+    expect(profileSource).not.toContain("preferred_foot");
+    expect(profileSource).toContain("FootRatingPicker");
+    expect(profileSource).toContain("role=\"radiogroup\"");
+    expect(profileSource).toContain("Clear");
+    expect(profileSource).toContain("★");
+    expect(profileSource).toContain("☆");
     expect(profileSource).toContain("accelerate_type");
     expect(profileSource).toContain("Save Changes");
     expect(profileSource).toContain("Add photo");
@@ -31,6 +38,8 @@ describe("profile player-details source", () => {
     expect(teamListSource).toContain('event.target === event.currentTarget');
     expect(teamListSource).toContain("aria-expanded");
     expect(teamListSource).toContain('{ label: "Age", value: details.age ?? "N/A" }');
+    expect(teamListSource).toContain('{ label: "Left foot", value: formatFootRating(details.left_foot_rating) }');
+    expect(teamListSource).toContain('{ label: "Right foot", value: formatFootRating(details.right_foot_rating) }');
     expect(teamListSource).toContain('{ label: "AcceleRATE Type", value: details.accelerate_type || "N/A" }');
     expect(teamListSource).not.toContain("selectedBookingId === booking.id ? renderPlayerDetails(booking) : null");
   });

@@ -4,14 +4,21 @@ import { describe, expect, it } from "vitest";
 import {
   ACCELERATE_DESCRIPTIONS,
   ACCELERATE_OPTIONS,
+  FOOT_RATING_VALUES,
   PLAYER_POSITION_OPTIONS,
   PREFERRED_FOOT_OPTIONS,
   isAccelerateType,
+  isFootRating,
   isPreferredFoot,
+  formatFootRating,
 } from "@/lib/playerProfile";
 
 const migration = readFileSync(
   join(process.cwd(), "supabase/migrations/20260925130000_upgrade_player_profile_fields.sql"),
+  "utf8"
+);
+const footRatingsMigration = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260925140000_add_player_foot_ratings.sql"),
   "utf8"
 );
 
@@ -34,5 +41,20 @@ describe("premium player profile fields", () => {
     expect(isPreferredFoot("Either")).toBe(false);
     expect(isAccelerateType("Mostly Lengthy")).toBe(true);
     expect(isAccelerateType("Fast")).toBe(false);
+  });
+
+  it("constrains both optional foot ratings to one through five", () => {
+    expect(FOOT_RATING_VALUES).toEqual([1, 2, 3, 4, 5]);
+    expect(footRatingsMigration).toContain("add column if not exists left_foot_rating integer");
+    expect(footRatingsMigration).toContain("add column if not exists right_foot_rating integer");
+    expect(footRatingsMigration).toContain("profiles_left_foot_rating_check");
+    expect(footRatingsMigration).toContain("profiles_right_foot_rating_check");
+    expect(isFootRating(1)).toBe(true);
+    expect(isFootRating(5)).toBe(true);
+    expect(isFootRating(0)).toBe(false);
+    expect(isFootRating(6)).toBe(false);
+    expect(isFootRating(null)).toBe(false);
+    expect(formatFootRating(3)).toBe("★★★☆☆");
+    expect(formatFootRating(null)).toBe("N/A");
   });
 });

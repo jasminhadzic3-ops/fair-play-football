@@ -23,12 +23,13 @@ describe("public booking privacy source", () => {
   it("keeps raw user ids server-side while returning only safe roster fields to signed-in viewers", () => {
     expect(files.bookingsRoute).toContain("getAuthenticatedUserId");
     expect(files.bookingsRoute).toContain("is_current_user: Boolean");
-    expect(files.bookingsRoute).toContain('select("id,username,age,gender,avatar_url,favourite_position,secondary_position,preferred_foot,accelerate_type")');
+    expect(files.bookingsRoute).toContain('select("id,username,age,gender,avatar_url,favourite_position,secondary_position,left_foot_rating,right_foot_rating,accelerate_type")');
     expect(files.bookingsRoute).not.toContain("user_id: booking.user_id");
     expect(files.bookingsRoute).not.toContain("email:");
     expect(files.bookingsRoute).not.toContain("phone:");
     expect(files.bookingsRoute).not.toContain("date_of_birth");
     expect(files.bookingsRoute).toContain("projectCurrentAge");
+    expect(files.bookingsRoute).not.toContain("preferred_foot");
   });
 
   it("renders optional roster avatars and positions without exposing placeholder profile data", () => {

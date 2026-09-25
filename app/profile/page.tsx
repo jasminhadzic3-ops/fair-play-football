@@ -15,8 +15,9 @@ import { supabase } from "@/lib/supabase";
 import {
   ACCELERATE_DESCRIPTIONS,
   ACCELERATE_OPTIONS,
+  FOOT_RATING_VALUES,
   PLAYER_POSITION_OPTIONS,
-  PREFERRED_FOOT_OPTIONS,
+  formatFootRating,
   getInitials,
 } from "@/lib/playerProfile";
 
@@ -28,7 +29,8 @@ interface Profile {
   gender: string | null;
   favourite_position: string | null;
   secondary_position: string | null;
-  preferred_foot: string | null;
+  left_foot_rating: number | null;
+  right_foot_rating: number | null;
   accelerate_type: string | null;
   avatar_url: string | null;
   terms_accepted_at?: string | null;
@@ -75,6 +77,55 @@ function getStringValue(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function FootRatingPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">{label}</p>
+      <div className="mt-2 flex items-center gap-1" role="radiogroup" aria-label={`${label} rating`}>
+        {FOOT_RATING_VALUES.map((rating) => (
+          <button
+            key={rating}
+            type="button"
+            role="radio"
+            aria-checked={value === rating}
+            aria-label={`${label} ${rating} of 5`}
+            onClick={() => onChange(rating)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+                event.preventDefault();
+                onChange(value === null ? 1 : Math.min(5, value + 1));
+              }
+              if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+                event.preventDefault();
+                onChange(value === null || value <= 1 ? null : value - 1);
+              }
+            }}
+            className="rounded-lg px-1 text-2xl leading-none text-stone-300 transition hover:scale-110 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+          >
+            {value !== null && rating <= value ? "★" : "☆"}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="ml-2 rounded-full px-3 py-1 text-[11px] font-semibold text-zinc-500 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-200/40"
+          aria-label={`Clear ${label} rating`}
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function formatNotificationDate(dateValue: string | null) {
   if (!dateValue) {
     return "";
@@ -100,7 +151,8 @@ export default function ProfilePage() {
   const [gender, setGender] = useState("");
   const [favouritePosition, setFavouritePosition] = useState("");
   const [secondaryPosition, setSecondaryPosition] = useState("");
-  const [preferredFoot, setPreferredFoot] = useState("");
+  const [leftFootRating, setLeftFootRating] = useState<number | null>(null);
+  const [rightFootRating, setRightFootRating] = useState<number | null>(null);
   const [accelerateType, setAccelerateType] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -120,7 +172,8 @@ export default function ProfilePage() {
     gender !== (profile?.gender || "") ||
     favouritePosition !== (profile?.favourite_position || "") ||
     secondaryPosition !== (profile?.secondary_position || "") ||
-    preferredFoot !== (profile?.preferred_foot || "") ||
+    leftFootRating !== (profile?.left_foot_rating ?? null) ||
+    rightFootRating !== (profile?.right_foot_rating ?? null) ||
     accelerateType !== (profile?.accelerate_type || "");
   const emailVerified = isEmailVerified(user);
   const displayName: string = profile?.username || username || (user ? getFallbackUsername(user) : "Player");
@@ -147,7 +200,8 @@ export default function ProfilePage() {
     setGender(profile?.gender || "");
     setFavouritePosition(profile?.favourite_position || "");
     setSecondaryPosition(profile?.secondary_position || "");
-    setPreferredFoot(profile?.preferred_foot || "");
+    setLeftFootRating(profile?.left_foot_rating ?? null);
+    setRightFootRating(profile?.right_foot_rating ?? null);
     setAccelerateType(profile?.accelerate_type || "");
     setIsEditingProfile(false);
     setStatusMessage(null);
@@ -307,7 +361,8 @@ export default function ProfilePage() {
       setGender("");
       setFavouritePosition("");
       setSecondaryPosition("");
-      setPreferredFoot("");
+      setLeftFootRating(null);
+      setRightFootRating(null);
       setAccelerateType("");
       setNotifications([]);
       setGamesPlayedCount(0);
@@ -320,7 +375,7 @@ export default function ProfilePage() {
 
     const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
-      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url,terms_accepted_at,terms_version")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,left_foot_rating,right_foot_rating,accelerate_type,avatar_url,terms_accepted_at,terms_version")
       .eq("id", authUser.id)
       .maybeSingle();
 
@@ -394,13 +449,6 @@ export default function ProfilePage() {
         getStringValue(userMetadata.secondaryPosition) ||
         getStringValue(userMetadata.secondary_position) ||
         null;
-      const completedPreferredFoot =
-        existingProfile?.preferred_foot ||
-        pendingProfile?.preferredFoot ||
-        pendingProfile?.preferred_foot ||
-        getStringValue(userMetadata.preferredFoot) ||
-        getStringValue(userMetadata.preferred_foot) ||
-        null;
       const completedAccelerateType =
         existingProfile?.accelerate_type ||
         pendingProfile?.accelerateType ||
@@ -429,14 +477,15 @@ export default function ProfilePage() {
           gender: completedGender,
           favourite_position: completedFavouritePosition,
           secondary_position: completedSecondaryPosition,
-          preferred_foot: completedPreferredFoot,
+          left_foot_rating: existingProfile?.left_foot_rating ?? null,
+          right_foot_rating: existingProfile?.right_foot_rating ?? null,
           accelerate_type: completedAccelerateType,
           avatar_url: existingProfile?.avatar_url ?? null,
           ...(completedTermsAcceptedAt
             ? { terms_accepted_at: completedTermsAcceptedAt, terms_version: completedTermsVersion }
             : {}),
         })
-        .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url,terms_accepted_at,terms_version")
+        .select("id,email,username,age,gender,favourite_position,secondary_position,left_foot_rating,right_foot_rating,accelerate_type,avatar_url,terms_accepted_at,terms_version")
         .single();
 
       if (completeError) {
@@ -467,7 +516,8 @@ export default function ProfilePage() {
       setGender(completedProfile.gender || "");
       setFavouritePosition(completedProfile.favourite_position || "");
       setSecondaryPosition(completedProfile.secondary_position || "");
-      setPreferredFoot(completedProfile.preferred_foot || "");
+      setLeftFootRating(completedProfile.left_foot_rating ?? null);
+      setRightFootRating(completedProfile.right_foot_rating ?? null);
       setAccelerateType(completedProfile.accelerate_type || "");
       setIsOnboarding(isOnboardingVisit);
       setNeedsPlayerDetails(isOnboardingVisit && playerDetailsMissing);
@@ -494,7 +544,8 @@ export default function ProfilePage() {
       setGender(existingProfile.gender || "");
       setFavouritePosition(existingProfile.favourite_position || "");
       setSecondaryPosition(existingProfile.secondary_position || "");
-      setPreferredFoot(existingProfile.preferred_foot || "");
+      setLeftFootRating(existingProfile.left_foot_rating ?? null);
+      setRightFootRating(existingProfile.right_foot_rating ?? null);
       setAccelerateType(existingProfile.accelerate_type || "");
       setIsOnboarding(false);
       setNeedsPlayerDetails(false);
@@ -510,7 +561,7 @@ export default function ProfilePage() {
         email: authUser.email,
         username: fallbackUsername,
       })
-      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url,terms_accepted_at,terms_version")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,left_foot_rating,right_foot_rating,accelerate_type,avatar_url,terms_accepted_at,terms_version")
       .single();
 
     if (createError) {
@@ -526,7 +577,8 @@ export default function ProfilePage() {
     setGender(newProfile.gender || "");
     setFavouritePosition(newProfile.favourite_position || "");
     setSecondaryPosition(newProfile.secondary_position || "");
-    setPreferredFoot(newProfile.preferred_foot || "");
+    setLeftFootRating(newProfile.left_foot_rating ?? null);
+    setRightFootRating(newProfile.right_foot_rating ?? null);
     setAccelerateType(newProfile.accelerate_type || "");
     setIsOnboarding(false);
     setNeedsPlayerDetails(false);
@@ -582,11 +634,12 @@ export default function ProfilePage() {
         gender: gender || null,
         favourite_position: favouritePosition || null,
         secondary_position: normalizedSecondaryPosition,
-        preferred_foot: preferredFoot || null,
+        left_foot_rating: leftFootRating,
+        right_foot_rating: rightFootRating,
         accelerate_type: accelerateType || null,
         avatar_url: profile?.avatar_url ?? null,
       })
-      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,left_foot_rating,right_foot_rating,accelerate_type,avatar_url")
       .single();
 
     if (error) {
@@ -601,7 +654,8 @@ export default function ProfilePage() {
     setGender(data.gender || "");
     setFavouritePosition(data.favourite_position || "");
     setSecondaryPosition(data.secondary_position || "");
-    setPreferredFoot(data.preferred_foot || "");
+    setLeftFootRating(data.left_foot_rating ?? null);
+    setRightFootRating(data.right_foot_rating ?? null);
     setAccelerateType(data.accelerate_type || "");
     const completedOnboarding = needsPlayerDetails && hasRequiredPlayerDetails(data);
     setNeedsPlayerDetails(false);
@@ -664,7 +718,7 @@ export default function ProfilePage() {
       .from("profiles")
       .update({ avatar_url: publicUrl })
       .eq("id", user.id)
-      .select("id,email,username,age,gender,favourite_position,secondary_position,preferred_foot,accelerate_type,avatar_url")
+      .select("id,email,username,age,gender,favourite_position,secondary_position,left_foot_rating,right_foot_rating,accelerate_type,avatar_url")
       .single();
 
     if (error) {
@@ -1011,22 +1065,12 @@ export default function ProfilePage() {
                     </select>
                   </div>
 
-                  <div>
-                    <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      Preferred foot
-                    </label>
-                    <select
-                      value={preferredFoot}
-                      onChange={(event) => setPreferredFoot(event.target.value)}
-                      className="mt-2 w-full rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4 text-white outline-none transition focus:border-white/30"
-                    >
-                      <option value="">No preference selected</option>
-                      {PREFERRED_FOOT_OPTIONS.map((foot) => (
-                        <option key={foot} value={foot}>
-                          {foot}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="rounded-3xl border border-zinc-700 bg-zinc-950 px-5 py-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Foot ability</p>
+                    <div className="mt-4 grid gap-5 sm:grid-cols-2">
+                      <FootRatingPicker label="Left foot" value={leftFootRating} onChange={setLeftFootRating} />
+                      <FootRatingPicker label="Right foot" value={rightFootRating} onChange={setRightFootRating} />
+                    </div>
                   </div>
 
                   <div>
@@ -1065,9 +1109,6 @@ export default function ProfilePage() {
                     profile?.secondary_position || secondaryPosition
                       ? { label: "Secondary position", value: profile?.secondary_position || secondaryPosition }
                       : null,
-                    profile?.preferred_foot || preferredFoot
-                      ? { label: "Preferred foot", value: profile?.preferred_foot || preferredFoot }
-                      : null,
                   ].filter((field): field is { label: string; value: string } => Boolean(field)).map((field) => (
                     <div
                       key={field.label}
@@ -1087,6 +1128,22 @@ export default function ProfilePage() {
               {statusMessage ? (
                 <div aria-live="polite" className="rounded-3xl border border-stone-300/15 bg-zinc-950 p-4 text-sm font-semibold text-stone-200">
                   {statusMessage}
+                </div>
+              ) : null}
+
+              {profile?.left_foot_rating != null || profile?.right_foot_rating != null || leftFootRating !== null || rightFootRating !== null ? (
+                <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 sm:p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Foot ability</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                      <span className="text-sm text-zinc-500">Left</span>
+                      <span className="text-lg tracking-[0.18em] text-stone-200">{formatFootRating(profile?.left_foot_rating ?? leftFootRating)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+                      <span className="text-sm text-zinc-500">Right</span>
+                      <span className="text-lg tracking-[0.18em] text-stone-200">{formatFootRating(profile?.right_foot_rating ?? rightFootRating)}</span>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 

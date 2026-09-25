@@ -15,7 +15,8 @@ type RosterProfileRow = {
   avatar_url: string | null;
   favourite_position: string | null;
   secondary_position: string | null;
-  preferred_foot: string | null;
+  left_foot_rating: number | null;
+  right_foot_rating: number | null;
   accelerate_type: string | null;
 };
 
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
     if (bookedUserIds.length > 0) {
       const { data: profiles, error: profilesError } = await supabaseAdmin
         .from("profiles")
-        .select("id,username,age,gender,avatar_url,favourite_position,secondary_position,preferred_foot,accelerate_type")
+        .select("id,username,age,gender,avatar_url,favourite_position,secondary_position,left_foot_rating,right_foot_rating,accelerate_type")
         .in("id", bookedUserIds);
 
       if (profilesError) {
@@ -114,7 +115,8 @@ export async function GET(request: Request) {
                         : {}),
                       primary_position: rosterProfileByUserId.get(booking.user_id)?.favourite_position ?? null,
                       secondary_position: rosterProfileByUserId.get(booking.user_id)?.secondary_position ?? null,
-                      preferred_foot: rosterProfileByUserId.get(booking.user_id)?.preferred_foot ?? null,
+                      left_foot_rating: rosterProfileByUserId.get(booking.user_id)?.left_foot_rating ?? null,
+                      right_foot_rating: rosterProfileByUserId.get(booking.user_id)?.right_foot_rating ?? null,
                       accelerate_type: rosterProfileByUserId.get(booking.user_id)?.accelerate_type ?? null,
                     },
                   }

@@ -8,6 +8,7 @@ export const PLAYER_POSITION_OPTIONS = [
 ] as const;
 
 export const PREFERRED_FOOT_OPTIONS = ["Left", "Right", "Both"] as const;
+export const FOOT_RATING_VALUES = [1, 2, 3, 4, 5] as const;
 
 export const ACCELERATE_OPTIONS = [
   "Explosive",
@@ -21,6 +22,7 @@ export const ACCELERATE_OPTIONS = [
 
 export type PlayerPosition = (typeof PLAYER_POSITION_OPTIONS)[number];
 export type PreferredFoot = (typeof PREFERRED_FOOT_OPTIONS)[number];
+export type FootRating = (typeof FOOT_RATING_VALUES)[number];
 export type AccelerateType = (typeof ACCELERATE_OPTIONS)[number];
 
 export const ACCELERATE_DESCRIPTIONS: Record<AccelerateType, string> = {
@@ -58,6 +60,14 @@ export function isPlayerPosition(value: string): value is PlayerPosition {
 
 export function isPreferredFoot(value: string): value is PreferredFoot {
   return (PREFERRED_FOOT_OPTIONS as readonly string[]).includes(value);
+}
+
+export function isFootRating(value: number | null | undefined): value is FootRating {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5;
+}
+
+export function formatFootRating(value: number | null | undefined) {
+  return isFootRating(value) ? `${"★".repeat(value)}${"☆".repeat(5 - value)}` : "N/A";
 }
 
 export function isAccelerateType(value: string): value is AccelerateType {

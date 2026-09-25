@@ -29,6 +29,8 @@ type ProfileRow = {
   gender: string | null;
   avatar_url: string | null;
   favourite_position: string | null;
+  left_foot_rating?: number | null;
+  right_foot_rating?: number | null;
 };
 
 const state: {
@@ -108,8 +110,8 @@ beforeEach(() => {
     },
   ];
   state.profiles = [
-    { id: "user-1", age: "28", gender: "Female", avatar_url: "https://example.com/current-player.jpg", favourite_position: "Midfielder" },
-    { id: "user-2", age: "31", gender: "Male", avatar_url: null, favourite_position: "Defender" },
+    { id: "user-1", age: "28", gender: "Female", avatar_url: "https://example.com/current-player.jpg", favourite_position: "Midfielder", left_foot_rating: 3, right_foot_rating: 5 },
+    { id: "user-2", age: "31", gender: "Male", avatar_url: null, favourite_position: "Defender", left_foot_rating: null, right_foot_rating: 4 },
     { id: "user-3", age: null, gender: null, avatar_url: "https://example.com/different-game.jpg", favourite_position: "Forward" },
     { id: "user-4", age: null, gender: null, avatar_url: null, favourite_position: null },
   ];
@@ -142,7 +144,8 @@ describe("public bookings route", () => {
           gender: "Female",
           primary_position: "Midfielder",
           secondary_position: null,
-          preferred_foot: null,
+          left_foot_rating: 3,
+          right_foot_rating: 5,
           accelerate_type: null,
         },
       },
@@ -160,7 +163,8 @@ describe("public bookings route", () => {
           gender: "Male",
           primary_position: "Defender",
           secondary_position: null,
-          preferred_foot: null,
+          left_foot_rating: null,
+          right_foot_rating: 4,
           accelerate_type: null,
         },
       },
@@ -176,7 +180,8 @@ describe("public bookings route", () => {
           avatar_url: "https://example.com/different-game.jpg",
           primary_position: "Forward",
           secondary_position: null,
-          preferred_foot: null,
+          left_foot_rating: null,
+          right_foot_rating: null,
           accelerate_type: null,
         },
       },
@@ -192,7 +197,8 @@ describe("public bookings route", () => {
           avatar_url: null,
           primary_position: null,
           secondary_position: null,
-          preferred_foot: null,
+          left_foot_rating: null,
+          right_foot_rating: null,
           accelerate_type: null,
         },
       },
