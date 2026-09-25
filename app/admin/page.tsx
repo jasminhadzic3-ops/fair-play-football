@@ -11,7 +11,13 @@ import {
   isValidAdminMoveDestination,
 } from "@/lib/adminGameSafety";
 import { supabase } from "@/lib/supabase";
-import { GAME_TAG_OPTIONS, MAX_GAME_TAGS, type GameTag } from "@/lib/gameTags";
+import {
+  GAME_TAG_OPTIONS,
+  MAX_GAME_TAGS,
+  getGameFormatMaxPlayers,
+  isGameFormatTag,
+  type GameTag,
+} from "@/lib/gameTags";
 
 interface Game {
   id: number;
@@ -773,6 +779,24 @@ export default function AdminPage() {
     }
   };
 
+  const toggleGameTag = (tag: GameTag) => {
+    const nextTags = selectedTags.includes(tag)
+      ? selectedTags.filter((currentTag) => currentTag !== tag)
+      : [
+          ...(isGameFormatTag(tag)
+            ? selectedTags.filter((currentTag) => !isGameFormatTag(currentTag))
+            : selectedTags),
+          tag,
+        ];
+    const taggedMaxPlayers = getGameFormatMaxPlayers(nextTags);
+
+    if (taggedMaxPlayers) {
+      setMaxPlayers(String(taggedMaxPlayers));
+    }
+
+    setSelectedTags(nextTags);
+  };
+
   const readApiError = async (response: Response) => {
     const result = await response.json().catch(() => null);
     return result?.error || "Unable to save game.";
@@ -892,7 +916,8 @@ export default function AdminPage() {
     setKickoffTime(formValues.kickoffTime);
     setPrice(String(game.price));
     setPricingMode(game.pricing_mode === "free" ? "free" : "paid");
-    setMaxPlayers(String(game.max_players));
+    const taggedMaxPlayers = getGameFormatMaxPlayers(game.tags ?? []);
+    setMaxPlayers(String(taggedMaxPlayers ?? game.max_players));
     setSelectedTags(game.tags ?? []);
     highlightForm();
     scrollToElement(formSectionRef.current);
@@ -2226,13 +2251,7 @@ export default function AdminPage() {
                       type="button"
                       aria-pressed={isSelected}
                       disabled={isDisabled}
-                      onClick={() =>
-                        setSelectedTags((currentTags) =>
-                          currentTags.includes(tag)
-                            ? currentTags.filter((currentTag) => currentTag !== tag)
-                            : [...currentTags, tag]
-                        )
-                      }
+                      onClick={() => toggleGameTag(tag)}
                       className={`rounded-full border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-stone-300/50 disabled:cursor-not-allowed disabled:opacity-35 ${
                         isSelected
                           ? "border-stone-200/40 bg-stone-200 text-zinc-950"

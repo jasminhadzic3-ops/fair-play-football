@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuthenticatedAdminUser } from "@/lib/adminAuth";
 import { sendNewGamePostedEmails } from "@/lib/email/newGamePosted";
 import { parseLondonKickoff } from "@/lib/londonKickoff";
-import { parseGameTags } from "@/lib/gameTags";
+import { hasMatchingGameFormatTag, parseGameTags } from "@/lib/gameTags";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type GamePayload = {
@@ -32,7 +32,8 @@ function parseGamePayload(body: GamePayload | null) {
     !pricingMode || Number.isNaN(price) || (pricingMode === "paid" && price <= 0) ||
     Number.isNaN(maxPlayers) ||
     ![12, 14, 16].includes(maxPlayers) ||
-    !tags
+    !tags ||
+    !hasMatchingGameFormatTag(tags, maxPlayers)
   ) {
     return null;
   }

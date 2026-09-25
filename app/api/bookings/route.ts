@@ -44,18 +44,10 @@ export async function GET(request: Request) {
     }
 
     const bookingRows = (bookings ?? []) as BookingRow[];
-    const currentUserGameIds = new Set(
-      currentUserId
-        ? bookingRows
-            .filter((booking) => booking.user_id === currentUserId)
-            .map((booking) => booking.game_id)
-        : []
-    );
     const bookedUserIds = currentUserId
       ? Array.from(
           new Set(
             bookingRows
-              .filter((booking) => currentUserGameIds.has(booking.game_id))
               .map((booking) => booking.user_id)
               .filter((userId): userId is string => Boolean(userId))
           )
@@ -85,7 +77,7 @@ export async function GET(request: Request) {
         game_id: booking.game_id,
         player_name: booking.player_name,
         is_current_user: Boolean(currentUserId && booking.user_id === currentUserId),
-        ...(currentUserId && currentUserGameIds.has(booking.game_id)
+        ...(currentUserId
           ? {
               avatar_url: booking.user_id
                 ? rosterProfileByUserId.get(booking.user_id)?.avatar_url ?? null

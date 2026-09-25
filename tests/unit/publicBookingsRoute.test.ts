@@ -98,16 +98,23 @@ beforeEach(() => {
       player_name: "Different Game Player",
       user_id: "user-3",
     },
+    {
+      id: 103,
+      game_id: 20,
+      player_name: "Player Without Profile Details",
+      user_id: "user-4",
+    },
   ];
   state.profiles = [
     { id: "user-1", avatar_url: "https://example.com/current-player.jpg", favourite_position: "Midfielder" },
     { id: "user-2", avatar_url: null, favourite_position: "Defender" },
     { id: "user-3", avatar_url: "https://example.com/different-game.jpg", favourite_position: "Forward" },
+    { id: "user-4", avatar_url: null, favourite_position: null },
   ];
 });
 
 describe("public bookings route", () => {
-  it("exposes roster-safe profile details only for games the authenticated player joined", async () => {
+  it("exposes roster-safe profile details to any authenticated game viewer", async () => {
     const response = await GET(
       new Request("http://localhost/api/bookings", {
         headers: {
@@ -140,12 +147,24 @@ describe("public bookings route", () => {
         game_id: 20,
         player_name: "Different Game Player",
         is_current_user: false,
+        avatar_url: "https://example.com/different-game.jpg",
+        favourite_position: "Forward",
+      },
+      {
+        id: 103,
+        game_id: 20,
+        player_name: "Player Without Profile Details",
+        is_current_user: false,
+        avatar_url: null,
+        favourite_position: null,
       },
     ]);
     expect(JSON.stringify(body)).not.toContain("user-1");
     expect(JSON.stringify(body)).not.toContain("user-2");
-    expect(JSON.stringify(body)).not.toContain("different-game.jpg");
-    expect(JSON.stringify(body)).not.toContain("Forward");
+    expect(JSON.stringify(body)).not.toContain("user-3");
+    expect(JSON.stringify(body)).not.toContain("user-4");
+    expect(JSON.stringify(body)).not.toContain("email");
+    expect(JSON.stringify(body)).not.toContain("phone");
   });
 
   it("marks every booking as not current user for signed-out requests", async () => {
@@ -157,13 +176,14 @@ describe("public bookings route", () => {
       expect.objectContaining({ id: 100, is_current_user: false }),
       expect.objectContaining({ id: 101, is_current_user: false }),
       expect.objectContaining({ id: 102, is_current_user: false }),
+      expect.objectContaining({ id: 103, is_current_user: false }),
     ]);
     expect(JSON.stringify(body)).not.toContain("avatar_url");
     expect(JSON.stringify(body)).not.toContain("favourite_position");
     expect(getUserMock).not.toHaveBeenCalled();
   });
 
-  it("does not expose profile details to an authenticated player outside the game", async () => {
+  it("exposes only safe roster fields to an authenticated player who has not booked a game", async () => {
     getUserMock.mockResolvedValueOnce({
       data: { user: { id: "spectator-user" } },
       error: null,
@@ -177,8 +197,34 @@ describe("public bookings route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(JSON.stringify(body)).not.toContain("avatar_url");
-    expect(JSON.stringify(body)).not.toContain("favourite_position");
-    expect(supabaseFromMock).not.toHaveBeenCalledWith("profiles");
+    expect(body.bookings).toEqual([
+      expect.objectContaining({
+        id: 100,
+        avatar_url: "https://example.com/current-player.jpg",
+        favourite_position: "Midfielder",
+      }),
+      expect.objectContaining({
+        id: 101,
+        avatar_url: null,
+        favourite_position: "Defender",
+      }),
+      expect.objectContaining({
+        id: 102,
+        avatar_url: "https://example.com/different-game.jpg",
+        favourite_position: "Forward",
+      }),
+      expect.objectContaining({
+        id: 103,
+        avatar_url: null,
+        favourite_position: null,
+      }),
+    ]);
+    expect(JSON.stringify(body)).not.toContain("user-1");
+    expect(JSON.stringify(body)).not.toContain("user-2");
+    expect(JSON.stringify(body)).not.toContain("user-3");
+    expect(JSON.stringify(body)).not.toContain("user-4");
+    expect(JSON.stringify(body)).not.toContain("email");
+    expect(JSON.stringify(body)).not.toContain("phone");
+    expect(supabaseFromMock).toHaveBeenCalledWith("profiles");
   });
 });

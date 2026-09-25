@@ -75,7 +75,7 @@ function adminRequest(body: unknown) {
       Authorization: "Bearer token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ pricing_mode: "paid", ...(body as Record<string, unknown>) }),
   });
 }
 
@@ -126,6 +126,43 @@ describe("admin game structured kickoff handling", () => {
 
     expect(response.status).toBe(400);
     expect(state.insertPayload).toBeNull();
+  });
+
+  it("rejects an a-side tag that disagrees with the configured capacity", async () => {
+    const response = await POST(
+      adminRequest({
+        title: "Mismatched format",
+        location: "London",
+        kickoff_date: "2026-07-15",
+        kickoff_time: "20:30",
+        price: 5,
+        max_players: 14,
+        tags: ["8-a-side"],
+      }) as Parameters<typeof POST>[0]
+    );
+
+    expect(response.status).toBe(400);
+    expect(state.insertPayload).toBeNull();
+  });
+
+  it("accepts an 8-a-side game with its 16-player capacity", async () => {
+    const response = await POST(
+      adminRequest({
+        title: "Eight-a-side",
+        location: "London",
+        kickoff_date: "2026-07-15",
+        kickoff_time: "20:30",
+        price: 5,
+        max_players: 16,
+        tags: ["8-a-side"],
+      }) as Parameters<typeof POST>[0]
+    );
+
+    expect(response.status).toBe(201);
+    expect(state.insertPayload).toMatchObject({
+      max_players: 16,
+      tags: ["8-a-side"],
+    });
   });
 
   it("updates games with a new structured kickoff when provided", async () => {

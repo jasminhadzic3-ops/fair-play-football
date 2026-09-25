@@ -21,6 +21,12 @@ export const MAX_GAME_TAGS = 5;
 
 export type GameTag = (typeof GAME_TAG_OPTIONS)[number];
 
+const gameFormatTagMaxPlayers: Partial<Record<GameTag, number>> = {
+  "6-a-side": 12,
+  "7-a-side": 14,
+  "8-a-side": 16,
+};
+
 const gameTagSet = new Set<string>(GAME_TAG_OPTIONS);
 
 export function parseGameTags(value: unknown): GameTag[] | null {
@@ -41,4 +47,28 @@ export function parseGameTags(value: unknown): GameTag[] | null {
 
 export function getGameTags(value: unknown): GameTag[] {
   return parseGameTags(value) ?? [];
+}
+
+export function isGameFormatTag(tag: GameTag): boolean {
+  return tag in gameFormatTagMaxPlayers;
+}
+
+export function getGameFormatMaxPlayers(tags: readonly GameTag[]): number | null | undefined {
+  const selectedFormats = tags.filter(isGameFormatTag);
+
+  if (selectedFormats.length === 0) {
+    return undefined;
+  }
+
+  if (selectedFormats.length > 1) {
+    return null;
+  }
+
+  return gameFormatTagMaxPlayers[selectedFormats[0]];
+}
+
+export function hasMatchingGameFormatTag(tags: readonly GameTag[], maxPlayers: number): boolean {
+  const taggedMaxPlayers = getGameFormatMaxPlayers(tags);
+
+  return taggedMaxPlayers === undefined || taggedMaxPlayers === maxPlayers;
 }
