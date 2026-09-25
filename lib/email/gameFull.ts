@@ -7,14 +7,15 @@ import { sendEmailWithDeliveryTracking } from "./deliveryTracking";
 import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
+  formatGameType,
+  getCommunityEmailText,
+  getFirstName,
   formatEmailGameDateTime,
   formatPrice,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
   renderPremiumInfoCard,
 } from "./shared";
-
-const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/JAGpOaEd8jf2njevCRK7JE?mode=gi_t";
 
 type GameFullEmailParams = { gameId: number };
 
@@ -49,7 +50,7 @@ function hashRecipientKey(value: string) {
 }
 
 function getGreetingName(playerName: string) {
-  return playerName.trim().split(/\s+/)[0] || "Player";
+  return getFirstName(playerName);
 }
 
 async function getRecipients(bookings: BookingRow[]): Promise<EmailRecipient[]> {
@@ -129,7 +130,7 @@ export async function sendGameFullEmails({ gameId }: GameFullEmailParams) {
   const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
   const venue = game.location || "TBD";
   const gameName = game.title || "Fair Play Football game";
-  const gameType = (game.tags ?? []).join(", ") || "Fair Play Football";
+  const gameType = formatGameType(game.tags) || "Fair Play Football";
   const isFreeGame = game.pricing_mode === "free";
   const price = isFreeGame ? "FREE" : formatPrice(game.price, "GBP");
   const subject = `Game On — ${venue}, ${kickoff.time}`;
@@ -162,10 +163,7 @@ export async function sendGameFullEmails({ gameId }: GameFullEmailParams) {
       "• No metal studs — astro trainers or moulded boots only.",
       "• Keep everyone involved in the game.",
       "",
-      "STAY IN THE LOOP",
-      "The game is full. Join the Fair Play WhatsApp group for upcoming games, availability and community updates.",
-      "",
-      `Join the WhatsApp group: ${WHATSAPP_GROUP_URL}`,
+      ...getCommunityEmailText(),
       "",
       "Thanks for playing with Fair Play. See you on the pitch.",
       "",
@@ -176,9 +174,8 @@ export async function sendGameFullEmails({ gameId }: GameFullEmailParams) {
     const html = renderPremiumEmailLayout({
       previewText: "Your game is full and confirmed. Please arrive 10–15 minutes early.",
       title: "GAME ON",
-      ctaHref: WHATSAPP_GROUP_URL,
-      ctaLabel: "Join the WhatsApp group",
       footerText: "Thanks for playing with Fair Play. See you on the pitch.",
+      includeCommunityBlocks: true,
       introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">Hi ${escapeHtml(greetingName)},</p>
         ${renderEmailParagraphs([
@@ -194,10 +191,6 @@ export async function sendGameFullEmails({ gameId }: GameFullEmailParams) {
           <li>No metal studs — astro trainers or moulded boots only.</li>
           <li>Keep everyone involved in the game.</li>
         </ul>
-        <p style="margin:22px 0 10px;color:#d6d3d1;font-size:12px;line-height:18px;font-weight:800;letter-spacing:0.22em;">STAY IN THE LOOP</p>
-        ${renderEmailParagraphs([
-          "The game is full. Join the Fair Play WhatsApp group for upcoming games, availability and community updates.",
-        ])}
       `,
       cardHtml: renderPremiumInfoCard("Game Details", [
         { label: "Game", value: gameName },

@@ -1,14 +1,15 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getWalletBalanceBreakdown } from "@/lib/wallet";
 import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
   formatPrice,
+  getFirstName as resolveFirstName,
   getSiteUrl,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
-  renderPremiumGameDetailsCard,
   renderPremiumInfoCard,
 } from "./shared";
 
@@ -54,7 +55,7 @@ const londonTimeFormatter = new Intl.DateTimeFormat("en-GB", {
 });
 
 function getFirstName(playerName: string | null | undefined) {
-  return playerName?.trim().split(/\s+/)[0] || "Player";
+  return resolveFirstName(playerName);
 }
 
 function getKickoffDetails(game: GameEmailData) {
@@ -90,7 +91,7 @@ function getOutcomeCopy(
   switch (outcome) {
     case "wallet_restored":
       return {
-        subject: "Credit Added To Your Wallet",
+        subject: "Wallet Credit Added",
         heading: "Credit Added To Your Wallet",
         previewText: `${amount} has been added to your Fair Play Wallet.`,
         paragraphs: [
@@ -104,26 +105,25 @@ function getOutcomeCopy(
       };
     case "no_refund_within_24h":
       return {
-        subject: `Booking Cancelled: ${gameTitle}`,
-        heading: "Booking Cancelled",
-        previewText: "Your booking has been cancelled. No wallet credit is available within 24 hours of kick-off.",
+        subject: "Booking Cancelled Within 24 Hours",
+        heading: "Cancellation Policy",
+        previewText: `Your booking for ${gameTitle} has been cancelled.`,
         paragraphs: [
           `Your booking for ${gameTitle} has been cancelled.`,
-          "No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.",
+          "Because you cancelled your booking within 24 hours of kick-off, you are not eligible for a wallet credit or refund in accordance with the Fair Play Football Cancellation Policy.",
         ],
         exactParagraphs: [
           `Your booking for ${gameTitle} has been cancelled.`,
-          "No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.",
+          "Because you cancelled your booking within 24 hours of kick-off, you are not eligible for a wallet credit or refund in accordance with the Fair Play Football Cancellation Policy.",
         ],
         reason: null,
-        ctaLabel: "View Wallet",
+        ctaLabel: "View Cancellation Policy",
       };
   }
 }
 
 export async function sendPlayerBookingCancelledEmail({
   cancellationId,
-  bookingId,
   gameId,
   userId,
   outcome,
@@ -174,44 +174,105 @@ export async function sendPlayerBookingCancelledEmail({
   const formattedAmount = amount === null ? null : formatPrice(amount, currency || "GBP");
   const outcomeCopy = getOutcomeCopy(outcome, formattedAmount, gameTitle);
   const walletUrl = `${getSiteUrl()}/wallet`;
+  const cancellationPolicyUrl = `${getSiteUrl()}/#about`;
   const idempotencyKey = `player_booking_cancelled:cancellation:${cancellationId}:outcome:${outcome}`;
+  const walletBalanceBreakdown = outcome === "wallet_restored"
+    ? await getWalletBalanceBreakdown({ userId, currency: currency || "GBP" })
+    : null;
+  const walletBalance = walletBalanceBreakdown
+    ? formatPrice(walletBalanceBreakdown.availableBalance, currency || "GBP")
+    : null;
 
-  const text = [
+  const text = outcome === "wallet_restored" ? [
     `Hi ${playerName},`,
     "",
-    ...(outcomeCopy.exactParagraphs ?? outcomeCopy.paragraphs).flatMap((paragraph) => [paragraph, ""]),
-    outcomeCopy.reason ? "Reason" : null,
-    outcomeCopy.reason,
+    `We've added ${formattedAmount || "Credit"} to your Fair Play Wallet.`,
     "",
-    outcomeCopy.reason ? null : "Game Details",
-    outcomeCopy.reason ? null : `📅 ${kickoff.date}`,
-    outcomeCopy.reason ? null : `🕒 ${kickoff.time}`,
-    outcomeCopy.reason ? null : `📍 ${gameLocation}`,
-    `Booking ID: ${bookingId}`,
+    "You can use your wallet credit to book another game at any time.",
     "",
-    `${outcomeCopy.ctaLabel}: ${walletUrl}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+    "If you'd prefer a refund to your original payment method, you can request one directly from your wallet.",
+    "",
+    "Wallet Credit",
+    `Amount\n${formattedAmount || "Credit"}`,
+    "Reason\nPlayer cancellation",
+    `Available Balance\n${walletBalance || ""}`,
+    "",
+    `Open Wallet: ${walletUrl}`,
+    "",
+    "Thank you for being part of Fair Play Football.",
+    "",
+    "If you have any questions, we're always happy to help.",
+    "",
+    "booking@fairplayfootball.co.uk",
+    "© Fair Play Football",
+  ].join("\n") : [
+    `Hi ${playerName},`,
+    "",
+    `Your booking for ${gameTitle} has been cancelled.`,
+    "",
+    "Because you cancelled your booking within 24 hours of kick-off, you are not eligible for a wallet credit or refund in accordance with the Fair Play Football Cancellation Policy.",
+    "",
+    "Cancellation Details",
+    `Game\n${gameTitle}`,
+    `Date\n${kickoff.date}`,
+    `Kick-off\n${kickoff.time}`,
+    `Venue\n${gameLocation}`,
+    "Status\nNot Eligible for Refund",
+    "",
+    `View Cancellation Policy: ${cancellationPolicyUrl}`,
+    "",
+    "We hope to see you at another Fair Play Football game soon.",
+    "",
+    "If you have any questions, we're always happy to help.",
+    "",
+    "booking@fairplayfootball.co.uk",
+    "© Fair Play Football",
+  ].join("\n");
 
   const html = renderPremiumEmailLayout({
-    previewText: outcomeCopy.previewText,
-    title: outcomeCopy.heading,
-    ctaHref: walletUrl,
-    ctaLabel: outcomeCopy.ctaLabel,
+    previewText: outcome === "wallet_restored"
+      ? `We've added ${formattedAmount || "Credit"} to your Fair Play Wallet.`
+      : outcomeCopy.previewText,
+    title: outcome === "wallet_restored" ? "Wallet Credit Added" : outcomeCopy.heading,
+    ctaHref: outcome === "wallet_restored" ? walletUrl : cancellationPolicyUrl,
+    ctaLabel: outcome === "wallet_restored" ? "Open Wallet" : outcomeCopy.ctaLabel,
+    footerText: outcome === "wallet_restored"
+      ? "Thank you for being part of Fair Play Football. If you have any questions, we're always happy to help."
+      : "We hope to see you at another Fair Play Football game soon. If you have any questions, we're always happy to help.",
     introHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(playerName)},
       </p>
-      ${renderEmailParagraphs(outcomeCopy.exactParagraphs ?? outcomeCopy.paragraphs)}
+      ${outcome === "wallet_restored" ? `
+        <p style="margin:0 0 16px;color:#d4d4d8;font-size:16px;line-height:25px;">
+          We've added <strong>${escapeHtml(formattedAmount || "Credit")}</strong> to your Fair Play Wallet.
+        </p>
+        ${renderEmailParagraphs([
+          "You can use your wallet credit to book another game at any time.",
+          "If you'd prefer a refund to your original payment method, you can request one directly from your wallet.",
+        ])}
+      ` : `
+        <p style="margin:0 0 16px;color:#d4d4d8;font-size:16px;line-height:25px;">
+          Your booking for <strong>${escapeHtml(gameTitle)}</strong> has been cancelled.
+        </p>
+        ${renderEmailParagraphs([
+          "Because you cancelled your booking within 24 hours of kick-off, you are not eligible for a wallet credit or refund in accordance with the Fair Play Football Cancellation Policy.",
+        ])}
+      `}
     `,
-    cardHtml: outcomeCopy.reason
-      ? renderPremiumInfoCard("Reason", [{ value: outcomeCopy.reason }])
-      : renderPremiumGameDetailsCard({
-          date: kickoff.date,
-          time: kickoff.time,
-          venue: gameLocation,
-        }),
+    cardHtml: outcome === "wallet_restored"
+      ? renderPremiumInfoCard("Wallet Credit", [
+          { label: "Amount", value: formattedAmount || "Credit" },
+          { label: "Reason", value: "Player cancellation" },
+          { label: "Available Balance", value: walletBalance || "" },
+        ])
+      : renderPremiumInfoCard("Cancellation Details", [
+          { label: "Game", value: gameTitle },
+          { label: "Date", value: kickoff.date },
+          { label: "Kick-off", value: kickoff.time },
+          { label: "Venue", value: gameLocation },
+          { label: "Status", value: "Not Eligible for Refund" },
+        ]),
   });
 
   return sendResendEmail({

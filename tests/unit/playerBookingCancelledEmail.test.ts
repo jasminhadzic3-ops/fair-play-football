@@ -19,6 +19,14 @@ vi.mock("@/lib/email/resend", () => ({
   sendResendEmail: sendResendEmailMock,
 }));
 
+vi.mock("@/lib/wallet", () => ({
+  getWalletBalanceBreakdown: vi.fn().mockResolvedValue({
+    completedBalance: 24,
+    reservedRefundAmount: 0,
+    availableBalance: 24,
+  }),
+}));
+
 import {
   sendPlayerBookingCancelledEmail,
   type PlayerBookingCancellationEmailOutcome,
@@ -134,15 +142,15 @@ describe("sendPlayerBookingCancelledEmail", () => {
     const email = await sendForOutcome("wallet_restored");
 
     expect(email.to).toBe("profile@example.com");
-    expect(email.subject).toBe("Credit Added To Your Wallet");
+    expect(email.subject).toBe("Wallet Credit Added");
     expect(email.text).toContain("Hi Jasmin,");
-    expect(email.text).toContain("£8.00 has been added to your Fair Play Wallet.");
+    expect(email.text).toContain("We've added £8.00 to your Fair Play Wallet.");
     expect(email.text).toContain("Reason");
     expect(email.text).toContain("Player cancellation");
-    expect(email.text).toContain("View Wallet: https://www.fairplayfootball.co.uk/wallet");
-    expect(email.html).toContain("Credit Added To Your Wallet");
+    expect(email.text).toContain("Open Wallet: https://www.fairplayfootball.co.uk/wallet");
+    expect(email.html).toContain("Wallet Credit");
     expect(email.html).toContain("Player cancellation");
-    expect(email.html).toContain("View Wallet");
+    expect(email.html).toContain("Open Wallet");
     expect(email.html).toContain("booking@fairplayfootball.co.uk");
     expect(email.idempotencyKey).toBe("player_booking_cancelled:cancellation:600:outcome:wallet_restored");
   });
@@ -151,16 +159,16 @@ describe("sendPlayerBookingCancelledEmail", () => {
     const email = await sendForOutcome("no_refund_within_24h");
 
     expect(email.to).toBe("profile@example.com");
-    expect(email.subject).toBe("Booking Cancelled: Thursday Football");
+    expect(email.subject).toBe("Booking Cancelled Within 24 Hours");
     expect(email.text).toContain("Hi Jasmin,");
     expect(email.text).toContain("Your booking for Thursday Football has been cancelled.");
-    expect(email.text).toContain("No wallet credit or refund is available because the booking was cancelled within 24 hours of kick-off.");
-    expect(email.text).toContain("📅 Thursday, 30 July");
-    expect(email.text).toContain("🕒 19:00");
-    expect(email.text).toContain("📍 Whittington Park");
-    expect(email.text).toContain("View Wallet: https://www.fairplayfootball.co.uk/wallet");
-    expect(email.html).toContain("Booking Cancelled");
-    expect(email.html).toContain("View Wallet");
+    expect(email.text).toContain("Because you cancelled your booking within 24 hours of kick-off, you are not eligible for a wallet credit or refund in accordance with the Fair Play Football Cancellation Policy.");
+    expect(email.text).toContain("Date\nThursday, 30 July");
+    expect(email.text).toContain("Kick-off\n19:00");
+    expect(email.text).toContain("Venue\nWhittington Park");
+    expect(email.text).toContain("View Cancellation Policy: https://www.fairplayfootball.co.uk/#about");
+    expect(email.html).toContain("Cancellation Policy");
+    expect(email.html).toContain("View Cancellation Policy");
     expect(email.idempotencyKey).toBe("player_booking_cancelled:cancellation:600:outcome:no_refund_within_24h");
   });
 
@@ -185,7 +193,7 @@ describe("sendPlayerBookingCancelledEmail", () => {
     const email = await sendForOutcome("no_refund_within_24h", null);
 
     expect(email.to).toBe("auth@example.com");
-    expect(email.text).toContain("Hi Player,");
+    expect(email.text).toContain("Hi there,");
     expect(email.text).not.toContain("Refund amount:");
   });
 
@@ -195,7 +203,7 @@ describe("sendPlayerBookingCancelledEmail", () => {
 
     const email = await sendForOutcome("no_refund_within_24h");
 
-    expect(email.text).toContain("📅 Friday 7pm");
-    expect(email.text).toContain("🕒 Friday 7pm");
+    expect(email.text).toContain("Date\nFriday 7pm");
+    expect(email.text).toContain("Kick-off\nFriday 7pm");
   });
 });

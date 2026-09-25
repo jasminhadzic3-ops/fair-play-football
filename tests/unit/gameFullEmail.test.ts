@@ -69,8 +69,14 @@ describe("sendGameFullEmails", () => {
     const email = sendResendEmailMock.mock.calls[0][0] as { subject: string; text: string; html: string };
     expect(email.subject).toBe("Game On — Whittington Park, Archway, 5:00 PM");
     expect(email.text).toContain("Price\n£5.00");
+    expect(email.text).toContain("Game Type\n8v8");
     expect(email.text).toContain("MATCH REMINDERS");
+    expect(email.text).toContain("Hi One,");
+    expect(email.text).toContain("STAY IN THE LOOP");
+    expect(email.text).toContain("FAIR PLAY REWARDS");
+    expect(email.text).toContain("Play 5 games. Get your 6th free.");
     expect(email.html).toContain("Join the WhatsApp group");
+    expect(email.html).toContain("View Rewards");
     expect(email.html).toContain("https://chat.whatsapp.com/JAGpOaEd8jf2njevCRK7JE?mode=gi_t");
   });
 

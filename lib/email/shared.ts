@@ -8,6 +8,7 @@ type PremiumEmailLayoutParams = {
   ctaHref?: string;
   ctaLabel?: string;
   footerText?: string;
+  includeCommunityBlocks?: boolean;
 };
 
 type EmailCardItem = {
@@ -23,6 +24,68 @@ export function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+export function getFirstName(value: string | null | undefined) {
+  const normalized = value?.trim() || "";
+  const firstName = normalized.split(/\s+/)[0] || "";
+
+  return firstName && firstName.toLowerCase() !== "player" ? firstName : "there";
+}
+
+export function formatGameType(tags: readonly string[] | null | undefined) {
+  const formatTag = tags?.find((tag) => tag === "6-a-side" || tag === "7-a-side" || tag === "8-a-side");
+  const formatLabels: Record<string, string> = {
+    "6-a-side": "6v6",
+    "7-a-side": "7v7",
+    "8-a-side": "8v8",
+  };
+
+  return formatTag ? formatLabels[formatTag] : (tags ?? []).join(", ");
+}
+
+export const FAIR_PLAY_WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/JAGpOaEd8jf2njevCRK7JE?mode=gi_t";
+
+export function getCommunityEmailText() {
+  return [
+    "STAY IN THE LOOP",
+    "Join the Fair Play WhatsApp group for upcoming games, availability and community updates.",
+    "Join the WhatsApp group: https://chat.whatsapp.com/JAGpOaEd8jf2njevCRK7JE?mode=gi_t",
+    "",
+    "FAIR PLAY REWARDS",
+    "Play 5 games. Get your 6th free.",
+    "Complete five qualifying paid Fair Play games and receive £5 credit towards your next game.",
+    "£5 for you. £5 for them.",
+    "Invite a new player with your referral code and you’ll both receive £5 Fair Play credit. Their £5 unlocks after their first qualifying paid game.",
+    `View Rewards: ${getSiteUrl()}/rewards`,
+  ];
+}
+
+function renderCommunityBlock(title: string, copy: string, ctaHref: string, ctaLabel: string) {
+  return `
+    <div style="margin-top:26px;border:1px solid #27272a;background:#111113;border-radius:26px;padding:20px;">
+      <p style="margin:0 0 10px;font-size:11px;line-height:16px;letter-spacing:0.22em;text-transform:uppercase;color:#d6d3d1;font-weight:800;">${title}</p>
+      <p style="margin:0 0 16px;color:#d4d4d8;font-size:15px;line-height:24px;">${copy}</p>
+      <a href="${escapeHtml(ctaHref)}" style="display:inline-block;border-radius:999px;background:#e7e5e4;color:#09090b;text-decoration:none;font-size:14px;line-height:18px;font-weight:900;padding:12px 18px;">${ctaLabel}</a>
+    </div>
+  `;
+}
+
+export function renderCommunityEmailBlocks() {
+  return [
+    renderCommunityBlock(
+      "STAY IN THE LOOP",
+      "Join the Fair Play WhatsApp group for upcoming games, availability and community updates.",
+      FAIR_PLAY_WHATSAPP_GROUP_URL,
+      "Join the WhatsApp group"
+    ),
+    renderCommunityBlock(
+      "FAIR PLAY REWARDS",
+      "Play 5 games. Get your 6th free.<br /><br />Complete five qualifying paid Fair Play games and receive £5 credit towards your next game.<br /><br />£5 for you. £5 for them.<br /><br />Invite a new player with your referral code and you’ll both receive £5 Fair Play credit. Their £5 unlocks after their first qualifying paid game.",
+      `${getSiteUrl()}/rewards`,
+      "View Rewards"
+    ),
+  ].join("");
 }
 
 export function getSiteUrl() {
@@ -158,6 +221,7 @@ export function renderPremiumEmailLayout({
   ctaHref,
   ctaLabel,
   footerText,
+  includeCommunityBlocks = false,
 }: PremiumEmailLayoutParams) {
   const escapedPreviewText = escapeHtml(previewText);
   const escapedTitle = escapeHtml(title);
@@ -195,6 +259,8 @@ export function renderPremiumEmailLayout({
                   </div>`
                 : ""
             }
+
+            ${includeCommunityBlocks ? renderCommunityEmailBlocks() : ""}
 
             ${
               footerText

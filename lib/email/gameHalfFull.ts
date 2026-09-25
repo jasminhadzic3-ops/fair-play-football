@@ -9,11 +9,14 @@ import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
   formatEmailGameDateTime,
+  formatGameType,
   formatPrice,
+  getCommunityEmailText,
+  getFirstName,
   getGameUrl,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
-  renderPremiumGameDetailsCard,
+  renderPremiumInfoCard,
 } from "./shared";
 
 type GameHalfFullEmailParams = {
@@ -27,7 +30,9 @@ type GameEmailData = {
   time: string | null;
   starts_at: string | null;
   price: number | null;
+  pricing_mode?: "paid" | "free" | null;
   max_players: number | null;
+  tags: string[] | null;
 };
 
 type ProfileEmailData = {
@@ -53,6 +58,10 @@ function getBroadcastTestRecipient() {
 
 function hashRecipientKey(value: string) {
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
+}
+
+function getGreetingName(playerName: string) {
+  return getFirstName(playerName);
 }
 
 async function getGameHalfFullRecipients(): Promise<EmailRecipient[]> {
@@ -94,7 +103,7 @@ export async function sendGameHalfFullEmails(params: GameHalfFullEmailParams) {
 
   const { data: game, error: gameError } = await supabaseAdmin
     .from("games")
-    .select("id,title,location,time,starts_at,price,max_players")
+    .select("id,title,location,time,starts_at,price,pricing_mode,max_players,tags")
     .eq("id", params.gameId)
     .maybeSingle<GameEmailData>();
 
@@ -129,48 +138,68 @@ export async function sendGameHalfFullEmails(params: GameHalfFullEmailParams) {
   const recipients = await getGameHalfFullRecipients();
   const gameLocation = game.location || "TBD";
   const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
-  const gamePrice = formatPrice(game.price, "GBP");
+  const gamePrice = game.pricing_mode === "free" ? "FREE" : formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(game.id);
-  const subject = "Game Filling Up Fast ⚽";
+  const subject = "Game Is Almost Full";
+  const gameName = game.title || "";
+  const gameType = formatGameType(game.tags);
   let sentCount = 0;
 
   for (const recipient of recipients) {
+    const greetingName = getGreetingName(recipient.playerName);
     const text = [
-      `Hi ${recipient.playerName},`,
+      `Hi ${greetingName},`,
       "",
-      "This game is already over halfway full.",
+      `${gameName} is almost full.`,
       "",
-      "If you're planning to play, now's a good time to secure your spot.",
+      "There are only a few spots left. If you'd like to play, we recommend booking soon.",
       "",
       "Game Details",
-      `📅 ${kickoff.date}`,
-      `🕒 ${kickoff.time}`,
-      `📍 ${gameLocation}`,
-      `💷 ${gamePrice}`,
+      `Game\n${gameName}`,
+      `Date\n${kickoff.date}`,
+      `Kick-off\n${kickoff.time}`,
+      `Venue\n${gameLocation}`,
+      `Game Type\n${gameType}`,
+      `Price\n${gamePrice}`,
       "",
-      `Book Now: ${gameUrl}`,
+      `View Game: ${gameUrl}`,
+      "",
+      ...getCommunityEmailText(),
+      "",
+      "We look forward to seeing you on the pitch.",
+      "",
+      "If you have any questions, we're always happy to help.",
+      "",
+      "booking@fairplayfootball.co.uk",
+      "© Fair Play Football",
     ].join("\n");
 
     const html = renderPremiumEmailLayout({
-      previewText: "This game is already over halfway full.",
-      title: "Game Filling Up Fast ⚽",
+      previewText: `${gameName} is almost full.`,
+      title: "Game Almost Full",
       ctaHref: gameUrl,
-      ctaLabel: "Book Now",
+      ctaLabel: "View Game",
+    footerText: "We look forward to seeing you on the pitch. If you have any questions, we're always happy to help.",
+    includeCommunityBlocks: true,
       introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
-          Hi ${escapeHtml(recipient.playerName)},
+          Hi ${escapeHtml(greetingName)},
+        </p>
+        <p style="margin:0 0 16px;color:#d4d4d8;font-size:16px;line-height:25px;">
+          <strong>${escapeHtml(gameName)}</strong> is almost full.
         </p>
         ${renderEmailParagraphs([
-          "This game is already over halfway full.",
-          "If you're planning to play, now's a good time to secure your spot.",
+          "There are only a few spots left. If you'd like to play, we recommend booking soon.",
         ])}
       `,
-      cardHtml: renderPremiumGameDetailsCard({
-        date: kickoff.date,
-        time: kickoff.time,
-        venue: gameLocation,
-        price: gamePrice,
-      }),
+      cardHtml: renderPremiumInfoCard("Game Details", [
+        { label: "Game", value: gameName },
+        { label: "Date", value: kickoff.date },
+        { label: "Kick-off", value: kickoff.time },
+        { label: "Venue", value: gameLocation },
+        { label: "Game Type", value: gameType },
+        { label: "Price", value: gamePrice },
+      ]),
     });
 
     const idempotencyKey = `game_half_full:game:${game.id}:recipient:${recipient.idempotencyRecipientKey}`;

@@ -6,11 +6,14 @@ import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
   formatEmailGameDateTime,
+  formatGameType,
   formatPrice,
+  getCommunityEmailText,
+  getFirstName,
   getGameUrl,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
-  renderPremiumGameDetailsCard,
+  renderPremiumInfoCard,
 } from "./shared";
 
 type NewGamePostedEmailParams = {
@@ -24,6 +27,8 @@ type GameEmailData = {
   time: string | null;
   starts_at: string | null;
   price: number | null;
+  pricing_mode?: "paid" | "free" | null;
+  tags: string[] | null;
 };
 
 type ProfileEmailData = {
@@ -52,7 +57,7 @@ function getBroadcastTestRecipient() {
 }
 
 function getGreetingName(playerName: string) {
-  return playerName.trim().split(/\s+/)[0] || "Player";
+  return getFirstName(playerName);
 }
 
 async function getTestRecipientProfile(testRecipient: string) {
@@ -83,7 +88,7 @@ async function getNewGameRecipients(): Promise<EmailRecipient[]> {
         userId: profile?.id,
         idempotencyRecipientKey: testRecipient.toLowerCase(),
         email: testRecipient,
-        playerName: profile?.username?.trim() || "Player",
+        playerName: profile?.username?.trim() || "there",
       },
     ];
   }
@@ -103,7 +108,7 @@ async function getNewGameRecipients(): Promise<EmailRecipient[]> {
       userId: profile.id,
       idempotencyRecipientKey: profile.id,
       email: profile.email,
-      playerName: profile.username || "Player",
+      playerName: profile.username || "there",
     }));
 }
 
@@ -114,7 +119,7 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
 
   const { data: game, error: gameError } = await supabaseAdmin
     .from("games")
-    .select("id,title,location,time,starts_at,price")
+        .select("id,title,location,time,starts_at,price,pricing_mode,tags")
     .eq("id", params.gameId)
     .maybeSingle<GameEmailData>();
 
@@ -129,9 +134,11 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
   const recipients = await getNewGameRecipients();
   const gameLocation = game.location || "TBD";
   const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
-  const gamePrice = formatPrice(game.price, "GBP");
+  const gamePrice = game.pricing_mode === "free" ? "FREE" : formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(game.id);
-  const subject = "New Game Available ⚽";
+  const subject = "New Game Available";
+  const gameName = game.title || "";
+  const gameType = formatGameType(game.tags);
   let sentCount = 0;
 
   for (const recipient of recipients) {
@@ -139,37 +146,54 @@ export async function sendNewGamePostedEmails(params: NewGamePostedEmailParams) 
     const text = [
       `Hi ${greetingName},`,
       "",
-      "A new Fair Play Football game has just been posted.",
+      "A new Fair Play Football game is now available.",
+      "",
+      "If you'd like to play, you can book your spot in just a few clicks.",
       "",
       "Game Details",
-      `📅 ${kickoff.date}`,
-      `🕒 ${kickoff.time}`,
-      `📍 ${gameLocation}`,
-      `💷 ${gamePrice}`,
+      `Game\n${gameName}`,
+      `Date\n${kickoff.date}`,
+      `Kick-off\n${kickoff.time}`,
+      `Venue\n${gameLocation}`,
+      `Game Type\n${gameType}`,
+      `Price\n${gamePrice}`,
       "",
-      `View & Book Your Spot: ${gameUrl}`,
+      `View Game: ${gameUrl}`,
       "",
-      "Spots are allocated on a first come, first served basis.",
+      ...getCommunityEmailText(),
+      "",
+      "We look forward to seeing you on the pitch.",
+      "",
+      "If you have any questions, we're always happy to help.",
+      "",
+      "booking@fairplayfootball.co.uk",
+      "© Fair Play Football",
     ].join("\n");
 
     const html = renderPremiumEmailLayout({
-      previewText: "A new Fair Play Football game has just been posted.",
-      title: "New Game Available ⚽",
+      previewText: "A new Fair Play Football game is ready to book.",
+      title: "New Game Available",
       ctaHref: gameUrl,
-      ctaLabel: "View & Book Your Spot",
-      footerText: "Spots are allocated on a first come, first served basis.",
+      ctaLabel: "View Game",
+      footerText: "We look forward to seeing you on the pitch. If you have any questions, we're always happy to help.",
+      includeCommunityBlocks: true,
       introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
           Hi ${escapeHtml(greetingName)},
         </p>
-        ${renderEmailParagraphs(["A new Fair Play Football game has just been posted."])}
+        ${renderEmailParagraphs([
+          "A new Fair Play Football game is now available.",
+          "If you'd like to play, you can book your spot in just a few clicks.",
+        ])}
       `,
-      cardHtml: renderPremiumGameDetailsCard({
-        date: kickoff.date,
-        time: kickoff.time,
-        venue: gameLocation,
-        price: gamePrice,
-      }),
+      cardHtml: renderPremiumInfoCard("Game Details", [
+        { label: "Game", value: gameName },
+        { label: "Date", value: kickoff.date },
+        { label: "Kick-off", value: kickoff.time },
+        { label: "Venue", value: gameLocation },
+        { label: "Game Type", value: gameType },
+        { label: "Price", value: gamePrice },
+      ]),
     });
 
     await sendResendEmail({

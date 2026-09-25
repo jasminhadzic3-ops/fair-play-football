@@ -173,7 +173,7 @@ describe("sendGameCancelledEmails", () => {
       1,
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "Your Game Has Been Cancelled",
+        subject: "Game Cancelled",
         idempotencyKey: "game_cancelled:game:10:recipient:user-with-profile-email",
       })
     );
@@ -190,15 +190,16 @@ describe("sendGameCancelledEmails", () => {
     };
 
     expect(firstEmail.text).toContain("Hi Profile,");
-    expect(firstEmail.text).toContain("Unfortunately this game has been cancelled.");
-    expect(firstEmail.text).toContain("Your payment has already been returned to your Fair Play Wallet as credit.");
-    expect(firstEmail.text).toContain("If you'd prefer a refund to your original payment method, you can request one from your Wallet.");
-    expect(firstEmail.text).toContain("📅 Friday 7pm");
-    expect(firstEmail.text).toContain("🕒 Friday 7pm");
-    expect(firstEmail.text).toContain("📍 Test Pitch");
-    expect(firstEmail.text).toContain("Open My Wallet: http://localhost:3000/wallet");
-    expect(firstEmail.html).toContain("Your Game Has Been Cancelled");
-    expect(firstEmail.html).toContain("Open My Wallet");
+    expect(firstEmail.text).toContain("Unfortunately, Friday Football has been cancelled.");
+    expect(firstEmail.text).toContain("Your booking has been cancelled automatically");
+    expect(firstEmail.text).toContain("If you'd prefer a refund to your original payment method");
+    expect(firstEmail.text).toContain("Kick-off\nFriday 7pm");
+    expect(firstEmail.text).toContain("Venue\nTest Pitch");
+    expect(firstEmail.text).toContain("Open Wallet: http://localhost:3000/wallet");
+    expect(firstEmail.html).toContain("We&#039;re Sorry");
+    expect(firstEmail.html).toContain("Open Wallet");
+    expect(firstEmail.html).not.toContain("STAY IN THE LOOP");
+    expect(firstEmail.html).not.toContain("FAIR PLAY REWARDS");
     expect(firstEmail.html).toContain("booking@fairplayfootball.co.uk");
     expect(`${firstEmail.text}\n${firstEmail.html}`).not.toMatch(/automatic(?:ally)? refund/i);
     expect(`${firstEmail.text}\n${firstEmail.html}`).not.toMatch(/reply to this email/i);

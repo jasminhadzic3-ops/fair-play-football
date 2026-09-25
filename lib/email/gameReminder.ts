@@ -4,10 +4,14 @@ import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
   formatEmailGameDateTime,
+  formatGameType,
+  formatPrice,
+  getCommunityEmailText,
+  getFirstName,
   getGameUrl,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
-  renderPremiumGameDetailsCard,
+  renderPremiumInfoCard,
 } from "./shared";
 
 export type GameReminderEmailGame = {
@@ -17,6 +21,8 @@ export type GameReminderEmailGame = {
   time: string | null;
   starts_at?: string | null;
   price: number | string | null;
+  tags?: string[] | null;
+  pricing_mode?: "paid" | "free" | null;
 };
 
 export type SendGameReminderEmailParams = {
@@ -43,40 +49,58 @@ export async function sendGameReminderEmail({
   const gameLocation = game.location || "TBD";
   const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
   const gameUrl = getGameUrl(game.id);
-  const subject = "You're Playing Soon ⚽";
+  const subject = "Ready for Kick-off";
+  const gameName = game.title || "";
+  const gameType = formatGameType(game.tags);
+  const price = game.pricing_mode === "free" ? "FREE" : formatPrice(Number(game.price));
+  const firstName = getFirstName(recipient.playerName);
 
   const text = [
-    `Hi ${recipient.playerName},`,
+    `Hi ${firstName},`,
     "",
-    "Just a reminder that your Fair Play Football game is coming up.",
+    "Just a quick reminder that your game starts soon.",
     "",
     "Game Details",
-    `📅 ${kickoff.date}`,
-    `🕒 ${kickoff.time}`,
-    `📍 ${gameLocation}`,
+    `Game\n${gameName}`,
+    `Date\n${kickoff.date}`,
+    `Kick-off\n${kickoff.time}`,
+    `Venue\n${gameLocation}`,
+    `Game Type\n${gameType}`,
+    `Price\n${price}`,
     "",
     `View Booking: ${gameUrl}`,
     "",
-    "Please arrive around 10 minutes before kick-off.",
+    ...getCommunityEmailText(),
+    "",
+    "We look forward to seeing you on the pitch.",
+    "",
+    "If you have any questions, we're always happy to help.",
+    "",
+    "booking@fairplayfootball.co.uk",
+    "© Fair Play Football",
   ].join("\n");
 
   const html = renderPremiumEmailLayout({
-    previewText: "Just a reminder that your Fair Play Football game is coming up.",
-    title: "You're Playing Soon ⚽",
+    previewText: "Just a quick reminder that your game starts soon.",
+    title: "Ready for Kick-off",
     ctaHref: gameUrl,
     ctaLabel: "View Booking",
-    footerText: "Please arrive around 10 minutes before kick-off.",
+    footerText: "We look forward to seeing you on the pitch. If you have any questions, we're always happy to help.",
+    includeCommunityBlocks: true,
     introHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
-        Hi ${escapeHtml(recipient.playerName)},
+        Hi ${escapeHtml(firstName)},
       </p>
-      ${renderEmailParagraphs(["Just a reminder that your Fair Play Football game is coming up."])}
+      ${renderEmailParagraphs(["Just a quick reminder that your game starts soon."])}
     `,
-    cardHtml: renderPremiumGameDetailsCard({
-      date: kickoff.date,
-      time: kickoff.time,
-      venue: gameLocation,
-    }),
+    cardHtml: renderPremiumInfoCard("Game Details", [
+      { label: "Game", value: gameName },
+      { label: "Date", value: kickoff.date },
+      { label: "Kick-off", value: kickoff.time },
+      { label: "Venue", value: gameLocation },
+      { label: "Game Type", value: gameType },
+      { label: "Price", value: price },
+    ]),
   });
 
   return sendResendEmail({

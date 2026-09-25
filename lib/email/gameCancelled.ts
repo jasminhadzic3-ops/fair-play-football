@@ -6,10 +6,11 @@ import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
   formatEmailGameDateTime,
+  getFirstName as resolveFirstName,
   getSiteUrl,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
-  renderPremiumGameDetailsCard,
+  renderPremiumInfoCard,
 } from "./shared";
 
 type GameCancelledEmailParams = {
@@ -52,7 +53,7 @@ function getBroadcastTestRecipient() {
 }
 
 function getFirstName(playerName: string | null | undefined) {
-  return playerName?.trim().split(/\s+/)[0] || "Player";
+  return resolveFirstName(playerName);
 }
 
 async function getGameCancelledRecipients(gameId: number): Promise<EmailRecipient[]> {
@@ -163,7 +164,8 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
   const gameLocation = game.location || "TBD";
   const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
   const walletUrl = `${getSiteUrl()}/wallet`;
-  const subject = "Your Game Has Been Cancelled";
+  const subject = "Game Cancelled";
+  const gameName = game.title || "";
   let sentCount = 0;
 
   for (const recipient of recipients) {
@@ -171,42 +173,54 @@ export async function sendGameCancelledEmails(params: GameCancelledEmailParams) 
     const text = [
       `Hi ${firstName},`,
       "",
-      "Unfortunately this game has been cancelled.",
+      `Unfortunately, ${gameName} has been cancelled.`,
       "",
-      "Your payment has already been returned to your Fair Play Wallet as credit.",
+      "Your booking has been cancelled automatically, and any eligible credit has been added to your Fair Play Wallet.",
       "",
-      "If you'd prefer a refund to your original payment method, you can request one from your Wallet.",
+      "If you'd prefer a refund to your original payment method, you can request one at any time from your wallet.",
       "",
-      "Game Details",
-      `📅 ${kickoff.date}`,
-      `🕒 ${kickoff.time}`,
-      `📍 ${gameLocation}`,
+      "Cancelled Game",
+      `Game\n${gameName}`,
+      `Date\n${kickoff.date}`,
+      `Kick-off\n${kickoff.time}`,
+      `Venue\n${gameLocation}`,
       "",
-      `Open My Wallet: ${walletUrl}`,
+      `Open Wallet: ${walletUrl}`,
+      "",
+      "We apologise for any inconvenience and hope to see you at another Fair Play Football game soon.",
+      "",
+      "If you have any questions, we're always happy to help.",
+      "",
+      "booking@fairplayfootball.co.uk",
+      "© Fair Play Football",
     ]
       .filter(Boolean)
       .join("\n");
 
     const html = renderPremiumEmailLayout({
-      previewText: "Unfortunately this game has been cancelled.",
-      title: "Your Game Has Been Cancelled",
+      previewText: `Unfortunately, ${gameName} has been cancelled.`,
+      title: "We're Sorry",
       ctaHref: walletUrl,
-      ctaLabel: "Open My Wallet",
+      ctaLabel: "Open Wallet",
+      footerText: "We apologise for any inconvenience and hope to see you at another Fair Play Football game soon. If you have any questions, we're always happy to help.",
       introHtml: `
         <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
           Hi ${escapeHtml(firstName)},
         </p>
+        <p style="margin:0 0 16px;color:#d4d4d8;font-size:16px;line-height:25px;">
+          Unfortunately, <strong>${escapeHtml(gameName)}</strong> has been cancelled.
+        </p>
         ${renderEmailParagraphs([
-          "Unfortunately this game has been cancelled.",
-          "Your payment has already been returned to your Fair Play Wallet as credit.",
-          "If you'd prefer a refund to your original payment method, you can request one from your Wallet.",
+          "Your booking has been cancelled automatically, and any eligible credit has been added to your Fair Play Wallet.",
+          "If you'd prefer a refund to your original payment method, you can request one at any time from your wallet.",
         ])}
       `,
-      cardHtml: renderPremiumGameDetailsCard({
-        date: kickoff.date,
-        time: kickoff.time,
-        venue: gameLocation,
-      }),
+      cardHtml: renderPremiumInfoCard("Cancelled Game", [
+        { label: "Game", value: gameName },
+        { label: "Date", value: kickoff.date },
+        { label: "Kick-off", value: kickoff.time },
+        { label: "Venue", value: gameLocation },
+      ]),
     });
 
     await sendResendEmail({

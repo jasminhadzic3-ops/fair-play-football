@@ -5,11 +5,14 @@ import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
   formatEmailGameDateTime,
+  formatGameType,
   formatPrice,
+  getCommunityEmailText,
+  getFirstName,
   getGameUrl,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
-  renderPremiumGameDetailsCard,
+  renderPremiumInfoCard,
 } from "./shared";
 
 type WaitingListSpotAvailableEmailParams = {
@@ -26,6 +29,8 @@ type GameEmailData = {
   time: string | null;
   starts_at: string | null;
   price: number | null;
+  pricing_mode?: "paid" | "free" | null;
+  tags: string[] | null;
 };
 
 type ProfileEmailData = {
@@ -33,12 +38,16 @@ type ProfileEmailData = {
   username: string | null;
 };
 
+function getGreetingName(playerName: string) {
+  return getFirstName(playerName);
+}
+
 export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotAvailableEmailParams) {
   const [{ data: game, error: gameError }, { data: profile, error: profileError }, { data: authUser, error: authError }] =
     await Promise.all([
       supabaseAdmin
         .from("games")
-        .select("title,location,time,starts_at,price")
+        .select("title,location,time,starts_at,price,pricing_mode,tags")
         .eq("id", params.gameId)
         .maybeSingle<GameEmailData>(),
       supabaseAdmin
@@ -71,51 +80,69 @@ export async function sendWaitingListSpotAvailableEmail(params: WaitingListSpotA
     throw new Error("Unable to send waiting-list spot email: player email not found.");
   }
 
-  const playerName = profile?.username || params.playerName || "Player";
+  const greetingName = getGreetingName(profile?.username || params.playerName);
   const gameLocation = game.location || "TBD";
   const kickoff = formatEmailGameDateTime(game.starts_at, game.time);
-  const gamePrice = formatPrice(game.price, "GBP");
+  const gamePrice = game.pricing_mode === "free" ? "FREE" : formatPrice(game.price, "GBP");
   const gameUrl = getGameUrl(params.gameId);
-  const subject = "Good News — A Spot Is Available ⚽";
+  const subject = "Spot Available";
+  const gameName = game.title || "";
+  const gameType = formatGameType(game.tags);
   const idempotencyKey = `waiting_list_spot_available:notification:${params.notificationId}`;
 
   const text = [
-    `Hi ${playerName},`,
+    `Hi ${greetingName},`,
     "",
-    "A place has become available and you've been invited from the waiting list.",
+    `A spot has become available for ${gameName}.`,
     "",
-    "Your spot isn't reserved until payment is completed.",
+    "If you’d still like to play, you can secure it now before it’s taken.",
     "",
     "Game Details",
-    `📅 ${kickoff.date}`,
-    `🕒 ${kickoff.time}`,
-    `📍 ${gameLocation}`,
-    `💷 ${gamePrice}`,
-    `Waiting list ID: ${params.waitingListId}`,
+    `Game\n${gameName}`,
+    `Date\n${kickoff.date}`,
+    `Kick-off\n${kickoff.time}`,
+    `Venue\n${gameLocation}`,
+    `Game Type\n${gameType}`,
+    `Price\n${gamePrice}`,
     "",
-    `Complete Your Booking: ${gameUrl}`,
+    `Book Now: ${gameUrl}`,
+    "",
+    ...getCommunityEmailText(),
+    "",
+    "We look forward to seeing you on the pitch.",
+    "",
+    "If you have any questions, we're always happy to help.",
+    "",
+    "booking@fairplayfootball.co.uk",
+    "© Fair Play Football",
   ].join("\n");
 
   const html = renderPremiumEmailLayout({
-    previewText: "A place has become available and you've been invited from the waiting list.",
-    title: "Good News — A Spot Is Available ⚽",
+    previewText: `A place has opened for ${gameName}.`,
+    title: "A Spot Is Available",
     ctaHref: gameUrl,
-    ctaLabel: "Complete Your Booking",
+    ctaLabel: "Book Now",
+    footerText: "We look forward to seeing you on the pitch. If you have any questions, we're always happy to help.",
+    includeCommunityBlocks: true,
     introHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
-        Hi ${escapeHtml(playerName)},
+        Hi ${escapeHtml(greetingName)},
+      </p>
+      <p style="margin:0 0 16px;color:#d4d4d8;font-size:16px;line-height:25px;">
+        A spot has become available for <strong>${escapeHtml(gameName)}</strong>.
       </p>
       ${renderEmailParagraphs([
-        "A place has become available and you've been invited from the waiting list.",
-        "Your spot isn't reserved until payment is completed.",
+        "If you’d still like to play, you can secure it now before it’s taken.",
       ])}
     `,
-    cardHtml: renderPremiumGameDetailsCard({
-      date: kickoff.date,
-      time: kickoff.time,
-      venue: gameLocation,
-      price: gamePrice,
-    }),
+    cardHtml: renderPremiumInfoCard("Game Details", [
+      { label: "Game", value: gameName },
+      { label: "Date", value: kickoff.date },
+      { label: "Kick-off", value: kickoff.time },
+      { label: "Venue", value: gameLocation },
+      { label: "Game Type", value: gameType },
+      { label: "Price", value: gamePrice },
+    ]),
   });
 
   return sendResendEmail({

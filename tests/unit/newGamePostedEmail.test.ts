@@ -144,7 +144,7 @@ describe("sendNewGamePostedEmails test-recipient personalization", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "jasminhadzic3@gmail.com",
-        subject: "New Game Available ⚽",
+        subject: "New Game Available",
         idempotencyKey: "new_game_posted:game:10:recipient:jasminhadzic3@gmail.com",
         text: expect.stringContaining("Hi Jasmin,"),
         html: expect.stringContaining("Hi Jasmin,"),
@@ -155,19 +155,19 @@ describe("sendNewGamePostedEmails test-recipient personalization", () => {
       text: string;
     };
 
-    expect(email.text).toContain("A new Fair Play Football game has just been posted.");
-    expect(email.text).toContain("📅 Friday 7pm");
-    expect(email.text).toContain("🕒 Friday 7pm");
-    expect(email.text).toContain("📍 Test Pitch");
-    expect(email.text).toContain("💷 £8.00");
-    expect(email.text).toContain("View & Book Your Spot: http://localhost:3000/?open_game_id=10#games");
-    expect(email.text).toContain("Spots are allocated on a first come, first served basis.");
-    expect(email.html).toContain("New Game Available ⚽");
-    expect(email.html).toContain("View &amp; Book Your Spot");
+    expect(email.text).toContain("A new Fair Play Football game is now available.");
+    expect(email.text).toContain("Game\nFriday Football");
+    expect(email.text).toContain("Kick-off\nFriday 7pm");
+    expect(email.text).toContain("Venue\nTest Pitch");
+    expect(email.text).toContain("Price\n£8.00");
+    expect(email.text).toContain("View Game: http://localhost:3000/?open_game_id=10#games");
+    expect(email.text).toContain("STAY IN THE LOOP");
+    expect(email.html).toContain("New Game Available");
+    expect(email.html).toContain("View Game");
     expect(email.html).toContain("booking@fairplayfootball.co.uk");
   });
 
-  it("falls back to Player when no matching test-recipient profile exists", async () => {
+  it("falls back to there when no matching test-recipient profile exists", async () => {
     state.profiles = [
       {
         id: "user-1",
@@ -181,13 +181,13 @@ describe("sendNewGamePostedEmails test-recipient personalization", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "jasminhadzic3@gmail.com",
-        text: expect.stringContaining("Hi Player,"),
-        html: expect.stringContaining("Hi Player,"),
+        text: expect.stringContaining("Hi there,"),
+        html: expect.stringContaining("Hi there,"),
       })
     );
   });
 
-  it("falls back to Player when the matching test-recipient profile has no username", async () => {
+  it("falls back to there when the matching test-recipient profile has no username", async () => {
     state.profiles = [
       {
         id: "user-1",
@@ -200,8 +200,8 @@ describe("sendNewGamePostedEmails test-recipient personalization", () => {
 
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: expect.stringContaining("Hi Player,"),
-        html: expect.stringContaining("Hi Player,"),
+        text: expect.stringContaining("Hi there,"),
+        html: expect.stringContaining("Hi there,"),
       })
     );
   });

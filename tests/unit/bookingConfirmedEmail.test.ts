@@ -118,7 +118,7 @@ describe("sendBookingConfirmedEmail", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "You're Booked In ⚽",
+        subject: "Booking Confirmed",
         idempotencyKey: "booking_confirmed:booking:123",
       })
     );
@@ -127,15 +127,17 @@ describe("sendBookingConfirmedEmail", () => {
       text: string;
     };
 
-    expect(email.text).toContain("Your spot is confirmed — we'll see you on the pitch. ⚽");
-    expect(email.text).toContain("📅 Friday 7pm");
-    expect(email.text).toContain("🕒 Friday 7pm");
-    expect(email.text).toContain("📍 Test Pitch");
-    expect(email.text).toContain("💷 £8.00");
-    expect(email.text).toContain("View Your Booking: http://localhost:3000/?open_game_id=10#games");
-    expect(email.text).toContain("We'll send you a reminder before kick-off.");
-    expect(email.html).toContain("You&#039;re Booked In ⚽");
-    expect(email.html).toContain("View Your Booking");
+    expect(email.text).toContain("Hi Profile,");
+    expect(email.text).toContain("Your spot is confirmed and everything is set.");
+    expect(email.text).toContain("Game\nFriday Football");
+    expect(email.text).toContain("Kick-off\nFriday 7pm");
+    expect(email.text).toContain("Venue\nTest Pitch");
+    expect(email.text).toContain("Price\n£8.00");
+    expect(email.text).toContain("View Booking: http://localhost:3000/?open_game_id=10#games");
+    expect(email.text).toContain("STAY IN THE LOOP");
+    expect(email.text).toContain("FAIR PLAY REWARDS");
+    expect(email.html).toContain("Your Spot Is Confirmed");
+    expect(email.html).toContain("View Booking");
     expect(email.html).toContain("booking@fairplayfootball.co.uk");
   });
 

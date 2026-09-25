@@ -161,7 +161,7 @@ describe("sendGameHalfFullEmails", () => {
 
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: "Game Filling Up Fast ⚽",
+        subject: "Game Is Almost Full",
         idempotencyKey: "game_half_full:game:10:recipient:user-1",
       })
     );
@@ -170,15 +170,16 @@ describe("sendGameHalfFullEmails", () => {
       text: string;
     };
 
-    expect(email.text).toContain("This game is already over halfway full.");
-    expect(email.text).toContain("If you're planning to play, now's a good time to secure your spot.");
-    expect(email.text).toContain("📅 Friday 7pm");
-    expect(email.text).toContain("🕒 Friday 7pm");
-    expect(email.text).toContain("📍 Test Pitch");
-    expect(email.text).toContain("💷 £8.00");
-    expect(email.text).toContain("Book Now: http://localhost:3000/?open_game_id=10#games");
-    expect(email.html).toContain("Game Filling Up Fast ⚽");
-    expect(email.html).toContain("Book Now");
+    expect(email.text).toContain("Friday Football is almost full.");
+    expect(email.text).toContain("There are only a few spots left. If you'd like to play, we recommend booking soon.");
+    expect(email.text).toContain("Game\nFriday Football");
+    expect(email.text).toContain("Kick-off\nFriday 7pm");
+    expect(email.text).toContain("Venue\nTest Pitch");
+    expect(email.text).toContain("Price\n£8.00");
+    expect(email.text).toContain("View Game: http://localhost:3000/?open_game_id=10#games");
+    expect(email.text).toContain("FAIR PLAY REWARDS");
+    expect(email.html).toContain("Game Almost Full");
+    expect(email.html).toContain("View Game");
     expect(email.html).toContain("booking@fairplayfootball.co.uk");
   });
 

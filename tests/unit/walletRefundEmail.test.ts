@@ -97,26 +97,26 @@ describe("sendWalletRefundEmail", () => {
     ],
     [
       "completed",
-      "Your Refund Has Been Processed",
-      "Your Refund Has Been Processed",
-      "Your refund has been processed successfully.",
-      "Returned to your original payment method",
+      "Refund Completed",
+      "",
+      "Your refund has now been processed successfully.",
+      "Refund Details",
       "View Wallet",
     ],
     [
       "failed_credit_available",
-      "Credit Added To Your Wallet",
-      "Credit Added To Your Wallet",
-      "£8.00 has been added to your Fair Play Wallet.",
-      "Refund credited to your wallet",
-      "View Wallet",
+      "Refund Sent to Your Wallet",
+      "We&#039;ve Added Credit to Your Wallet",
+      "We were unable to process your refund back to your original payment method.",
+      "Credit Available",
+      "Open Wallet",
     ],
     [
       "manual_review",
       "Refund Under Review",
-      "Refund Under Review",
-      "Please don’t submit another refund request while this check is in progress.",
-      "Refund status: Refund Under Review",
+      "We&#039;re Looking Into It",
+      "This can occasionally happen",
+      "Under Review",
       "View Wallet",
     ],
   ] satisfies Array<[WalletRefundEmailOutcome, string, string, string, string, string]>)(
@@ -164,7 +164,7 @@ describe("sendWalletRefundEmail", () => {
     const email = await sendForOutcome("completed", "8.5");
 
     expect(email.to).toBe("auth@example.com");
-    expect(email.text).toContain("Hi Player,");
-    expect(email.text).toContain("Your refund has been processed successfully.");
+    expect(email.text).toContain("Hi there,");
+    expect(email.text).toContain("Your refund has now been processed successfully.");
   });
 });

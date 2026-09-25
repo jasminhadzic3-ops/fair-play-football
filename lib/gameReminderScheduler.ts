@@ -155,7 +155,7 @@ function isGameStillReminderEligible(game: GameRow | undefined, now: Date) {
 async function fetchGamesForNewDeliveries(now: Date) {
   const { data, error } = await supabaseAdmin
     .from("games")
-    .select("id,title,location,time,price,starts_at,status,archived_at")
+    .select("id,title,location,time,price,tags,pricing_mode,starts_at,status,archived_at")
     .eq("status", "active")
     .is("archived_at", null)
     .not("starts_at", "is", null)
@@ -319,7 +319,7 @@ async function fetchGamesByIds(gameIds: number[]) {
 
   const { data, error } = await supabaseAdmin
     .from("games")
-    .select("id,title,location,time,price,starts_at,status,archived_at")
+    .select("id,title,location,time,price,tags,pricing_mode,starts_at,status,archived_at")
     .in("id", gameIds);
 
   if (error) {

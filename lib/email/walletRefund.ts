@@ -9,6 +9,7 @@ import { sendResendEmail } from "./resend";
 import {
   escapeHtml,
   formatPrice,
+  getFirstName as resolveFirstName,
   getSiteUrl,
   renderEmailParagraphs,
   renderPremiumEmailLayout,
@@ -34,8 +35,47 @@ type ProfileEmailData = {
   username: string | null;
 };
 
+type RefundRequestEmailData = {
+  admin_note: string | null;
+  metadata: Record<string, unknown> | null;
+  updated_at: string | null;
+};
+
+const refundDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+function getRefundMetadataValue(metadata: Record<string, unknown> | null, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function formatPaymentMethod(value: string) {
+  return value.toLowerCase() === "sumup" ? "SumUp" : value || "Original payment method";
+}
+
+function formatRefundDate(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : refundDateFormatter.format(date);
+}
+
+function formatRefundReason(metadata: Record<string, unknown> | null) {
+  switch (getRefundMetadataValue(metadata, "source_transaction_type")) {
+    case "game_cancelled_credit":
+      return "Game cancelled";
+    case "player_cancelled_credit":
+      return "Player cancellation";
+    default:
+      return "Refund requested";
+  }
+}
+
 function getFirstName(playerName: string | null | undefined) {
-  return playerName?.trim().split(/\s+/)[0] || "Player";
+  return resolveFirstName(playerName);
 }
 
 function getOutcomeCopy(outcome: WalletRefundEmailOutcome, formattedAmount: string) {
@@ -55,12 +95,12 @@ function getOutcomeCopy(outcome: WalletRefundEmailOutcome, formattedAmount: stri
       };
     case "completed":
       return {
-        subject: "Your Refund Has Been Processed",
-        heading: "Your Refund Has Been Processed",
+        subject: "Refund Completed",
+        heading: "Refund Completed",
         previewText: "Your refund has been processed successfully.",
         paragraphs: [
-          "Your refund has been processed successfully.",
-          "Depending on your bank, it may take a few working days to appear in your account.",
+          "Your refund has now been processed successfully.",
+          "Depending on your bank or payment provider, it may take a few working days for the funds to appear in your account.",
         ],
         amountLabel: "Refund amount",
         statusLabel: "Returned to your original payment method",
@@ -69,29 +109,33 @@ function getOutcomeCopy(outcome: WalletRefundEmailOutcome, formattedAmount: stri
       };
     case "failed_credit_available":
       return {
-        subject: "Credit Added To Your Wallet",
-        heading: "Credit Added To Your Wallet",
-        previewText: `${formattedAmount} has been added to your Fair Play Wallet.`,
+        subject: "Refund Sent to Your Wallet",
+        heading: "We've Added Credit to Your Wallet",
+        previewText: `We were unable to process your ${formattedAmount} refund back to your original payment method.`,
         paragraphs: [
-          `${formattedAmount} has been added to your Fair Play Wallet.`,
+          "We were unable to process your refund back to your original payment method.",
+          `Instead, ${formattedAmount} has been added to your Fair Play Wallet, where it's available to use immediately for future bookings.`,
+          "If you'd still prefer a refund to your original payment method, you can submit another refund request from your wallet at any time. If you need any assistance, please contact us and we'll be happy to help.",
         ],
         amountLabel: "Amount",
-        statusLabel: "Refund credited to your wallet",
-        ctaLabel: "View Wallet",
-        reason: "Refund credited to your wallet",
+        statusLabel: "Credit Available",
+        ctaLabel: "Open Wallet",
+        failedCreditAvailable: true,
       };
     case "manual_review":
       return {
         subject: "Refund Under Review",
-        heading: "Refund Under Review",
-        previewText: `We’re checking the status of your ${formattedAmount} refund.`,
+        heading: "We're Looking Into It",
+        previewText: `Your refund request for ${formattedAmount} requires a manual review.`,
         paragraphs: [
-          `We’re checking the status of your ${formattedAmount} refund.`,
-          "Please don’t submit another refund request while this check is in progress. We’ll update your Wallet as soon as the status is confirmed.",
+          `Your refund request for ${formattedAmount} has been received but requires a manual review before it can be completed.`,
+          "This can occasionally happen if we're unable to confirm the refund automatically.",
+          "There's nothing you need to do. We'll review your request and email you again as soon as an update is available.",
         ],
-        amountLabel: "Refund amount",
-        statusLabel: "Refund Under Review",
+        amountLabel: "Amount",
+        statusLabel: "Under Review",
         ctaLabel: "View Wallet",
+        manualReview: true,
       };
   }
 }
@@ -131,8 +175,92 @@ export async function sendWalletRefundEmail({
   const outcomeCopy = getOutcomeCopy(outcome, formattedAmount);
   const walletUrl = `${getSiteUrl()}/wallet`;
   const idempotencyKey = `wallet_refund:${outcome}:request:${refundRequestId}`;
+  let completedRefundDetails: {
+    paymentMethod: string;
+    refundDate: string;
+    reason: string;
+  } | null = null;
 
-  const text = [
+  if (outcome === "completed") {
+    const { data: refundRequest, error: refundRequestError } = await supabaseAdmin
+      .from("wallet_transactions")
+      .select("admin_note,metadata,updated_at")
+      .eq("id", refundRequestId)
+      .eq("transaction_type", "refund_requested")
+      .maybeSingle<RefundRequestEmailData>();
+
+    if (refundRequestError) throw refundRequestError;
+
+    const metadata = refundRequest?.metadata ?? null;
+    completedRefundDetails = {
+      paymentMethod: formatPaymentMethod(getRefundMetadataValue(metadata, "original_payment_method")),
+      refundDate: formatRefundDate(getRefundMetadataValue(metadata, "processed_at") || refundRequest?.updated_at || null),
+      reason: formatRefundReason(metadata),
+    };
+  }
+
+  const text = outcome === "completed" && completedRefundDetails ? [
+    `Hi ${firstName},`,
+    "",
+    "Your refund has now been processed successfully.",
+    "",
+    "Depending on your bank or payment provider, it may take a few working days for the funds to appear in your account.",
+    "",
+    "Refund Details",
+    `Amount\n${formattedAmount}`,
+    `Original Payment Method\n${completedRefundDetails.paymentMethod}`,
+    `Refund Date\n${completedRefundDetails.refundDate}`,
+    `Reason\n${completedRefundDetails.reason}`,
+    "",
+    `View Wallet: ${walletUrl}`,
+    "",
+    "Thank you for being part of Fair Play Football.",
+    "",
+    "If you have any questions, we're always happy to help.",
+    "",
+    "booking@fairplayfootball.co.uk",
+    "© Fair Play Football",
+  ].join("\n") : outcome === "manual_review" ? [
+    `Hi ${firstName},`,
+    "",
+    `Your refund request for ${formattedAmount} has been received but requires a manual review before it can be completed.`,
+    "",
+    "This can occasionally happen if we're unable to confirm the refund automatically.",
+    "",
+    "There's nothing you need to do. We'll review your request and email you again as soon as an update is available.",
+    "",
+    "Refund Details",
+    `Amount\n${formattedAmount}`,
+    "Status\nUnder Review",
+    "",
+    `View Wallet: ${walletUrl}`,
+    "",
+    "Thank you for your patience.",
+    "",
+    "If you have any questions, we're always happy to help.",
+    "",
+    "booking@fairplayfootball.co.uk",
+    "© Fair Play Football",
+  ].join("\n") : outcome === "failed_credit_available" ? [
+    `Hi ${firstName},`,
+    "",
+    "We were unable to process your refund back to your original payment method.",
+    "",
+    `Instead, ${formattedAmount} has been added to your Fair Play Wallet, where it's available to use immediately for future bookings.`,
+    "",
+    "If you'd still prefer a refund to your original payment method, you can submit another refund request from your wallet at any time. If you need any assistance, please contact us and we'll be happy to help.",
+    "",
+    "Wallet Credit",
+    `Amount\n${formattedAmount}`,
+    "Status\nCredit Available",
+    "",
+    `Open Wallet: ${walletUrl}`,
+    "",
+    "If you have any questions, we're always happy to help.",
+    "",
+    "booking@fairplayfootball.co.uk",
+    "© Fair Play Football",
+  ].join("\n") : [
     `Hi ${firstName},`,
     "",
     ...outcomeCopy.paragraphs.flatMap((paragraph) => [paragraph, ""]),
@@ -155,14 +283,47 @@ export async function sendWalletRefundEmail({
     title: outcomeCopy.heading,
     ctaHref: walletUrl,
     ctaLabel: outcomeCopy.ctaLabel,
+    footerText: outcome === "completed"
+      ? "Thank you for being part of Fair Play Football. If you have any questions, we're always happy to help."
+      : outcome === "manual_review"
+        ? "Thank you for your patience. If you have any questions, we're always happy to help."
+        : outcome === "failed_credit_available"
+          ? "If you have any questions, we're always happy to help."
+          : undefined,
     introHtml: `
       <p style="margin:0 0 16px;color:#ffffff;font-size:16px;line-height:25px;">
         Hi ${escapeHtml(firstName)},
       </p>
-      ${renderEmailParagraphs(outcomeCopy.paragraphs)}
+      ${outcome === "manual_review" ? `
+        <p style="margin:0 0 16px;color:#d4d4d8;font-size:16px;line-height:25px;">
+          Your refund request for <strong>${escapeHtml(formattedAmount)}</strong> has been received but requires a manual review before it can be completed.
+        </p>
+        ${renderEmailParagraphs(outcomeCopy.paragraphs.slice(1))}
+      ` : outcome === "failed_credit_available" ? `
+        ${renderEmailParagraphs([outcomeCopy.paragraphs[0]])}
+        <p style="margin:0 0 16px;color:#d4d4d8;font-size:16px;line-height:25px;">
+          Instead, <strong>${escapeHtml(formattedAmount)}</strong> has been added to your Fair Play Wallet, where it's available to use immediately for future bookings.
+        </p>
+        ${renderEmailParagraphs(outcomeCopy.paragraphs.slice(2))}
+      ` : renderEmailParagraphs(outcomeCopy.paragraphs)}
     `,
-    cardHtml: "reason" in outcomeCopy && outcomeCopy.reason
-      ? renderPremiumInfoCard("Reason", [{ value: outcomeCopy.reason }])
+    cardHtml: outcome === "manual_review"
+      ? renderPremiumInfoCard("Refund Details", [
+          { label: "Amount", value: formattedAmount },
+          { label: "Status", value: "Under Review" },
+        ])
+      : outcome === "failed_credit_available"
+        ? renderPremiumInfoCard("Wallet Credit", [
+            { label: "Amount", value: formattedAmount },
+            { label: "Status", value: "Credit Available" },
+          ])
+      : outcome === "completed" && completedRefundDetails
+      ? renderPremiumInfoCard("Refund Details", [
+          { label: "Amount", value: formattedAmount },
+          { label: "Original Payment Method", value: completedRefundDetails.paymentMethod },
+          { label: "Refund Date", value: completedRefundDetails.refundDate },
+          { label: "Reason", value: completedRefundDetails.reason },
+        ])
       : "completedRefund" in outcomeCopy && outcomeCopy.completedRefund
         ? renderPremiumInfoCard("Refund Details", [
             { icon: "💷", value: formattedAmount },

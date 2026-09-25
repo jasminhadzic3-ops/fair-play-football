@@ -114,7 +114,7 @@ describe("sendWaitingListSpotAvailableEmail", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "profile@example.com",
-        subject: "Good News — A Spot Is Available ⚽",
+        subject: "Spot Available",
         idempotencyKey: "waiting_list_spot_available:notification:700",
       })
     );
@@ -123,15 +123,16 @@ describe("sendWaitingListSpotAvailableEmail", () => {
       text: string;
     };
 
-    expect(email.text).toContain("A place has become available and you've been invited from the waiting list.");
-    expect(email.text).toContain("Your spot isn't reserved until payment is completed.");
-    expect(email.text).toContain("📅 Friday 7pm");
-    expect(email.text).toContain("🕒 Friday 7pm");
-    expect(email.text).toContain("📍 Test Pitch");
-    expect(email.text).toContain("💷 £8.00");
-    expect(email.text).toContain("Complete Your Booking: http://localhost:3000/?open_game_id=10#games");
-    expect(email.html).toContain("Good News — A Spot Is Available ⚽");
-    expect(email.html).toContain("Complete Your Booking");
+    expect(email.text).toContain("A spot has become available for Friday Football.");
+    expect(email.text).toContain("If you’d still like to play, you can secure it now before it’s taken.");
+    expect(email.text).toContain("Game\nFriday Football");
+    expect(email.text).toContain("Kick-off\nFriday 7pm");
+    expect(email.text).toContain("Venue\nTest Pitch");
+    expect(email.text).toContain("Price\n£8.00");
+    expect(email.text).toContain("Book Now: http://localhost:3000/?open_game_id=10#games");
+    expect(email.text).toContain("FAIR PLAY REWARDS");
+    expect(email.html).toContain("A Spot Is Available");
+    expect(email.html).toContain("Book Now");
     expect(email.html).toContain("booking@fairplayfootball.co.uk");
   });
 

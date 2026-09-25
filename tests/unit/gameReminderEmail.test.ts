@@ -40,7 +40,7 @@ describe("sendGameReminderEmail", () => {
     expect(sendResendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "player@example.com",
-        subject: "You're Playing Soon ⚽",
+        subject: "Ready for Kick-off",
         idempotencyKey: "game_reminder:game:10:user:user-1",
       })
     );
@@ -50,14 +50,15 @@ describe("sendGameReminderEmail", () => {
       text: string;
     };
 
-    expect(email.text).toContain("Hi Profile Player,");
-    expect(email.text).toContain("Just a reminder that your Fair Play Football game is coming up.");
-    expect(email.text).toContain("📅 Friday 7pm");
-    expect(email.text).toContain("🕒 Friday 7pm");
-    expect(email.text).toContain("📍 Test Pitch");
+    expect(email.text).toContain("Hi Profile,");
+    expect(email.text).toContain("Just a quick reminder that your game starts soon.");
+    expect(email.text).toContain("Game\nFriday Football");
+    expect(email.text).toContain("Kick-off\nFriday 7pm");
+    expect(email.text).toContain("Venue\nTest Pitch");
     expect(email.text).toContain("View Booking: https://www.fairplayfootball.co.uk/?open_game_id=10#games");
-    expect(email.text).toContain("Please arrive around 10 minutes before kick-off.");
-    expect(email.html).toContain("You&#039;re Playing Soon ⚽");
+    expect(email.text).toContain("STAY IN THE LOOP");
+    expect(email.text).toContain("FAIR PLAY REWARDS");
+    expect(email.html).toContain("Ready for Kick-off");
     expect(email.html).toContain("View Booking");
     expect(email.html).toContain("booking@fairplayfootball.co.uk");
   });
