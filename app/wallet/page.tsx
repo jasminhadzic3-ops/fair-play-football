@@ -402,18 +402,18 @@ export default function WalletPage() {
   return (
     <main className="min-h-screen bg-black p-4 text-white sm:p-8">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="mb-12 flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="mb-3 text-xs uppercase tracking-[0.35em] text-zinc-500">
-              Account
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500">
+              Wallet &amp; Rewards
             </p>
             <h1 className="text-4xl font-bold md:text-5xl">Wallet</h1>
           </div>
           <Link
             href="/"
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-3xl border border-stone-300/20 bg-zinc-950 px-6 text-sm font-bold text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-stone-200/35 hover:bg-zinc-900 sm:w-auto md:text-base"
+            className="text-sm font-semibold text-zinc-500 transition hover:text-stone-200 focus:outline-none focus-visible:text-stone-200"
           >
-            Back to Home
+            ← Back to home
           </Link>
         </div>
 
@@ -437,33 +437,33 @@ export default function WalletPage() {
 
         {!isLoading && userId && !errorMessage ? (
           <div className="space-y-6">
-            <section className="rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.35)] sm:p-8">
+            <section className="rounded-[2rem] border border-zinc-800/90 bg-zinc-950 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.25)] sm:p-8">
               <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                 Available balance
               </p>
               <p className="mt-4 text-5xl font-black tracking-tight text-stone-100 sm:text-6xl">
                 {formatBalance(availableBalance)}
               </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">
-                    Total wallet balance
+              <div className="mt-8 grid gap-5 border-t border-zinc-800/80 pt-6 sm:grid-cols-2 sm:gap-0">
+                <div className="sm:border-r sm:border-zinc-800/80 sm:pr-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                    Total balance
                   </p>
-                  <p className="mt-2 text-lg font-black text-stone-100">
+                  <p className="mt-2 text-2xl font-black text-stone-100">
                     {formatBalance(completedBalance)}
                   </p>
                 </div>
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-900 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">
+                <div className="sm:pl-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
                     Reserved for refunds
                   </p>
-                  <p className="mt-2 text-lg font-black text-stone-100">
+                  <p className="mt-2 text-2xl font-black text-stone-100">
                     {formatBalance(reservedRefundAmount)}
                   </p>
                 </div>
               </div>
-              <div className="mt-6 border-t border-zinc-800 pt-5">
-                <p className="text-sm font-semibold text-zinc-300">
+              <div className="mt-8 border-t border-zinc-800/80 pt-5">
+                <p className="text-sm leading-6 text-zinc-500">
                   Eligible cancellation credits can be used straight away or requested back to your card.
                 </p>
                 {refundMessage ? (
@@ -476,8 +476,8 @@ export default function WalletPage() {
 
             <ReferralWalletCard userId={userId} />
 
-            <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:p-6">
-              <div className="mb-5 flex items-center justify-between gap-4">
+            <section className="rounded-[2rem] border border-zinc-800/90 bg-zinc-950 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.2)] sm:p-6">
+              <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                     Recent activity
@@ -486,14 +486,14 @@ export default function WalletPage() {
               </div>
 
               {transactions.length === 0 ? (
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-6 text-zinc-400">
+                <div className="border-t border-zinc-800/80 pt-6 text-zinc-400">
                   <p className="font-semibold text-zinc-200">No wallet activity yet.</p>
                   <p className="mt-2 text-sm leading-6">
                     Eligible cancellation credit will appear here automatically.
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-zinc-800 overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950">
+                <div className="divide-y divide-zinc-800/80 border-t border-zinc-800/80">
                   {transactions.map((transaction) => {
                     const amount = Number(transaction.amount ?? 0);
                     const description =
@@ -510,18 +510,18 @@ export default function WalletPage() {
                     return (
                       <div
                         key={transaction.id}
-                        className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                        className="flex flex-col gap-3 px-1 py-5 transition-colors hover:bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between sm:px-2"
                       >
                         <div className="min-w-0">
                           <p className="break-words text-sm font-bold text-white">{primaryLabel}</p>
                           {activityGame ? (
-                            <div className="mt-2 space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            <div className="mt-2 space-y-1 text-xs font-medium text-zinc-500">
                               {gameKickoff ? <p>{gameKickoff}</p> : null}
                               {activityDescription ? <p>{activityDescription}</p> : null}
                               {ledgerStatus ? <p>{ledgerStatus}</p> : null}
                             </div>
                           ) : (
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-500">
                               {ledgerDate ? <span>{ledgerDate}</span> : null}
                               {transaction.status ? <span>{transaction.status}</span> : null}
                             </div>
