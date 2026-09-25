@@ -19,6 +19,8 @@ interface Booking {
   player_details?: {
     display_name: string;
     avatar_url: string | null;
+    age?: number | null;
+    gender?: string | null;
     primary_position: string | null;
     secondary_position: string | null;
     preferred_foot: string | null;
@@ -103,9 +105,13 @@ export default function TeamList({
             Close
           </button>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-          {details.preferred_foot ? <div className="rounded-xl bg-white/[0.04] p-2.5"><p className="text-zinc-500">Preferred foot</p><p className="mt-1 font-semibold text-stone-200">{details.preferred_foot}</p></div> : null}
-        </div>
+        {(details.age !== null && details.age !== undefined) || details.gender || details.preferred_foot ? (
+          <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+            {details.age !== null && details.age !== undefined ? <div className="rounded-xl bg-white/[0.04] p-2.5"><p className="text-zinc-500">Age</p><p className="mt-1 font-semibold text-stone-200">{details.age}</p></div> : null}
+            {details.gender ? <div className="rounded-xl bg-white/[0.04] p-2.5"><p className="text-zinc-500">Gender</p><p className="mt-1 font-semibold text-stone-200">{details.gender}</p></div> : null}
+            {details.preferred_foot ? <div className="rounded-xl bg-white/[0.04] p-2.5"><p className="text-zinc-500">Preferred foot</p><p className="mt-1 font-semibold text-stone-200">{details.preferred_foot}</p></div> : null}
+          </div>
+        ) : null}
         {details.accelerate_type ? (
           <div className="mt-3 border-t border-white/[0.08] pt-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400">Movement profile</p>

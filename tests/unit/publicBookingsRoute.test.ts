@@ -25,6 +25,8 @@ type BookingRow = {
 
 type ProfileRow = {
   id: string;
+  age: string | null;
+  gender: string | null;
   avatar_url: string | null;
   favourite_position: string | null;
 };
@@ -106,10 +108,10 @@ beforeEach(() => {
     },
   ];
   state.profiles = [
-    { id: "user-1", avatar_url: "https://example.com/current-player.jpg", favourite_position: "Midfielder" },
-    { id: "user-2", avatar_url: null, favourite_position: "Defender" },
-    { id: "user-3", avatar_url: "https://example.com/different-game.jpg", favourite_position: "Forward" },
-    { id: "user-4", avatar_url: null, favourite_position: null },
+    { id: "user-1", age: "28", gender: "Female", avatar_url: "https://example.com/current-player.jpg", favourite_position: "Midfielder" },
+    { id: "user-2", age: "31", gender: "Male", avatar_url: null, favourite_position: "Defender" },
+    { id: "user-3", age: null, gender: null, avatar_url: "https://example.com/different-game.jpg", favourite_position: "Forward" },
+    { id: "user-4", age: null, gender: null, avatar_url: null, favourite_position: null },
   ];
 });
 
@@ -136,6 +138,8 @@ describe("public bookings route", () => {
         player_details: {
           display_name: "Current Player",
           avatar_url: "https://example.com/current-player.jpg",
+          age: 28,
+          gender: "Female",
           primary_position: "Midfielder",
           secondary_position: null,
           preferred_foot: null,
@@ -152,6 +156,8 @@ describe("public bookings route", () => {
         player_details: {
           display_name: "Other Player",
           avatar_url: null,
+          age: 31,
+          gender: "Male",
           primary_position: "Defender",
           secondary_position: null,
           preferred_foot: null,
@@ -197,6 +203,7 @@ describe("public bookings route", () => {
     expect(JSON.stringify(body)).not.toContain("user-4");
     expect(JSON.stringify(body)).not.toContain("email");
     expect(JSON.stringify(body)).not.toContain("phone");
+    expect(JSON.stringify(body)).not.toContain("date_of_birth");
   });
 
   it("marks every booking as not current user for signed-out requests", async () => {
