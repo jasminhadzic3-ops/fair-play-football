@@ -401,6 +401,7 @@ export default function AdminPage() {
   const [pendingScrollGameId, setPendingScrollGameId] = useState<number | null>(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [cancellingGameId, setCancellingGameId] = useState<number | null>(null);
+  const [sendingGameFullGameId, setSendingGameFullGameId] = useState<number | null>(null);
   const [processingRefundRequestId, setProcessingRefundRequestId] = useState<number | null>(null);
   const [processingAdminRefundSourceId, setProcessingAdminRefundSourceId] = useState<number | null>(null);
   const [addPlayerGame, setAddPlayerGame] = useState<Game | null>(null);
@@ -905,6 +906,50 @@ export default function AdminPage() {
       alertAfterPaint(error instanceof Error ? error.message : "Unable to save game.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const sendGameOn = async (game: Game) => {
+    const activeBookingCount = getGameBookings(game.id).length;
+
+    if (game.status !== "active" || game.archived_at || activeBookingCount !== game.max_players) {
+      return;
+    }
+
+    if (!window.confirm("Send the Game On email to all currently booked players for this full game?")) {
+      return;
+    }
+
+    setSendingGameFullGameId(game.id);
+
+    try {
+      const response = await fetch("/api/admin/emails/game-full", {
+        method: "POST",
+        headers: await getAdminAuthHeaders(),
+        body: JSON.stringify({ gameId: game.id }),
+      });
+      const result = (await response.json().catch(() => null)) as {
+        error?: string;
+        sentCount?: number;
+        skipped?: boolean;
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(result?.error || "Unable to send Game On email.");
+      }
+
+      alert(
+        [
+          "Game On email processed successfully.",
+          `Sent: ${Number(result?.sentCount ?? 0)}`,
+          `Skipped: ${result?.skipped ? "already processed" : "0"}`,
+        ].join("\n")
+      );
+      await fetchAdminData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to send Game On email.");
+    } finally {
+      setSendingGameFullGameId(null);
     }
   };
 
@@ -2349,6 +2394,7 @@ export default function AdminPage() {
                 const isArchived = lifecycle === "archived";
                 const financialRecords = game.financial_records ?? [];
                 const financialSummary = getFinancialSummary(safety, financialRecords);
+                const isFullGame = !isArchived && game.status === "active" && gameBookings.length === game.max_players;
 
                 if (isArchived) {
                   return (
@@ -2567,6 +2613,16 @@ export default function AdminPage() {
                       </div>
 
                       <div className="flex gap-3">
+                        {isFullGame ? (
+                          <button
+                            type="button"
+                            onClick={() => void sendGameOn(game)}
+                            disabled={sendingGameFullGameId === game.id}
+                            className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {sendingGameFullGameId === game.id ? "Sending..." : "Send Game On"}
+                          </button>
+                        ) : null}
                         {!isArchived && game.status !== "cancelled" && safety.spaces_remaining > 0 ? (
                           <button
                             type="button"
